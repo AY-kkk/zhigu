@@ -178,8 +178,6 @@ references/            上游版本清单；不打包参考仓库源码
 
 欢迎提交可复现的问题、测试用例、文档改进和数据源适配方案。请先阅读 [贡献指南](CONTRIBUTING.md)，通过 [Issue 模板](https://github.com/AY-kkk/zhigu/issues/new/choose) 描述问题。涉及凭据、越权或数据泄露的问题，请使用 [安全报告通道](SECURITY.md)。
 
-## 许可与致谢
+## 许可
 
-原创代码的开源许可尚未指定，参见 [许可说明](LICENSE.md)。第三方依赖分别遵循各自许可证，详见 [第三方说明](THIRD_PARTY_NOTICES.md)。本地私有 GoSaaS 快照未包含在此公开仓库中，阶段 A 的启动也不依赖它。
-
-感谢 [Eino](https://github.com/cloudwego/eino)、[DeerFlow](https://github.com/bytedance/deer-flow)、[Vue](https://github.com/vuejs/core)、[Gin](https://github.com/gin-gonic/gin)、[GORM](https://github.com/go-gorm/gorm) 等本仓库实际使用的依赖项目。这不代表与上述项目存在官方合作。
+原创代码的开源许可尚未指定，参见 [许可说明](LICENSE.md)。第三方依赖分别遵循各自许可证，详见 [第三方说明](THIRD_PARTY_NOTICES.md)。
