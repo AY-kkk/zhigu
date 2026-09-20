@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "run_id": "run_demo",
+  "version": 1,
+  "mode": "fixture",
+  "as_of": "2026-09-17T00:00:00Z",
+  "quality_status": "completed",
+  "verdict": "insufficient",
+  "summary": "营业收入增长不足以单独判断未来股价方向；此为完全虚构的协议示例。",
+  "support": [
+    {
+      "claim_type": "fact",
+      "text": "虚构测试数据中，演示公司的营业收入同比增长。",
+      "evidence_ids": [
+        "ev_demo"
+      ]
+    }
+  ],
+  "challenge": [],
+  "assumptions": [
+    "收入增长能转化为利润且尚未被估值反映，需要另行验证。"
+  ],
+  "change_conditions": [
+    "补充利润、现金流和估值证据后重新研究。"
+  ],
+  "unknowns": [
+    "未获得足以判断未来股价方向的证据。"
+  ],
+  "evidence_ids": [
+    "ev_demo"
+  ],
+  "model_config_version": "model_fixture_v1",
+  "source_policy_version": "source_fixture_v1",
+  "prompt_version": "prompt_v1"
+}

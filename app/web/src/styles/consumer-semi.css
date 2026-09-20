@@ -1,0 +1,379 @@
+html:has(.zhigu-consumer),
+html:has(.zhigu-consumer) body,
+html:has(.zhigu-consumer) #app {
+  height: 100%;
+  overflow: hidden;
+}
+
+.zhigu-consumer {
+  --semi-color-primary: #b94c55;
+  --semi-color-primary-hover: #ab424c;
+  --semi-color-primary-active: #9c3943;
+  --semi-color-primary-light-default: #fbedef;
+  --semi-color-primary-light-hover: #f8e3e6;
+  --semi-color-primary-light-active: #f2d4d8;
+  --semi-color-bg-0: #fcfbfb;
+  --semi-color-bg-1: #ffffff;
+  --semi-color-bg-2: #ffffff;
+  --semi-color-text-0: #272326;
+  --semi-color-text-1: #716b70;
+  --semi-color-text-2: #716b70;
+  --semi-color-border: #ece7e8;
+  --semi-border-radius-small: 8px;
+  --semi-border-radius-medium: 8px;
+  --semi-border-radius-large: 12px;
+  --zg-sidebar-bg: #f7f5f5;
+  --zg-brand-text: #a33f48;
+  --zg-control-border: #91858a;
+  --zg-surface-muted: #f6f4f4;
+  --zg-danger: #c7373f;
+  --zg-success: #237a57;
+  --zg-warning: #8a6500;
+  --zg-warning-bg: #fff8e6;
+  --zg-reading-max: 840px;
+  color: var(--semi-color-text-0);
+  background: var(--semi-color-bg-0);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+}
+
+.zhigu-app-shell {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.zhigu-consumer *,
+.zhigu-consumer *::before,
+.zhigu-consumer *::after {
+  box-sizing: border-box;
+}
+
+.zhigu-shell-inner {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+}
+
+.zhigu-shell-inner > .semi-layout,
+.zhigu-consumer .semi-layout-has-sider {
+  flex: 1;
+  min-height: 0;
+  height: 100% !important;
+  overflow: hidden;
+  background: var(--semi-color-bg-0);
+  display: flex !important;
+  flex-direction: row;
+}
+
+.zhigu-sider,
+.zhigu-consumer .semi-layout-sider.zhigu-sider {
+  width: 88px !important;
+  max-width: 88px !important;
+  min-width: 88px !important;
+  flex: 0 0 88px !important;
+  background: var(--zg-sidebar-bg) !important;
+  border-right: 1px solid var(--semi-color-border);
+  height: 100% !important;
+  overflow: hidden;
+}
+
+.zhigu-sider .semi-layout-sider-children {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--zg-sidebar-bg);
+}
+
+.zhigu-brand {
+  height: 64px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  color: var(--semi-color-text-0);
+  text-decoration: none;
+  flex: none;
+}
+
+.zhigu-brand-mark {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  background: var(--semi-color-primary-light-default);
+  color: var(--zg-brand-text);
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.zhigu-brand-name {
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 500;
+}
+
+.zhigu-consumer .zhigu-side-nav,
+.zhigu-consumer .semi-navigation {
+  flex: 1;
+  width: 88px !important;
+  max-width: 88px !important;
+  background: transparent !important;
+  border-right: 0 !important;
+  padding: 8px 0 16px !important;
+}
+
+.zhigu-consumer .semi-navigation-inner,
+.zhigu-consumer .semi-navigation-header-list-outer,
+.zhigu-consumer .semi-navigation-list-wrapper,
+.zhigu-consumer .semi-navigation-list {
+  width: 88px !important;
+  overflow: visible;
+  padding: 0 !important;
+}
+
+.zhigu-consumer .semi-navigation-item {
+  width: 64px !important;
+  min-width: 64px !important;
+  max-width: 64px !important;
+  height: 64px !important;
+  margin: 0 auto 8px !important;
+  padding: 8px 4px !important;
+  border-radius: 12px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  color: var(--semi-color-text-1);
+  background: transparent !important;
+  box-sizing: border-box;
+}
+
+.zhigu-consumer .semi-navigation-item-icon {
+  margin: 0 !important;
+  width: 20px;
+  height: 20px;
+  color: inherit;
+}
+
+.zhigu-consumer .semi-navigation-item-text {
+  margin: 0 !important;
+  padding: 0 !important;
+  font-size: 12px !important;
+  line-height: 18px !important;
+  height: 18px !important;
+  max-height: none !important;
+  overflow: visible !important;
+  font-weight: 400 !important;
+  white-space: nowrap;
+  transform: none !important;
+}
+
+.zhigu-consumer .semi-navigation-item:hover,
+.zhigu-consumer .semi-navigation-item-hover {
+  background: #fff5f5 !important;
+  color: var(--semi-color-text-0);
+}
+
+.zhigu-consumer .semi-navigation-item-selected {
+  background: var(--semi-color-primary-light-default) !important;
+  color: var(--zg-brand-text) !important;
+  font-weight: 500 !important;
+}
+
+.zhigu-main,
+.zhigu-consumer .semi-layout .semi-layout {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  display: flex !important;
+  flex-direction: column !important;
+  background: var(--semi-color-bg-1);
+}
+
+.zhigu-header,
+.zhigu-consumer header.zhigu-header {
+  height: 64px !important;
+  flex: none !important;
+  padding: 0 32px !important;
+  display: flex !important;
+  align-items: center !important;
+  background: var(--semi-color-bg-1);
+  border-bottom: 1px solid var(--semi-color-border);
+}
+
+.zhigu-header-title {
+  margin: 0;
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 600;
+  color: var(--semi-color-text-0);
+}
+
+.zhigu-content,
+.zhigu-consumer .semi-layout-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--semi-color-bg-1);
+}
+
+.zhigu-content.is-scrollable {
+  overflow: auto;
+}
+
+.zhigu-reading {
+  width: 100%;
+  max-width: var(--zg-reading-max);
+  margin: 0 auto;
+  padding-left: 32px;
+  padding-right: 32px;
+}
+
+.zhigu-page {
+  width: 100%;
+  max-width: var(--zg-reading-max);
+  margin: 0 auto;
+  padding: 24px 32px 48px;
+}
+
+.zhigu-page-fill {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.zhigu-consumer .semi-input-textarea,
+.zhigu-consumer .semi-input,
+.zhigu-consumer .semi-select,
+.zhigu-consumer .semi-input-textarea-wrapper {
+  border-color: var(--zg-control-border);
+  border-radius: 12px;
+  background: #ffffff !important;
+}
+
+.zhigu-consumer .semi-input-textarea-wrapper:focus-within,
+.zhigu-consumer .semi-input-wrapper-focus,
+.zhigu-consumer .semi-select-focus {
+  border-color: var(--semi-color-primary);
+  box-shadow: 0 0 0 3px rgba(185, 76, 85, 0.16);
+}
+
+.zhigu-consumer .semi-button {
+  border-radius: 8px;
+}
+
+.zhigu-consumer .semi-button-primary {
+  background-color: var(--semi-color-primary);
+  border-color: var(--semi-color-primary);
+}
+
+.zhigu-consumer .semi-button-primary:hover {
+  background-color: var(--semi-color-primary-hover);
+  border-color: var(--semi-color-primary-hover);
+}
+
+.zhigu-consumer .semi-button-primary:active {
+  background-color: var(--semi-color-primary-active);
+  border-color: var(--semi-color-primary-active);
+}
+
+.zhigu-consumer :focus-visible {
+  outline: 2px solid var(--semi-color-primary);
+  outline-offset: 2px;
+}
+
+.zhigu-consumer .semi-chat {
+  height: 100% !important;
+  width: 100% !important;
+  max-width: none;
+  background: transparent;
+  border: 0;
+}
+
+.zhigu-consumer .semi-chat-container,
+.zhigu-consumer .semi-chat-inputBox,
+.zhigu-consumer .zhigu-composer {
+  width: 100%;
+  max-width: var(--zg-reading-max);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.zhigu-consumer .semi-chat-inner,
+.zhigu-consumer .semi-chat-content,
+.zhigu-consumer .semi-chat-container {
+  background: transparent;
+}
+
+.zhigu-consumer .semi-chat-chatBox-content {
+  max-width: 80%;
+}
+
+.zhigu-consumer .semi-chat-chatBox-content-user,
+.zhigu-consumer .semi-chat-chatBox-content-bubble.semi-chat-chatBox-content-right {
+  background: var(--zg-surface-muted);
+  color: var(--semi-color-text-0);
+  border-radius: 12px;
+}
+
+.zhigu-consumer .semi-sidesheet-inner,
+.zhigu-consumer .semi-dropdown-wrapper,
+.zhigu-consumer .semi-tooltip-wrapper,
+.zhigu-consumer .semi-select-option-list,
+.zhigu-consumer .semi-modal-content,
+.zhigu-consumer .semi-toast-wrapper {
+  background: var(--semi-color-bg-1);
+}
+
+.zhigu-overlay-root {
+  position: relative;
+  z-index: 1000;
+  height: auto;
+  display: block;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .zhigu-consumer *,
+  .zhigu-consumer *::before,
+  .zhigu-consumer *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media (max-width: 1199px) {
+  .zhigu-header,
+  .zhigu-reading,
+  .zhigu-page {
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+}
+
+@media (max-width: 767px) {
+  .zhigu-header {
+    height: 56px !important;
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+
+  .zhigu-reading,
+  .zhigu-page {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .zhigu-composer {
+    max-height: 35dvh;
+  }
+}

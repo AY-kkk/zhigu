@@ -1,0 +1,22 @@
+name: 功能建议
+description: 描述用户场景与可验证的改进
+title: "[Feature] "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: 用户场景与问题
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 建议方案与验收条件
+    validations:
+      required: true
+  - type: textarea
+    id: data
+    attributes:
+      label: 数据、费用与授权边界
+      description: 若涉及新数据源或模型，请给出官方文档、免费额度及使用范围。

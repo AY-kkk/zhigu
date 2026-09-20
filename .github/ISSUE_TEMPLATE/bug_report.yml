@@ -1,0 +1,29 @@
+name: 问题反馈
+description: 提交可以复现的功能或工程问题
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: 版本与运行环境
+      placeholder: 提交 SHA、系统、Go / Python / Node 版本
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤
+      description: 请使用 fixture 或脱敏样例，不要提交密钥或真实用户材料。
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期行为与实际行为
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 脱敏日志或截图

@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0",
+  "run_id": "run_demo",
+  "task_id": "task_support",
+  "status": "succeeded",
+  "arguments": [
+    {
+      "claim_type": "fact",
+      "text": "虚构测试数据中，演示公司的营业收入同比增长。",
+      "evidence_ids": [
+        "ev_demo"
+      ]
+    }
+  ],
+  "evidence_ids": [
+    "ev_demo"
+  ],
+  "unknowns": [
+    "缺少利润、现金流、估值与市场预期资料。"
+  ],
+  "counterevidence": [],
+  "usage": {
+    "model_calls": 2,
+    "tool_calls": 1,
+    "input_tokens": 1000,
+    "output_tokens": 300,
+    "usage_unknown": false
+  },
+  "errors": []
+}

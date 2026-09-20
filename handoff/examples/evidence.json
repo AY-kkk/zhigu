@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "evidence_id": "ev_demo",
+  "run_id": "run_demo",
+  "instrument_id": "DEMO:COMPANY",
+  "source_id": "source_fixture",
+  "title": "虚构测试财务数据，不用于投资",
+  "source_url": "https://example.invalid/fixture/annual-report",
+  "source_kind": "fixture",
+  "published_at": "2026-03-31T00:00:00Z",
+  "available_at": "2026-03-31T00:00:00Z",
+  "retrieved_at": "2026-09-17T00:00:00Z",
+  "content_hash": "4e5e8b84fb02de2736a1b7a312d2f694528107a15de6a0ea0a56be0b8748433f",
+  "data_version": "fixture_annual_v1",
+  "mode": "fixture",
+  "locator": "fixture:financials:revenue",
+  "text": "Fixture only: revenue 2025 = 100 CNY_million; 2024 = 80 CNY_million.",
+  "metrics": [
+    {
+      "metric": "revenue",
+      "period_start": "2025-01-01",
+      "period_end": "2025-12-31",
+      "value": "100",
+      "unit": "CNY_million",
+      "value_type": "actual"
+    },
+    {
+      "metric": "revenue",
+      "period_start": "2024-01-01",
+      "period_end": "2024-12-31",
+      "value": "80",
+      "unit": "CNY_million",
+      "value_type": "actual"
+    }
+  ]
+}

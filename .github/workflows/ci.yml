@@ -1,0 +1,78 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  go:
+    name: Go
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: app/server
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: app/server/go.mod
+          cache-dependency-path: app/server/go.sum
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+      - name: Install Python worker for Go cross-process tests
+        run: uv sync --frozen --no-dev --project ../research-service
+      - run: go mod verify
+      - run: go test ./... -count=1 -timeout 300s
+      - run: go test -race ./service/finance -count=1 -timeout 300s
+  python:
+    name: Python
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          enable-cache: true
+      - name: Install fixture dependencies from lock
+        run: uv sync --frozen --no-dev --project app/research-service
+      - name: Install test dependencies
+        run: uv pip install --python app/research-service/.venv/bin/python pytest rfc3339-validator
+      - name: Fixture and regression tests
+        working-directory: app/research-service
+        env:
+          ZHIGU_RESEARCH_SQLITE: /tmp/zhigu-ci-jobs.sqlite
+        run: .venv/bin/python -m pytest tests -q -k 'not test_actual_harness_import'
+      - name: Public contract checks
+        run: app/research-service/.venv/bin/python -m pytest handoff/tests -q -k 'not test_repository_pins_and_reuse_paths'
+      - name: Public tree checks
+        run: python3 scripts/check-public-tree.py
+  web:
+    name: Web
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: app/web
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: app/web/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - name: Browser smoke checks (no live API)
+        run: npm run test:e2e

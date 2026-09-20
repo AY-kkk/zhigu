@@ -1,0 +1,366 @@
+{
+  "schema_version": "1.0",
+  "scope": "Application acceptance requirements; not yet executed application tests",
+  "cases": [
+    {
+      "id": "A01",
+      "title": "正常双路",
+      "given": "两方成功且证据有效",
+      "when": "提交已确认观点",
+      "then": "completed；报告可见；所有重要事实有来源",
+      "implementation_task": "T5",
+      "status": "not_implemented"
+    },
+    {
+      "id": "A02",
+      "title": "全部证据不足",
+      "given": "两方正常结束且无足够资料",
+      "when": "完成研究",
+      "then": "completed+insufficient；无伪造证据",
+      "implementation_task": "T5",
+      "status": "not_implemented"
+    },
+    {
+      "id": "A03",
+      "title": "反方无反证",
+      "given": "支持证据存在，反方 insufficient",
+      "when": "合成报告",
+      "then": "不将未找到反证解释为已证明；呈现未知",
+      "implementation_task": "T5",
+      "status": "not_implemented"
+    },
+    {
+      "id": "A04",
+      "title": "一方失败",
+      "given": "支持 succeeded，反方 timeout",
+      "when": "合成报告",
+      "then": "有可信内容则 incomplete、verdict=null；否则 failed",
+      "implementation_task": "T5",
+      "status": "not_implemented"
+    },
+    {
+      "id": "A05",
+      "title": "来源冲突",
+      "given": "同期间同口径两来源给出冲突数值",
+      "when": "核验报告",
+      "then": "显示冲突与来源，不择优迎合用户",
+      "implementation_task": "T4",
+      "status": "not_implemented"
+    },
+    {
+      "id": "A06",
+      "title": "未来信息",
+      "given": "available_at 晚于 as_of",
+      "when": "登记或引用证据",
+      "then": "拒绝未来证据，不进入结论",
+      "implementation_task": "T4",
+      "status": "not_implemented"
+    },
+    {
+      "id": "A07",
+      "title": "历史修订泄漏",
+      "given": "当前版本修订了过去数据，无历史快照",
+      "when": "历史日期研究",
+      "then": "拒绝将当前修订值当时点值",
+      "implementation_task": "T4",
+      "status": "not_implemented"
+    },
+    {
+      "id": "A08",
+      "title": "单位错误",
+      "given": "指标为百万元，候选报告写亿元",
+      "when": "发布报告",
+      "then": "硬校验失败；修复不成功不完整发布",
+      "implementation_task": "T4",
+      "status": "not_implemented"
+    },
+    {
+      "id": "A09",
+      "title": "期间错误",
+      "given": "年报与季度指标混用",
+      "when": "计算增速",
+      "then": "拒绝不匹配输入或显式统一口径",
+      "implementation_task": "T4",
+      "status": "not_implemented"
+    },
+    {
+      "id": "A10",
+      "title": "预测当实际",
+      "given": "输入 value_type=estimate",
+      "when": "生成确定性事实",
+      "then": "拒绝；估计值必须标注",
+      "implementation_task": "T4",
+      "status": "not_implemented"
+    },
+    {
+      "id": "A11",
+      "title": "零分母",
+      "given": "增长计算基期为0",
+      "when": "calculate_metric",
+      "then": "INSUFFICIENT_DENOMINATOR，无Inf/NaN",
+      "implementation_task": "T4",
+      "status": "not_implemented"
+    },
+    {
+      "id": "A12",
+      "title": "伪造引用",
+      "given": "模型输出未登记 evidence_id",
+      "when": "发布报告",
+      "then": "拒绝未知引用",
+      "implementation_task": "T4",
+      "status": "not_implemented"
+    },
+    {
+      "id": "A13",
+      "title": "跨用户读取",
+      "given": "用户B持有用户A的run/evidence ID",
+      "when": "详情/历史/证据/追问/删除",
+      "then": "全部拒绝，404不泄露归属",
+      "implementation_task": "T1",
+      "status": "not_implemented"
+    },
+    {
+      "id": "A14",
+      "title": "跨角色未授权引用",
+      "given": "反方引用仅支持方授权的证据ID",
+      "when": "接收角色结果",
+      "then": "拒绝；汇总层可使用两方已验证集合",
+      "implementation_task": "T4",
+      "status": "not_implemented"
+    },
+    {
+      "id": "A15",
+      "title": "提示注入",
+      "given": "正文要求读取密钥或忽略截止时间",
+      "when": "工具读取正文",
+      "then": "无越权动作；时间/工具闸门仍有效",
+      "implementation_task": "T3",
+      "status": "not_implemented"
+    },
+    {
+      "id": "A16",
+      "title": "意外工具",
+      "given": "Harness含shell/task/read_file等非白名单工具",
+      "when": "构建研究Agent",
+      "then": "失败关闭，不开始调用",
+      "implementation_task": "T3",
+      "status": "not_implemented"
+    },
+    {
+      "id": "A17",
+      "title": "角色串上下文",
+      "given": "并发两个角色与两个用户的任务",
+      "when": "检查模型请求和工具记录",
+      "then": "不混messages/token/任务ID",
+      "implementation_task": "T3",
+      "status": "not_implemented"
+    },
+    {
+      "id": "A18",
+      "title": "共享额度竞争",
+      "given": "总剩余1次模型额度，双角色同时申请",
+      "when": "并发调用",
+      "then": "只1次获得授权；另一条不触达上游",
+      "implementation_task": "T2",
+      "status": "not_implemented"
+    },
+    {
+      "id": "A19",
+      "title": "SDK隐式重试",
+      "given": "上游429/timeout",
+      "when": "代理请求",
+      "then": "无隐藏重试；显式重试计新额度",
+      "implementation_task": "T2",
+      "status": "not_implemented"
+    },
+    {
+      "id": "A20",
+      "title": "未知usage",
+      "given": "上游断线或无usage",
+      "when": "核销账单",
+      "then": "unknown并保守占用，不自动免费",
+      "implementation_task": "T2",
+      "status": "not_implemented"
+    },
+    {
+      "id": "A21",
+      "title": "确认幂等",
+      "given": "同用户同key同请求重复20次",
+      "when": "POST research",
+      "then": "一个run/两角色；相同响应ID",
+      "implementation_task": "T1",
+      "status": "not_implemented"
+    },
+    {
+      "id": "A22",
+      "title": "幂等冲突",
+      "given": "同key不同请求体",
+      "when": "POST research",
+      "then": "409，不新建任务",
+      "implementation_task": "T1",
+      "status": "not_implemented"
+    },
+    {
+      "id": "A23",
+      "title": "草稿重复使用",
+      "given": "同draft/revision不同key提交",
+      "when": "创建研究",
+      "then": "仅确认一次，不重复转移解析usage",
+      "implementation_task": "T1",
+      "status": "not_implemented"
+    },
+    {
+      "id": "A24",
+      "title": "内部任务重放",
+      "given": "相同task_id提交后响应丢失",
+      "when": "查询再重发相同ID",
+      "then": "返回原任务，不重复执行",
+      "implementation_task": "T3",
+      "status": "not_implemented"
+    },
+    {
+      "id": "A25",
+      "title": "取消发布竞态",
+      "given": "合成与取消并发",
+      "when": "取消run",
+      "then": "先canceling；撤权后不得发布，停止确认后canceled",
+      "implementation_task": "T1",
+      "status": "not_implemented"
+    },
+    {
+      "id": "A26",
+      "title": "删除晚到结果",
+      "given": "研究未结束时删除",
+      "when": "worker稍后回写",
+      "then": "用户立即不可见；无记录复活；正文按期限清理",
+      "implementation_task": "T1",
+      "status": "not_implemented"
+    },
+    {
+      "id": "A27",
+      "title": "断线刷新",
+      "given": "浏览器断网或刷新",
+      "when": "恢复详情页",
+      "then": "读取持久状态，无重复run/假完成",
+      "implementation_task": "T6",
+      "status": "not_implemented"
+    },
+    {
+      "id": "A28",
+      "title": "配置热切换",
+      "given": "runA用版本1，管理员激活版本2",
+      "when": "继续A并创建B",
+      "then": "A全程1，B用2，两个语言路径一致",
+      "implementation_task": "T2",
+      "status": "not_implemented"
+    },
+    {
+      "id": "A29",
+      "title": "密钥不回显",
+      "given": "管理员保存真实测试key",
+      "when": "GET配置、前端、日志检查",
+      "then": "仅has_key；密钥不出现在响应/日志/Prompt",
+      "implementation_task": "T2",
+      "status": "not_implemented"
+    },
+    {
+      "id": "A30",
+      "title": "SSRF",
+      "given": "BaseURL为127.0.0.1/metadata/重绑定或跳转",
+      "when": "配置测试与调用",
+      "then": "拒绝；合法内部服务独立白名单仍通",
+      "implementation_task": "T2",
+      "status": "not_implemented"
+    },
+    {
+      "id": "A31",
+      "title": "边界时限",
+      "given": "排队>30秒或执行>180秒",
+      "when": "调度/请求",
+      "then": "排队failed；执行停止后续调用，不伪装完整报告",
+      "implementation_task": "T5",
+      "status": "not_implemented"
+    },
+    {
+      "id": "A32",
+      "title": "有限修复",
+      "given": "候选报告连续校验不通过",
+      "when": "运行修复",
+      "then": "最多1次修复，修后再验，失败不完整发布",
+      "implementation_task": "T5",
+      "status": "not_implemented"
+    },
+    {
+      "id": "A33",
+      "title": "追问新增资料",
+      "given": "用户要求报告外的新行情",
+      "when": "POST questions",
+      "then": "不启动新检索；指出证据缺口与重新研究入口",
+      "implementation_task": "T6",
+      "status": "not_implemented"
+    },
+    {
+      "id": "A34",
+      "title": "后台越权",
+      "given": "普通用户构造admin API请求",
+      "when": "修改模型或数据源",
+      "then": "403，配置不变",
+      "implementation_task": "T6",
+      "status": "not_implemented"
+    },
+    {
+      "id": "A35",
+      "title": "fixture误展示",
+      "given": "未配置真实数据或模型",
+      "when": "运行离线演示",
+      "then": "mode=fixture全链保留；醒目标记不伪装live",
+      "implementation_task": "T6",
+      "status": "not_implemented"
+    },
+    {
+      "id": "A36",
+      "title": "重启恢复",
+      "given": "Python运行时重启或Go租约过期",
+      "when": "恢复调度",
+      "then": "查询原任务/标失败；不无预算重复调用",
+      "implementation_task": "T3",
+      "status": "not_implemented"
+    },
+    {
+      "id": "A37",
+      "title": "模型启用测试失效",
+      "given": "测试成功后修改model/key/url",
+      "when": "activate",
+      "then": "拒绝旧test_digest；要求重新测试Go/Python",
+      "implementation_task": "T2",
+      "status": "not_implemented"
+    },
+    {
+      "id": "A38",
+      "title": "账户并发限制",
+      "given": "已有活动run或全局2个run",
+      "when": "再提交/调度",
+      "then": "用户受限；全局不超过2，角色不超过4",
+      "implementation_task": "T1",
+      "status": "not_implemented"
+    },
+    {
+      "id": "A39",
+      "title": "移动端和恶意HTML",
+      "given": "390px视口，文本包含脚本和javascript链接",
+      "when": "渲染报告/抽屉",
+      "then": "可操作无溢出，无脚本执行",
+      "implementation_task": "T6",
+      "status": "not_implemented"
+    },
+    {
+      "id": "A40",
+      "title": "公开运营关口",
+      "given": "仅通过样机，没有授权/合规/备份证明",
+      "when": "准备对外上线",
+      "then": "报告未满足门槛，不声称可公开运营",
+      "implementation_task": "T7",
+      "status": "not_implemented"
+    }
+  ]
+}

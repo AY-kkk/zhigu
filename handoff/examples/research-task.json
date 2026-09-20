@@ -1,0 +1,31 @@
+{
+  "schema_version": "1.0",
+  "run_id": "run_demo",
+  "task_id": "task_support",
+  "role": "supporter",
+  "claim": {
+    "text": "演示公司的收入增长能否支持未来一年股价上涨？",
+    "horizon": "2026-09-18 至 2027-09-17",
+    "items": [
+      {
+        "claim_id": "claim_1",
+        "text": "演示公司的收入增长。",
+        "claim_type": "fact"
+      },
+      {
+        "claim_id": "claim_2",
+        "text": "收入增长会推动未来一年股价上涨。",
+        "claim_type": "inference"
+      }
+    ]
+  },
+  "instrument_id": "DEMO:COMPANY",
+  "as_of": "2026-09-17T00:00:00Z",
+  "mode": "fixture",
+  "source_policy_version": "source_fixture_v1",
+  "model_config_version": "model_fixture_v1",
+  "prompt_version": "prompt_v1",
+  "max_model_calls": 4,
+  "max_tool_calls": 6,
+  "deadline_at": "2026-09-17T00:03:00Z"
+}
