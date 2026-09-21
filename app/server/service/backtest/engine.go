@@ -205,6 +205,15 @@ func Run(in Input) Result {
 		if i < warmup {
 			continue
 		}
+		evalBars, evalSeries := signalBars, series
+		if in.Doc.PriceBasis == "causal_qfq" && len(in.Actions) > 0 {
+			evalBars = causalQfq(in.Raw[:i+1], in.Actions, raw.Time)
+			var qerr error
+			evalSeries, qerr = indicators.ComputeMany(evalBars, specs)
+			if qerr != nil {
+				return failRes("STRATEGY_INVALID", qerr.Error())
+			}
+		}
 		posQty := sumQty(lots)
 		if posQty.GreaterThan(decimal.Zero) {
 			if hitRisk(in.Doc.Risk, lots, raw, recv) {
@@ -212,7 +221,7 @@ func Run(in Input) Result {
 				pend = &pending{side: "sell", signal: "risk_" + raw.Time, exit: true, created: raw.Time, targetFrac: decimal.Zero}
 				continue
 			}
-			exit, ready := strategy.EvalCond(in.Doc.Exit, signalBars, series, i)
+			exit, ready := strategy.EvalCond(in.Doc.Exit, evalBars, evalSeries, i)
 			if ready && exit {
 				sigs = append(sigs, Signal{Date: raw.Time, Kind: "exit"})
 				pend = &pending{side: "sell", signal: "exit_" + raw.Time, exit: true, created: raw.Time, targetFrac: decimal.Zero}
@@ -220,7 +229,7 @@ func Run(in Input) Result {
 			}
 		}
 		if posQty.Equal(decimal.Zero) && !soldToday {
-			enter, ready := strategy.EvalCond(in.Doc.Entry, signalBars, series, i)
+			enter, ready := strategy.EvalCond(in.Doc.Entry, evalBars, evalSeries, i)
 			if ready && enter {
 				sigs = append(sigs, Signal{Date: raw.Time, Kind: "entry"})
 				pend = &pending{side: "buy", signal: "entry_" + raw.Time, created: raw.Time, targetFrac: entryFrac}
@@ -234,6 +243,13 @@ func Run(in Input) Result {
 		"滑点 "+cfg.SlippageBPS+" bps，数量上限为前一日成交量的 "+cfg.ParticipationCap,
 		"费用来源 "+rule.Source+" / "+rule.Version,
 	)
+	if in.Doc.PriceBasis == "causal_qfq" {
+		if len(in.Actions) == 0 {
+			assumptions = append(assumptions, "区间内无公司行动记录，causal_qfq 与 raw 一致")
+		} else {
+			assumptions = append(assumptions, "信号按 causal_qfq：每个信号日只用当时已可知的公司行动调整历史窗口；成交仍用原始开盘价")
+		}
+	}
 	res := Result{
 		Status: "succeeded", Orders: orders, Fills: fills, Equity: equity, Signals: sigs,
 		Metrics: m, Assumptions: assumptions,

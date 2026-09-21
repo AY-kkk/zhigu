@@ -1,9 +1,14 @@
 package market
 
-import "github.com/shopspring/decimal"
+import (
+	"strings"
+	"time"
+
+	"github.com/shopspring/decimal"
+)
 
 const (
-	SourceContractVersion = "eastmoney_push2_kline_v3"
+	SourceContractVersion = "eastmoney_push2_kline_v4"
 	CalendarVersion       = "cn_hk_weekends_holidays_v1"
 	RuleVersion           = "exchange_board_rules_v1"
 	AdjustmentVersion     = "actions_v1"
@@ -38,6 +43,9 @@ type InstrumentView struct {
 	Aliases        []string `json:"aliases"`
 	CatalogVersion string   `json:"catalog_version"`
 	Unsupported    string   `json:"unsupported_reason,omitempty"`
+	Last           string   `json:"last,omitempty"`
+	Change         string   `json:"change,omitempty"`
+	ChangePct      string   `json:"change_pct,omitempty"`
 }
 
 type TradingRule struct {
@@ -64,6 +72,17 @@ type CorporateAction struct {
 	CashAmount    string  `json:"cash_amount,omitempty"`
 	Ratio         string  `json:"ratio,omitempty"`
 	EvidenceLevel string  `json:"evidence_level"`
+}
+
+func DayKey(s string) string {
+	s = strings.TrimSpace(s)
+	if len(s) >= 10 && s[4] == '-' && s[7] == '-' {
+		return s[:10]
+	}
+	if t, err := time.Parse(time.RFC3339, s); err == nil {
+		return t.UTC().Format("2006-01-02")
+	}
+	return s
 }
 
 func MustDec(s string) decimal.Decimal {

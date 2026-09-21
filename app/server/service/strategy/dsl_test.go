@@ -74,14 +74,37 @@ func TestGenerateTencentPhrase(t *testing.T) {
 	}
 }
 
-func TestGenerateClarificationAndForbidden(t *testing.T) {
+func TestGenerateFuzzyGoldCrossDefaultsMACD(t *testing.T) {
 	q := GenerateFromText(GenerateInput{Text: "金叉买入", InstrumentID: "600519.SH"})
-	if q.Status != "needs_clarification" {
+	if q.Status != "ready" || q.Document == nil {
 		t.Fatalf("%+v", q)
+	}
+	if len(q.Document.Indicators) == 0 || q.Document.Indicators[0].Type != "MACD" {
+		t.Fatalf("want default MACD %+v", q.Document.Indicators)
 	}
 	f := GenerateFromText(GenerateInput{Text: "未来三天会涨才买", InstrumentID: "600519.SH"})
 	if f.Status != "unsupported" {
 		t.Fatalf("%+v", f)
+	}
+}
+
+func TestGenerateNeedsInstrument(t *testing.T) {
+	q := GenerateFromText(GenerateInput{Text: "金叉买入"})
+	if q.Status != "needs_clarification" {
+		t.Fatalf("%+v", q)
+	}
+}
+
+func TestGenerateInfersInstrumentFromFuzzyText(t *testing.T) {
+	q := GenerateFromText(GenerateInput{Text: "茅台金叉买入"})
+	if q.Status != "ready" || q.Document == nil || q.Document.InstrumentID != "600519.SH" {
+		t.Fatalf("%+v", q)
+	}
+	if InferInstrumentID("600519 均线金叉") != "600519.SH" || InferInstrumentID("00700.HK 金叉") != "00700.HK" {
+		t.Fatal(InferInstrumentID("600519 均线金叉"), InferInstrumentID("00700.HK 金叉"))
+	}
+	if NameQuery("贝特瑞金叉买入") != "贝特瑞" || NameQuery("金叉买入") != "" {
+		t.Fatal(NameQuery("贝特瑞金叉买入"), NameQuery("金叉买入"))
 	}
 }
 

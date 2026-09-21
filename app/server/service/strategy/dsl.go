@@ -15,7 +15,7 @@ import (
 const (
 	SchemaVersion   = "strategy.v1"
 	CompilerVersion = "strategy.compile.v1"
-	PromptVersion   = "strategy.prompt.v1"
+	PromptVersion   = "strategy.prompt.v2"
 	MaxIndicators   = 20
 	MaxCondNodes    = 100
 	MaxCondDepth    = 8

@@ -33,13 +33,13 @@ ZHIGU_STAGE_B_LIVE_DATA=1 go test ./service/finance -run 'TestLiveDataSampleGate
 # 600519.SH / 300750.SZ / 000333.SZ 两年三表 PASS；600519.SH 与 00700.HK 三表6科目+公告 PASS
 
 cd app/research-service && PYTHONPATH=. .venv/bin/python -m pytest tests -q -p no:cacheprovider
-# 28 passed
+# 34 passed
 
 cd app/web && npm run build
 # vite build exit 0
 
-cd app/web && npx playwright test e2e/editorial.spec.js e2e/smoke.spec.js
-# 18 passed, 2 skipped（缺 ZHIGU_E2E_API 的真登录环）
+cd app/web && npx playwright test e2e/editorial.spec.js e2e/stage-b.spec.js e2e/stage-b-live.spec.js
+# editorial+stage-b 17 passed, 3 skipped（缺 ZHIGU_E2E_API / D-02 的真登录与 live 全链路）
 ```
 
 ## 阶段 A 记录（2026-09-18，仍有效）

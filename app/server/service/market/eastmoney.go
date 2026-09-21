@@ -286,33 +286,49 @@ func (e *EastMoney) Bars(ctx context.Context, inst SeedInstrument, period, adjus
 	q.Set("beg", beg)
 	q.Set("end", fin)
 	raw, err := e.getQuote(ctx, "/api/qt/stock/kline/get?"+q.Encode(), klineHosts)
+	if err == nil {
+		var env struct {
+			Data *struct {
+				Klines []string `json:"klines"`
+			} `json:"data"`
+		}
+		if json.Unmarshal(raw, &env) == nil && env.Data != nil {
+			complete := LastCompleteSession(CalendarID(inst.Exchange), time.Now().UTC())
+			out := make([]QuoteBar, 0, len(env.Data.Klines))
+			for _, line := range env.Data.Klines {
+				p := strings.Split(line, ",")
+				if len(p) < 6 {
+					continue
+				}
+				out = append(out, QuoteBar{
+					Time: p[0], Open: p[1], Close: p[2], High: p[3], Low: p[4],
+					Volume: toShares(p[5], inst.Exchange), IsFinal: p[0] <= complete,
+				})
+			}
+			if len(out) > 0 {
+				if len(out) > limit {
+					out = out[len(out)-limit:]
+				}
+				return out, nil
+			}
+		}
+	}
+	out, err := e.barsFromGtimg(ctx, inst, adjust, start, end, limit)
+	if err == nil && klineEnough(inst, out) {
+		return out, nil
+	}
+	if inst.Exchange != "HKEX" {
+		if sina, err2 := e.barsFromSina(ctx, inst, start, end, limit); err2 == nil && len(sina) > 0 {
+			return sina, nil
+		}
+	}
+	if err == nil && len(out) > 0 {
+		return out, nil
+	}
 	if err != nil {
 		return nil, err
 	}
-	var env struct {
-		Data *struct {
-			Klines []string `json:"klines"`
-		} `json:"data"`
-	}
-	if json.Unmarshal(raw, &env) != nil || env.Data == nil {
-		return nil, finance.NewError(503, "unavailable", "DATA_UNAVAILABLE", "K 线无法解析")
-	}
-	complete := LastCompleteSession(CalendarID(inst.Exchange), time.Now().UTC())
-	out := make([]QuoteBar, 0, len(env.Data.Klines))
-	for _, line := range env.Data.Klines {
-		p := strings.Split(line, ",")
-		if len(p) < 6 {
-			continue
-		}
-		out = append(out, QuoteBar{
-			Time: p[0], Open: p[1], Close: p[2], High: p[3], Low: p[4],
-			Volume: toShares(p[5], inst.Exchange), IsFinal: p[0] <= complete,
-		})
-	}
-	if len(out) > limit {
-		out = out[len(out)-limit:]
-	}
-	return out, nil
+	return nil, finance.NewError(503, "unavailable", "DATA_UNAVAILABLE", "K 线无法解析")
 }
 
 func toShares(vol, exchange string) string {
@@ -347,13 +363,24 @@ func (e *EastMoney) Actions(ctx context.Context, inst SeedInstrument) ([]Corpora
 	if err != nil {
 		return nil, err
 	}
+	return parseActions(raw)
+}
+
+func parseActions(raw []byte) ([]CorporateAction, error) {
 	var env struct {
-		Success bool `json:"success"`
+		Success bool   `json:"success"`
+		Message string `json:"message"`
 		Result  *struct {
 			Data []map[string]any `json:"data"`
 		} `json:"result"`
 	}
-	if json.Unmarshal(raw, &env) != nil || !env.Success || env.Result == nil {
+	if json.Unmarshal(raw, &env) != nil {
+		return nil, finance.NewError(503, "unavailable", "DATA_UNAVAILABLE", "公司行动无法解析")
+	}
+	if env.Result == nil {
+		if env.Success || strings.Contains(env.Message, "空") || strings.TrimSpace(env.Message) == "" {
+			return []CorporateAction{}, nil
+		}
 		return nil, finance.NewError(503, "unavailable", "DATA_UNAVAILABLE", "公司行动无法解析")
 	}
 	out := make([]CorporateAction, 0, len(env.Result.Data))

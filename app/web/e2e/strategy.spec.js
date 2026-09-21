@@ -22,7 +22,7 @@ test('strategy workbench search select and rule card', async ({ page }) => {
     }
     if (url.includes('/market/instruments?') || /\/market\/instruments$/.test(new URL(url).pathname)) {
       return fulfill(wrap({
-        items: [{ instrument_id: '00700.HK', name: '腾讯控股', exchange: 'HKEX', currency: 'HKD', asset_type: 'stock', code: '00700' }],
+        items: [{ instrument_id: '00700.HK', name: '腾讯控股', exchange: 'HKEX', currency: 'HKD', asset_type: 'stock', code: '00700', last: '430', change: '11', change_pct: '2.63' }],
         catalog_version: 'cat_e2e', catalog_as_of: '2026-09-18', freshness_status: 'fixture'
       }))
     }
@@ -30,6 +30,14 @@ test('strategy workbench search select and rule card', async ({ page }) => {
       return fulfill(wrap({
         instrument: { instrument_id: '00700.HK', name: '腾讯控股', exchange: 'HKEX', currency: 'HKD', asset_type: 'stock' },
         coverage: { status: 'ready' }, backtest_available: true
+      }))
+    }
+    if (url.includes('/market/quotes')) {
+      return fulfill(wrap({ items: [{ instrument_id: '00700.HK', last: '430', change: '11', change_pct: '2.63' }] }))
+    }
+    if (url.includes('/market/quote')) {
+      return fulfill(wrap({
+        instrument_id: '00700.HK', name: '腾讯控股', last: '430', change: '11', change_pct: '2.63', volume: '19669333'
       }))
     }
     if (url.includes('/market/ohlcv')) {
@@ -89,10 +97,19 @@ test('strategy workbench search select and rule card', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto('/app/strategies')
   await expect(page.getByRole('heading', { name: '策略助手' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '移除 MACD' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '移除 KDJ' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '移除 VOL' })).toBeVisible()
   await page.getByLabel('搜索股票').fill('700')
   await expect(page.getByRole('option').first()).toBeVisible()
+  await expect(page.getByTestId('hit-last')).toContainText('430')
   await page.getByRole('option').first().click()
   await expect(page.getByTestId('quote-ident')).toContainText('00700.HK')
+  await expect(page.getByTestId('quote-last')).toContainText('430')
+  await expect(page.getByTestId('quote-date')).toHaveText('2026-09-18')
+  await expect(page.getByTestId('chart-host')).toBeVisible()
+  await expect(page.getByTestId('chart-reset')).toBeVisible()
+  await page.getByTestId('chart-reset').click()
   await expect(page.getByText('时效未验证', { exact: false })).toBeVisible()
   await page.getByPlaceholder(/例如：MACD/).fill('MACD 金叉且 KDJ 的 K 小于 30 时半仓买入，MACD 死叉卖出')
   await expect(page.getByTestId('generate-rule')).toBeEnabled()
@@ -105,6 +122,78 @@ test('strategy workbench search select and rule card', async ({ page }) => {
   await page.getByRole('button', { name: '应用修改' }).click()
   await page.getByTestId('run-backtest').click()
   await expect(page.getByText('总收益')).toBeVisible({ timeout: 10000 })
+})
+
+test('strategy chart OHLC panel reset and older bars', async ({ page }) => {
+  await seedSession(page)
+  await page.route('**/api/finance/**', async (route) => {
+    const url = route.request().url()
+    const fulfill = (body, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) })
+    if (url.includes('/market/indicators') && !url.includes('indicator-series')) {
+      return fulfill(wrap({ items: [{ type: 'MACD', pane: 'oscillator' }, { type: 'MA', pane: 'price' }], engine_version: 'indicators.v1' }))
+    }
+    if (url.includes('/market/instruments?') || /\/market\/instruments$/.test(new URL(url).pathname)) {
+      return fulfill(wrap({
+        items: [{ instrument_id: '600519.SH', name: '贵州茅台', exchange: 'SSE', currency: 'CNY', asset_type: 'stock', code: '600519' }],
+        catalog_version: 'cat_e2e', catalog_as_of: '2026-09-18', freshness_status: 'fixture'
+      }))
+    }
+    if (url.includes('/market/instruments/600519.SH')) {
+      return fulfill(wrap({
+        instrument: { instrument_id: '600519.SH', name: '贵州茅台', exchange: 'SSE', currency: 'CNY', asset_type: 'stock' },
+        coverage: { status: 'ready' }, backtest_available: true
+      }))
+    }
+    if (url.includes('/market/quotes')) {
+      return fulfill(wrap({ items: [{ instrument_id: '600519.SH', last: '1252.57', change: '-4.55', change_pct: '-0.36' }] }))
+    }
+    if (url.includes('/market/quote')) {
+      return fulfill(wrap({
+        instrument_id: '600519.SH', name: '贵州茅台', last: '1252.57', change: '-4.55', change_pct: '-0.36', volume: '2501700'
+      }))
+    }
+    if (url.includes('/market/ohlcv')) {
+      const older = url.includes('cursor=')
+      return fulfill(wrap({
+        instrument_id: '600519.SH', name: '贵州茅台', exchange: 'SSE', currency: 'CNY', period: '1d', adjust: 'raw',
+        data_snapshot_id: 'snap_e2e',
+        quality: { status: 'complete', freshness_status: 'fixture', last_complete_date: '2026-09-18', warnings: ['时效未验证'] },
+        bars: older
+          ? [
+              { time: '2026-09-11', open: '1400', high: '1410', low: '1390', close: '1405', volume: '800', is_final: true },
+              { time: '2026-09-12', open: '1405', high: '1420', low: '1400', close: '1418', volume: '900', is_final: true }
+            ]
+          : [
+              { time: '2026-09-16', open: '1420', high: '1430', low: '1415', close: '1428', volume: '1000', is_final: true },
+              { time: '2026-09-17', open: '1428', high: '1440', low: '1420', close: '1435', volume: '1100', is_final: true },
+              { time: '2026-09-18', open: '1435', high: '1450', low: '1430', close: '1448', volume: '1200', is_final: true }
+            ],
+        has_more: !older,
+        next_cursor: older ? null : 'older1'
+      }))
+    }
+    if (url.includes('/indicator-series')) {
+      return fulfill(wrap({ series: [], times: ['2026-09-16', '2026-09-17', '2026-09-18'] }))
+    }
+    return fulfill(wrap({ items: [], revision: 0 }))
+  })
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/app/strategies')
+  const olderReq = page.waitForRequest((req) => req.url().includes('/market/ohlcv') && req.url().includes('cursor='), { timeout: 8000 })
+  await page.getByLabel('搜索股票').fill('600519')
+  await expect(page.getByRole('option').first()).toBeVisible()
+  await page.getByRole('option').first().click()
+  await expect(page.getByTestId('quote-date')).toHaveText('2026-09-18')
+  await expect(page.getByTestId('chart-host')).toBeVisible()
+  const autoOlder = await olderReq.catch(() => null)
+  if (!autoOlder) {
+    await page.getByRole('button', { name: '更早行情' }).click()
+  }
+  await page.getByTestId('chart-reset').click()
+  const box = await page.getByTestId('chart-host').boundingBox()
+  expect(box?.height || 0).toBeGreaterThan(200)
+  await page.mouse.move(box.x + box.width * 0.75, box.y + 80)
+  await expect(page.getByTestId('quote-strip')).toContainText('开')
 })
 
 test('mobile strategy uses tabs', async ({ page }) => {

@@ -105,7 +105,7 @@ func readZipFile(f *zip.File) ([]byte, error) {
 		return nil, err
 	}
 	defer rc.Close()
-	return io.ReadAll(io.LimitReader(rc, 12<<20))
+	return io.ReadAll(io.LimitReader(rc, 32<<20))
 }
 
 func joinRuns(t string, runs []xRun) string {

@@ -21,6 +21,8 @@ func RegisterStrategy(engine *gin.Engine, hub *workbench.Hub) {
 	g.GET("/market/instruments", func(c *gin.Context) { strategySearch(c, hub) })
 	g.GET("/market/instruments/*id", func(c *gin.Context) { strategyInstrument(c, hub) })
 	g.GET("/market/ohlcv", func(c *gin.Context) { strategyOHLCV(c, hub) })
+	g.GET("/market/quotes", func(c *gin.Context) { strategyQuotes(c, hub) })
+	g.GET("/market/quote", func(c *gin.Context) { strategyQuote(c, hub) })
 	g.GET("/market/indicators", func(c *gin.Context) {
 		httpx.OK(c, http.StatusOK, gin.H{"items": hub.IndicatorRegistry(), "engine_version": indicators.EngineVersion})
 	})
@@ -82,6 +84,29 @@ func strategyOHLCV(c *gin.Context, hub *workbench.Hub) {
 		return
 	}
 	httpx.OK(c, http.StatusOK, out)
+}
+
+func strategyQuote(c *gin.Context, hub *workbench.Hub) {
+	out, err := hub.Quote(svcfinance.WithUser(c.Request.Context(), httpx.CurrentUserID(c), roleOf(c)), c.Query("instrument_id"))
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	httpx.OK(c, http.StatusOK, out)
+}
+
+func strategyQuotes(c *gin.Context, hub *workbench.Hub) {
+	raw := strings.TrimSpace(c.Query("ids"))
+	var ids []string
+	if raw != "" {
+		ids = strings.Split(raw, ",")
+	}
+	out, err := hub.Quotes(svcfinance.WithUser(c.Request.Context(), httpx.CurrentUserID(c), roleOf(c)), ids)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	httpx.OK(c, http.StatusOK, gin.H{"items": out})
 }
 
 func strategyIndicatorSeries(c *gin.Context, hub *workbench.Hub) {

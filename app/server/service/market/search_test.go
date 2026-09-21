@@ -9,6 +9,7 @@ import (
 )
 
 func TestSearchFixtureUniverse(t *testing.T) {
+	t.Setenv("ZHIGU_MARKET_MODE", "fixture")
 	db := testdb.Start(t)
 	svc := NewService(db)
 	ctx := context.Background()

@@ -122,7 +122,7 @@ func TestParseSZSEAndHKEXXLSX(t *testing.T) {
 }
 
 func TestAllowOfficialAndKlineHosts(t *testing.T) {
-	for _, host := range []string{"www.szse.cn", "query.sse.com.cn", "www.bse.cn", "www.hkex.com.hk", "72.push2his.eastmoney.com"} {
+	for _, host := range []string{"www.szse.cn", "query.sse.com.cn", "www.bse.cn", "www.hkex.com.hk", "72.push2his.eastmoney.com", "web.ifzq.gtimg.cn"} {
 		if _, ok := quoteHosts[host]; !ok {
 			t.Fatalf("missing host %s", host)
 		}

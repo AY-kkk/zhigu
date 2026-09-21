@@ -47,6 +47,7 @@ func TestLiveCoverageAudit(t *testing.T) {
 		OperationalCounts: byEx, OfficialSources: off.Sources, OfficialErrors: off.Errors,
 		Notes: []string{
 			"运营目录 = 巨潮上市名单 ∪ 交易所官方名单。覆盖率分母为官方名单，不是巨潮。",
+			"claim_100 仅表示运营目录包含全部官方股票柜台，不是全市场 K 线、公司行动或回测签收。",
 			"K 线按 push2his → 72.push2his → 80.push2his 回退。",
 		},
 		KlineSamples: map[string]any{},

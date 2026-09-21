@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -145,8 +146,10 @@ func (s *Service) Search(ctx context.Context, q, market, exchange, cursor string
 	if err := s.ensureCatalog(ctx); err != nil {
 		return SearchResult{}, err
 	}
-	if limit <= 0 || limit > 50 {
+	if limit <= 0 {
 		limit = 20
+	} else if limit > 80 {
+		limit = 80
 	}
 	meta, _ := s.CatalogMeta(ctx)
 	ver, _ := meta["catalog_version"].(string)
@@ -203,6 +206,7 @@ func (s *Service) Search(ctx context.Context, q, market, exchange, cursor string
 		}
 	}
 	if cursor == "" {
+		rankNameHits(q, rest)
 		rows = append(exact, rest...)
 	}
 	var next *string
@@ -216,7 +220,69 @@ func (s *Service) Search(ctx context.Context, q, market, exchange, cursor string
 	for _, r := range rows {
 		items = append(items, toView(r))
 	}
+	s.attachQuotes(ctx, items)
 	return SearchResult{Items: items, NextCursor: next, CatalogVersion: ver, CatalogAsOf: asOf, Freshness: fresh}, nil
+}
+
+func listingKey(r model.Instrument) string {
+	if r.ListingDate != nil {
+		return *r.ListingDate
+	}
+	return ""
+}
+
+func rankNameHits(q string, rest []model.Instrument) {
+	want := strings.TrimSpace(q)
+	if want == "" {
+		return
+	}
+	sort.SliceStable(rest, func(i, j int) bool {
+		ni, nj := rest[i].Name == want, rest[j].Name == want
+		if ni != nj {
+			return ni
+		}
+		di := rest[i].DelistingDate != nil && *rest[i].DelistingDate != ""
+		dj := rest[j].DelistingDate != nil && *rest[j].DelistingDate != ""
+		if di != dj {
+			return !di
+		}
+		if li, lj := listingKey(rest[i]), listingKey(rest[j]); li != lj {
+			return li > lj
+		}
+		// 北交所 2025 年后代码迁到 92 开头，旧 43/83/87 与新代码同名时优先新代码。
+		if rest[i].Exchange == "BSE" && rest[j].Exchange == "BSE" {
+			ci, cj := strings.HasPrefix(rest[i].Code, "92"), strings.HasPrefix(rest[j].Code, "92")
+			if ci != cj {
+				return ci
+			}
+		}
+		return false
+	})
+}
+
+func (s *Service) attachQuotes(ctx context.Context, items []InstrumentView) {
+	if s.mode != "live" || len(items) == 0 {
+		return
+	}
+	em, ok := s.Adapter.(*EastMoney)
+	if !ok || em == nil {
+		return
+	}
+	seeds := make([]SeedInstrument, 0, len(items))
+	for _, it := range items {
+		seeds = append(seeds, SeedInstrument{InstrumentID: it.InstrumentID, Exchange: it.Exchange, Code: it.Code, Name: it.Name})
+	}
+	got, err := em.LastQuotes(ctx, seeds)
+	if err != nil {
+		return
+	}
+	for i := range items {
+		q, ok := got[items[i].InstrumentID]
+		if !ok {
+			continue
+		}
+		items[i].Last, items[i].Change, items[i].ChangePct = q.Last, q.Change, q.ChangePct
+	}
 }
 
 func containsHK(id, q string) bool {
@@ -239,8 +305,8 @@ func toView(r model.Instrument) InstrumentView {
 	if r.AssetType != "stock" {
 		v.Unsupported = "该证券类型不是股票，策略与股票回测不可用"
 	}
-	if r.LotSize <= 0 && r.Exchange == "HKEX" {
-		v.Unsupported = "缺少每手股数，历史回测暂不可用；行情仍可查看"
+	if v.LotSize <= 0 {
+		v.LotSize = RuleFor(r.Exchange, r.Board, time.Now().Format("2006-01-02")).LotSize
 	}
 	return v
 }
@@ -255,20 +321,106 @@ func (s *Service) GetInstrument(ctx context.Context, id string) (map[string]any,
 	}
 	view := toView(row)
 	rule := RuleFor(row.Exchange, row.Board, time.Now().Format("2006-01-02"))
-	if row.LotSize > 0 {
-		rule.LotSize = row.LotSize
+	if view.LotSize > 0 {
+		rule.LotSize = view.LotSize
 	}
 	cover := s.coverage(ctx, id)
+	if q, err := s.GetQuote(ctx, id); err == nil {
+		view.Last, view.Change, view.ChangePct = q.Last, q.Change, q.ChangePct
+	}
 	return map[string]any{
 		"instrument":         view,
 		"rule":               rule,
 		"periods":            []string{"1d", "1w", "1mo"},
 		"adjust":             []string{"raw", "qfq", "hfq"},
 		"coverage":           cover,
-		"intraday":           map[string]any{"status": "unverified", "label": "时效未验证"},
-		"backtest_available": view.AssetType == "stock" && row.LotSize > 0,
+		"intraday":           map[string]any{"status": "unverified", "label": "最新价延迟未知"},
+		"backtest_available": view.AssetType == "stock" && view.LotSize > 0,
 		"reason":             view.Unsupported,
 	}, nil
+}
+
+func (s *Service) GetQuote(ctx context.Context, id string) (QuoteSnapshot, error) {
+	if err := s.ensureCatalog(ctx); err != nil {
+		return QuoteSnapshot{}, err
+	}
+	var row model.Instrument
+	if err := s.DB.WithContext(ctx).Where("instrument_id = ?", id).Take(&row).Error; err != nil {
+		return QuoteSnapshot{}, finance.NewError(404, "not_found", "NOT_FOUND", "标的不存在")
+	}
+	seed := SeedInstrument{InstrumentID: row.InstrumentID, Exchange: row.Exchange, Code: row.Code, Name: row.Name, Board: row.Board, AssetType: row.AssetType}
+	if s.mode == "live" {
+		if em, ok := s.Adapter.(*EastMoney); ok && em != nil {
+			if q, err := em.LastQuote(ctx, seed); err == nil {
+				return q, nil
+			}
+		}
+	}
+	pack, err := s.loadBars(ctx, row, "1d", "raw")
+	if err != nil || len(pack.Bars) == 0 {
+		return QuoteSnapshot{}, finance.NewError(503, "unavailable", "DATA_UNAVAILABLE", "最新价不可用")
+	}
+	last := pack.Bars[len(pack.Bars)-1]
+	return QuoteSnapshot{
+		InstrumentID: row.InstrumentID, Name: row.Name, Exchange: row.Exchange,
+		Last: last.Close, Open: last.Open, High: last.High, Low: last.Low, PrevClose: last.Close,
+		Volume: last.Volume, ObservedAt: time.Now().UTC().Format(time.RFC3339), MarketTime: last.Time,
+		IsFinal: last.IsFinal, SourceID: pack.Source,
+		Quality: map[string]any{"status": "unverified", "freshness_status": "daily_close", "warnings": []string{"无盘中最新价，展示最近完整日收盘"}},
+	}, nil
+}
+
+func (s *Service) GetQuotes(ctx context.Context, ids []string) ([]QuoteSnapshot, error) {
+	if err := s.ensureCatalog(ctx); err != nil {
+		return nil, err
+	}
+	seen := map[string]struct{}{}
+	want := make([]string, 0, len(ids))
+	for _, id := range ids {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		want = append(want, id)
+		if len(want) >= 80 {
+			break
+		}
+	}
+	if len(want) == 0 {
+		return []QuoteSnapshot{}, nil
+	}
+	var rows []model.Instrument
+	if err := s.DB.WithContext(ctx).Where("instrument_id IN ?", want).Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make([]QuoteSnapshot, 0, len(want))
+	if s.mode == "live" {
+		if em, ok := s.Adapter.(*EastMoney); ok && em != nil {
+			seeds := make([]SeedInstrument, 0, len(rows))
+			for _, r := range rows {
+				seeds = append(seeds, SeedInstrument{InstrumentID: r.InstrumentID, Exchange: r.Exchange, Code: r.Code, Name: r.Name, Board: r.Board, AssetType: r.AssetType})
+			}
+			got, err := em.LastQuotes(ctx, seeds)
+			if err == nil {
+				for _, id := range want {
+					if q, ok := got[id]; ok {
+						out = append(out, q)
+					}
+				}
+				return out, nil
+			}
+		}
+	}
+	for _, id := range want {
+		if q, err := s.GetQuote(ctx, id); err == nil {
+			out = append(out, q)
+		}
+	}
+	return out, nil
 }
 
 func (s *Service) coverage(ctx context.Context, id string) map[string]any {
@@ -332,7 +484,7 @@ func (s *Service) GetOHLCV(ctx context.Context, id, period, adjust, start, end, 
 		return OHLCV{}, err
 	}
 	pack := v.(barPack)
-	bars := pack.Bars
+	bars := normalizeBars(pack.Bars)
 	if start != "" || end != "" {
 		filtered := make([]QuoteBar, 0, len(bars))
 		for _, b := range bars {
@@ -410,7 +562,7 @@ func (s *Service) loadBars(ctx context.Context, inst model.Instrument, period, a
 		}
 		bars := make([]QuoteBar, 0, len(rows))
 		for _, r := range rows {
-			b := QuoteBar{Time: r.TradeDate, Open: r.Open, High: r.High, Low: r.Low, Close: r.Close, Volume: r.Volume, IsFinal: r.IsFinal}
+			b := QuoteBar{Time: DayKey(r.TradeDate), Open: r.Open, High: r.High, Low: r.Low, Close: r.Close, Volume: r.Volume, IsFinal: r.IsFinal}
 			if r.PeriodStart != nil {
 				b.PeriodStart = *r.PeriodStart
 			}
@@ -478,6 +630,24 @@ func (s *Service) loadBars(ctx context.Context, inst model.Instrument, period, a
 		}
 	}
 	return barPack{SnapshotID: id, Source: src, Bars: use, Latest: latest}, nil
+}
+
+func normalizeBars(bars []QuoteBar) []QuoteBar {
+	out := make([]QuoteBar, 0, len(bars))
+	for _, b := range bars {
+		b.Time = DayKey(b.Time)
+		if b.PeriodStart != "" {
+			b.PeriodStart = DayKey(b.PeriodStart)
+		}
+		if b.PeriodEnd != "" {
+			b.PeriodEnd = DayKey(b.PeriodEnd)
+		}
+		if b.Time == "" {
+			continue
+		}
+		out = append(out, b)
+	}
+	return out
 }
 
 func (s *Service) snapshotFresh(inst model.Instrument, snap model.Snapshot) bool {

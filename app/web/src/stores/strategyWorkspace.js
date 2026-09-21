@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import * as api from '../api/strategies.js'
+import { timeKey } from '../components/strategies/chartTime.js'
 
 function newKey() {
   return crypto.randomUUID()
@@ -7,6 +8,32 @@ function newKey() {
 
 function errText(e) {
   return e?.message || '请求失败'
+}
+
+const defaultChartIndicators = [
+  { id: 'ma5', type: 'MA', params: { n: 5 } },
+  { id: 'ma10', type: 'MA', params: { n: 10 } },
+  { id: 'ma20', type: 'MA', params: { n: 20 } },
+  { id: 'vol', type: 'VOL', params: { ma5: 5, ma10: 10 } },
+  { id: 'macd', type: 'MACD', params: { fast: 12, slow: 26, signal: 9 } },
+  { id: 'kdj', type: 'KDJ', params: { n: 9, m1: 3, m2: 3 } }
+]
+
+function withThreePanes(list) {
+  const rows = Array.isArray(list) ? list.filter((r) => r && r.type) : []
+  const types = new Set(rows.map((r) => r.type))
+  const out = [...rows]
+  if (![...types].some((t) => t === 'MA' || t === 'EMA' || t === 'BOLL')) {
+    out.unshift({ id: 'ma20', type: 'MA', params: { n: 20 } })
+  }
+  if (!types.has('VOL')) {
+    out.push({ id: 'vol', type: 'VOL', params: { ma5: 5, ma10: 10 } })
+  }
+  if (![...types].some((t) => ['MACD', 'KDJ', 'RSI', 'WR', 'BIAS', 'CCI', 'ATR', 'OBV'].includes(t))) {
+    out.push({ id: 'macd', type: 'MACD', params: { fast: 12, slow: 26, signal: 9 } })
+    out.push({ id: 'kdj', type: 'KDJ', params: { n: 9, m1: 3, m2: 3 } })
+  }
+  return out
 }
 
 function payloadOf(res) {
@@ -55,20 +82,22 @@ export const useStrategyWorkspace = defineStore('strategyWorkspace', {
     hits: [],
     searchBusy: false,
     searchError: '',
+    searchMarket: '',
+    searchCursor: null,
     instrument: null,
     coverage: null,
     bars: [],
     ohlcvMeta: null,
     ohlcvBusy: false,
     ohlcvError: '',
+    ohlcvLoadingMore: false,
     seq: 0,
     period: '1d',
     adjust: 'raw',
     hover: null,
-    chartIndicators: [
-      { id: 'ma20', type: 'MA', params: { n: 20 } },
-      { id: 'vol', type: 'VOL', params: { ma5: 5, ma10: 10 } }
-    ],
+    quote: null,
+    quoteTimer: 0,
+    chartIndicators: defaultChartIndicators.map((row) => ({ ...row, params: { ...row.params } })),
     series: [],
     registry: [],
     prompt: '',
@@ -106,7 +135,7 @@ export const useStrategyWorkspace = defineStore('strategyWorkspace', {
   getters: {
     hoverValues(state) {
       if (!state.hover || !state.bars.length) return {}
-      const i = state.bars.findIndex((b) => b.time === state.hover.time)
+      const i = state.bars.findIndex((b) => timeKey(b.time) === timeKey(state.hover.time))
       if (i < 0) return {}
       const out = {}
       state.series.forEach((row) => {
@@ -124,12 +153,19 @@ export const useStrategyWorkspace = defineStore('strategyWorkspace', {
     async boot() {
       await Promise.all([this.loadRegistry(), this.loadWorkspace(), this.refreshStrategies()])
     },
-    async search() {
+    async search(append = false) {
       this.searchBusy = true
       this.searchError = ''
       try {
-        const res = await api.searchInstruments({ q: this.query, limit: 20 })
-        this.hits = res.data.items || []
+        const res = await api.searchInstruments({
+          q: this.query,
+          market: this.searchMarket || undefined,
+          cursor: append ? this.searchCursor : undefined,
+          limit: 40
+        })
+        const items = res.data.items || []
+        this.hits = append ? [...this.hits, ...items] : items
+        this.searchCursor = res.data.next_cursor || null
         this.catalogMeta = {
           catalog_version: res.data.catalog_version,
           catalog_as_of: res.data.catalog_as_of,
@@ -137,10 +173,15 @@ export const useStrategyWorkspace = defineStore('strategyWorkspace', {
         }
       } catch (e) {
         this.searchError = errText(e)
-        this.hits = []
+        if (!append) this.hits = []
       } finally {
         this.searchBusy = false
       }
+    },
+    setSearchMarket(market) {
+      this.searchMarket = market
+      this.searchCursor = null
+      this.search()
     },
     async loadRegistry() {
       try {
@@ -156,7 +197,7 @@ export const useStrategyWorkspace = defineStore('strategyWorkspace', {
         this.workspaceRevision = res.data.revision || 0
         this.watchlist = Array.isArray(res.data.watchlist) ? res.data.watchlist : []
         if (Array.isArray(res.data.chart_indicators) && res.data.chart_indicators.length) {
-          this.chartIndicators = res.data.chart_indicators
+          this.chartIndicators = withThreePanes(res.data.chart_indicators)
         }
         if (res.data.last_instrument_id) {
           await this.selectInstrument(res.data.last_instrument_id)
@@ -193,6 +234,8 @@ export const useStrategyWorkspace = defineStore('strategyWorkspace', {
       this.ohlcvError = ''
       this.bars = []
       this.instrument = null
+      this.quote = null
+      this.stopQuote()
       try {
         const [detail, ohlcv] = await Promise.all([
           api.getInstrument(id),
@@ -214,6 +257,8 @@ export const useStrategyWorkspace = defineStore('strategyWorkspace', {
         }
         this.schedulePersist()
         await this.refreshIndicators(seq)
+        await this.refreshQuote(seq)
+        this.startQuote(seq)
       } catch (e) {
         if (seq !== this.seq) return
         this.ohlcvError = errText(e)
@@ -221,10 +266,34 @@ export const useStrategyWorkspace = defineStore('strategyWorkspace', {
         if (seq === this.seq) this.ohlcvBusy = false
       }
     },
+    stopQuote() {
+      if (this.quoteTimer) {
+        clearInterval(this.quoteTimer)
+        this.quoteTimer = 0
+      }
+    },
+    startQuote(seq) {
+      this.stopQuote()
+      this.quoteTimer = setInterval(() => {
+        this.refreshQuote(seq)
+      }, 15000)
+    },
+    async refreshQuote(seq) {
+      const id = this.instrument?.instrument_id
+      if (!id) return
+      try {
+        const res = await api.getQuote({ instrument_id: id })
+        if (seq && seq !== this.seq) return
+        this.quote = res.data || null
+      } catch {
+        if (seq && seq !== this.seq) return
+      }
+    },
     async loadMore() {
       const cursor = this.ohlcvMeta?.next_cursor
-      if (!cursor || !this.instrument?.instrument_id) return
+      if (!cursor || !this.instrument?.instrument_id || this.ohlcvLoadingMore) return
       const seq = this.seq
+      this.ohlcvLoadingMore = true
       try {
         const ohlcv = await api.getOHLCV({
           instrument_id: this.instrument.instrument_id,
@@ -240,7 +309,10 @@ export const useStrategyWorkspace = defineStore('strategyWorkspace', {
         this.ohlcvMeta = { ...ohlcv.data, bars: this.bars }
         await this.refreshIndicators(seq)
       } catch (e) {
+        if (seq !== this.seq) return
         this.ohlcvError = errText(e)
+      } finally {
+        if (seq === this.seq) this.ohlcvLoadingMore = false
       }
     },
     async setPeriod(period) {
@@ -298,21 +370,16 @@ export const useStrategyWorkspace = defineStore('strategyWorkspace', {
     applyStrategyIndicators() {
       const inds = this.draft?.dsl?.indicators
       if (!Array.isArray(inds)) return
-      this.chartIndicators = inds.map((row) => ({ ...row }))
+      this.chartIndicators = withThreePanes(inds.map((row) => ({ ...row })))
       this.schedulePersist()
       this.refreshIndicators(this.seq)
     },
     async generate() {
-      if (!this.instrument?.instrument_id) {
-        this.genStatus = 'failed'
-        this.genError = '请先选择股票'
-        return { status: 'failed', hasDsl: Boolean(this.draft?.dsl), err: this.genError }
-      }
       this.genStatus = 'queued'
       this.genError = ''
       try {
         const res = await api.generateDraft(
-          { text: this.prompt, instrument_id: this.instrument.instrument_id, draft_id: this.draft?.draft_id, base_revision: this.draft?.revision },
+          { text: this.prompt, instrument_id: this.instrument?.instrument_id || '', draft_id: this.draft?.draft_id, base_revision: this.draft?.revision },
           newKey()
         )
         const started = payloadOf(res)
@@ -325,7 +392,10 @@ export const useStrategyWorkspace = defineStore('strategyWorkspace', {
         }
         for (let i = 0; i < 40; i += 1) {
           const g = payloadOf(await api.getGeneration(id))
-          const dsl = g.dsl && typeof g.dsl === 'object' ? g.dsl : null
+          let dsl = g.dsl && typeof g.dsl === 'object' ? g.dsl : null
+          if (!dsl && typeof g.dsl === 'string') {
+            try { dsl = JSON.parse(g.dsl) } catch { dsl = null }
+          }
           this.genStatus = g.status || this.genStatus
           this.draft = {
             draft_id: g.draft_id || started.draft_id,
@@ -338,12 +408,19 @@ export const useStrategyWorkspace = defineStore('strategyWorkspace', {
           this.draftRev += 1
           if (dsl) this.dslText = JSON.stringify(dsl, null, 2)
           if (g.error_message) this.genError = g.error_message
+          if (g.status === 'ready' && !dsl) {
+            await new Promise((r) => setTimeout(r, 250))
+            continue
+          }
           if (['ready', 'failed', 'unsupported', 'needs_clarification', 'canceled'].includes(g.status)) break
           await new Promise((r) => setTimeout(r, 250))
         }
         if (!['ready', 'failed', 'unsupported', 'needs_clarification', 'canceled'].includes(this.genStatus)) {
           this.genStatus = 'failed'
           this.genError = this.genError || '生成超时'
+        }
+        if (this.draft?.dsl?.instrument_id && this.instrument?.instrument_id !== this.draft.dsl.instrument_id) {
+          await this.selectInstrument(this.draft.dsl.instrument_id)
         }
       } catch (e) {
         this.genStatus = 'failed'
@@ -443,6 +520,18 @@ export const useStrategyWorkspace = defineStore('strategyWorkspace', {
         this.btError = '请先生成可执行规则'
         return
       }
+      if (!this.instrument?.instrument_id) {
+        this.btError = '请先选择一只股票'
+        return
+      }
+      if (!this.start || !this.end) {
+        this.btError = '请填写回测起止日期'
+        return
+      }
+      if (!this.initialCash || Number(this.initialCash) <= 0) {
+        this.btError = '请填写大于 0 的初始资金'
+        return
+      }
       this.btBusy = true
       this.btError = ''
       this.results = null
@@ -479,6 +568,9 @@ export const useStrategyWorkspace = defineStore('strategyWorkspace', {
         if (run?.status === 'succeeded') {
           this.results = (await api.getBacktestResults(id)).data
           this.trades = (await api.getBacktestTrades(id)).data
+          if (this.results?.manifest?.initial_cash_raised) {
+            this.initialCash = String(this.results.manifest.initial_cash_raised)
+          }
           this.resultTab = 'overview'
           this.mobileTab = this.mobileTab === 'quote' ? 'quote' : 'result'
         } else {

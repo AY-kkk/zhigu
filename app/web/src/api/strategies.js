@@ -9,6 +9,12 @@ export function getInstrument(id, config = {}) {
 export function getOHLCV(params, config = {}) {
   return http.get('/api/finance/market/ohlcv', { ...config, params })
 }
+export function getQuote(params, config = {}) {
+  return http.get('/api/finance/market/quote', { ...config, params })
+}
+export function getQuotes(params, config = {}) {
+  return http.get('/api/finance/market/quotes', { ...config, params })
+}
 export function listIndicators(config = {}) {
   return http.get('/api/finance/market/indicators', config)
 }

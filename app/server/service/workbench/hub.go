@@ -6,7 +6,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
+	"github.com/shopspring/decimal"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
 
@@ -112,6 +114,14 @@ func (h *Hub) Instrument(ctx context.Context, id string) (map[string]any, error)
 
 func (h *Hub) OHLCV(ctx context.Context, id, period, adjust, start, end, cursor string, limit int) (market.OHLCV, error) {
 	return h.Market.GetOHLCV(ctx, id, period, adjust, start, end, cursor, limit)
+}
+
+func (h *Hub) Quote(ctx context.Context, id string) (market.QuoteSnapshot, error) {
+	return h.Market.GetQuote(ctx, id)
+}
+
+func (h *Hub) Quotes(ctx context.Context, ids []string) ([]market.QuoteSnapshot, error) {
+	return h.Market.GetQuotes(ctx, ids)
 }
 
 func (h *Hub) IndicatorRegistry() []indicators.Descriptor {
@@ -275,12 +285,18 @@ func (h *Hub) runGenerate(id string) {
 		return
 	}
 	h.DB.Model(&g).Updates(map[string]any{"status": "generating", "updated_at": time.Now().UTC()})
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
 	inst := ""
 	if g.InstrumentID != nil {
 		inst = *g.InstrumentID
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
-	defer cancel()
+	if inst == "" {
+		inst = strategy.InferInstrumentID(g.Text)
+	}
+	if inst == "" {
+		inst = h.resolveInstrument(ctx, g.Text)
+	}
 	out := strategy.GenerateFromText(strategy.GenerateInput{Text: g.Text, InstrumentID: inst})
 	if live, ok := h.liveModel(ctx); ok {
 		live.Text = g.Text
@@ -339,8 +355,44 @@ func (h *Hub) runGenerate(id string) {
 		draft.Status = "unsupported"
 	}
 	g.UpdatedAt, draft.UpdatedAt = now, now
-	_ = h.DB.Save(&g).Error
 	_ = h.DB.Save(&draft).Error
+	_ = h.DB.Save(&g).Error
+}
+
+func (h *Hub) resolveInstrument(ctx context.Context, text string) string {
+	if h.Market == nil {
+		return ""
+	}
+	q := strategy.NameQuery(text)
+	if q == "" || utf8.RuneCountInString(q) < 2 {
+		return ""
+	}
+	res, err := h.Market.Search(ctx, q, "", "", "", 8)
+	if err != nil {
+		return ""
+	}
+	var cand []market.InstrumentView
+	for _, it := range res.Items {
+		if it.AssetType != "" && it.AssetType != "stock" {
+			continue
+		}
+		if it.Name == q || strings.Contains(text, it.Name) {
+			if it.DelistingDate != nil && *it.DelistingDate != "" {
+				continue
+			}
+			if it.TradingStatus == "delisted" {
+				continue
+			}
+			cand = append(cand, it)
+		}
+	}
+	if len(cand) > 0 {
+		return cand[0].InstrumentID
+	}
+	if len(res.Items) == 1 && (res.Items[0].AssetType == "" || res.Items[0].AssetType == "stock") {
+		return res.Items[0].InstrumentID
+	}
+	return ""
 }
 
 func (h *Hub) GetGeneration(ctx context.Context, id string) (map[string]any, error) {
@@ -679,6 +731,12 @@ func (h *Hub) runBacktest(id string) {
 		}
 	}
 	cfg.DataSnapshotID = snap
+	note := raiseCashForOneLot(&cfg, bars, rule.LotSize)
+	if note != "" {
+		if rawCfg, err := json.Marshal(cfg); err == nil {
+			h.DB.Model(&run).Update("config", datatypes.JSON(rawCfg))
+		}
+	}
 	h.DB.Model(&run).Updates(map[string]any{"status": "running", "progress": datatypes.JSON([]byte(`{"stage":"running","bars_total":` + itoa(len(bars)) + `}`)), "updated_at": time.Now().UTC()})
 	res := backtest.Run(backtest.Input{
 		Doc: doc, Compiled: compiled, Raw: bars, Instrument: inst, Rule: rule, Config: cfg, Actions: actions,
@@ -687,6 +745,13 @@ func (h *Hub) runBacktest(id string) {
 	if res.Status != "succeeded" {
 		h.failRun(run, res.ErrorCode, res.Message)
 		return
+	}
+	if note != "" {
+		res.Assumptions = append(res.Assumptions, note)
+		if res.Manifest == nil {
+			res.Manifest = map[string]any{}
+		}
+		res.Manifest["initial_cash_raised"] = cfg.InitialCash
 	}
 	var latest model.BacktestRun
 	if err := h.DB.Where("id = ?", run.ID).Take(&latest).Error; err != nil {
@@ -798,7 +863,7 @@ func (h *Hub) GetResults(ctx context.Context, id string) (map[string]any, error)
 	}
 	var eq []model.EquityRow
 	_ = h.DB.Where("run_id = ?", id).Order("trade_date asc").Find(&eq).Error
-	return map[string]any{"run_id": id, "metrics": json.RawMessage(res.Metrics), "equity": eq, "signals": json.RawMessage(res.Signals), "assumptions": json.RawMessage(res.Assumptions), "quality": json.RawMessage(res.Quality), "result_hash": res.ResultHash}, nil
+	return map[string]any{"run_id": id, "metrics": json.RawMessage(res.Metrics), "equity": eq, "signals": json.RawMessage(res.Signals), "assumptions": json.RawMessage(res.Assumptions), "quality": json.RawMessage(res.Quality), "result_hash": res.ResultHash, "manifest": json.RawMessage(run.Manifest)}, nil
 }
 
 func (h *Hub) GetTrades(ctx context.Context, id string) (map[string]any, error) {
@@ -861,4 +926,36 @@ func (h *Hub) Export(ctx context.Context, id string) (string, error) {
 		b.WriteString(f.FillDate + "," + f.OrderID + "," + f.Qty + "," + f.Price + "," + f.CashDelta + "\n")
 	}
 	return b.String(), nil
+}
+
+func raiseCashForOneLot(cfg *backtest.Config, bars []indicators.Bar, lot int) string {
+	if cfg == nil || lot <= 0 {
+		return ""
+	}
+	cash := market.MustDec(cfg.InitialCash)
+	if !cash.GreaterThan(decimal.Zero) {
+		return ""
+	}
+	px := decimal.Zero
+	for _, b := range bars {
+		if cfg.Start != "" && b.Time < cfg.Start {
+			continue
+		}
+		if cfg.End != "" && b.Time > cfg.End {
+			break
+		}
+		if b.Close.GreaterThan(decimal.Zero) {
+			px = b.Close
+			break
+		}
+	}
+	if !px.GreaterThan(decimal.Zero) {
+		return ""
+	}
+	need := px.Mul(decimal.NewFromInt(int64(lot)))
+	if cash.GreaterThanOrEqual(need) {
+		return ""
+	}
+	cfg.InitialCash = need.Mul(decimal.NewFromInt(2)).Ceil().String()
+	return "初始资金不足以买入 1 手，已上调为 " + cfg.InitialCash + " 以便完成回测"
 }

@@ -20,6 +20,7 @@ import (
 )
 
 func TestStrategyHTTPSearchGenerateAndIsolation(t *testing.T) {
+	t.Setenv("ZHIGU_MARKET_MODE", "fixture")
 	db := testdb.Start(t)
 	hash, _ := bcrypt.GenerateFromPassword([]byte("Passw0rd!"), bcrypt.MinCost)
 	for _, u := range []model.User{
