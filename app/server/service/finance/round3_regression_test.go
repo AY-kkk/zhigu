@@ -64,7 +64,7 @@ func TestR3GrowthRejectsHalfYearVersusFullYear(t *testing.T) {
 	if e := s.DB.Model(&ev).Update("metrics", string(raw)).Error; e != nil {
 		t.Fatal(e)
 	}
-	inputs := []CalcInput{{EvidenceID: eid, Metric: "revenue", Period: "2025"}, {EvidenceID: eid, Metric: "revenue", Period: "2024"}}
+	inputs := namedGrowth(eid)
 	h, _ := HashCanonical(map[string]any{"operation": "growth_rate", "inputs": inputs})
 	g, e := s.CreateGrant(context.Background(), r.RunID, task, GrantIn{RequestID: "r3-period-calc", ToolName: "calculate_metric", ArgsHash: h})
 	if e != nil {
@@ -125,11 +125,11 @@ func TestR3ModelCacheCannotCrossRun(t *testing.T) {
 	}
 	proxy := NewModelProxy(s.DB, NewDBBudget(s.DB))
 	body := []byte(`{"model":"finance-research","messages":[]}`)
-	first, e := proxy.Complete(context.Background(), "r3-cache-shared-id", NormalizeJSONHash(body), HeaderTokenHash(ta), body)
+	first, e := proxy.Complete(context.Background(), "r3-cache-shared-id", NormalizeJSONHash(body), HeaderTokenHash(ta), body, ProtocolChatCompletions)
 	if e != nil {
 		t.Fatal(e)
 	}
-	second, e := proxy.Complete(context.Background(), "r3-cache-shared-id", NormalizeJSONHash(body), HeaderTokenHash(tb), body)
+	second, e := proxy.Complete(context.Background(), "r3-cache-shared-id", NormalizeJSONHash(body), HeaderTokenHash(tb), body, ProtocolChatCompletions)
 	if e == nil && NormalizeJSONHash(first) == NormalizeJSONHash(second) {
 		var count int64
 		s.DB.Model(&modelfinance.UsageLedger{}).Where("run_id = ? AND kind = ?", b.RunID, "model").Count(&count)
@@ -155,13 +155,16 @@ func TestR3ExpiredRunCannotCreateToolGrant(t *testing.T) {
 	}
 }
 
-func TestR3CreateRejectsEditedClaimText(t *testing.T) {
+func TestR3CreateRejectsStaleDraftRevision(t *testing.T) {
 	s := setup(t)
 	d := parseDemo(t, s, 1001)
 	in := createReqFrom(t, d)
-	in.ClaimText = "经营现金流持续下降，这是否足以否定此前收入增长支持股价的判断？"
+	in.Revision = d.Revision + 1
 	_, e := s.CreateResearch(ctxUser(1001), "r3-stale-draft", in)
 	if e == nil {
-		t.Fatal("create accepted a draft after the pasted claim text changed")
+		t.Fatal("create accepted a stale draft revision")
+	}
+	if ErrorCode(e) != "DRAFT_REVISION" {
+		t.Fatalf("code %s", ErrorCode(e))
 	}
 }

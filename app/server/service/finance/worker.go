@@ -11,6 +11,7 @@ import (
 )
 
 func (s *ResearchService) StartWorker(ctx context.Context) {
+	WarmLiveCatalog()
 	go func() {
 		t := time.NewTicker(2 * time.Second)
 		defer t.Stop()

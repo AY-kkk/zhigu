@@ -144,7 +144,9 @@ Workflow 图是 DAG，DeerFlow 的调查 Loop 位于研究节点内部。最终�
 
 运营人员只在 GoSaaS 配置，Go 持久化不可变模型版本、密钥引用和测试结果。Eino 与 DeerFlow 均按同一 run 的冻结版本调用。
 
-2026-09-18 用户明确双协议接入，阶段 B 按 [SPEC B-1.1](阶段B_开发SPEC.md)实现两个受限内部入口：`/internal/llm/v1/chat/completions` 与 `/internal/llm/v1/responses`。后台protocol分别为 `openai_chat_completions`、`openai_responses`；入口必须匹配任务冻结配置。两者共享Go网关的鉴权、用途、允许上游、预算与供应商Key注入，不是两套后台。Eino 使用同一配置/预算服务，不绕过统计。
+2026-09-21 起阶段 B 以 [SPEC B-1.2](阶段B_开发SPEC.md) 为准：独立宿主运行；live 兼容 Responses；数据走东财/新浪+巨潮（AKShare 不得进入研究工具进程）。
+
+2026-09-18 用户明确双协议接入，阶段 B 实现两个受限内部入口：`/internal/llm/v1/chat/completions` 与 `/internal/llm/v1/responses`。后台protocol分别为 `openai_chat_completions`、`openai_responses`；入口必须匹配任务冻结配置。两者共享Go网关的鉴权、用途、允许上游、预算与供应商Key注入，不是两套后台。Eino 使用同一配置/预算服务，不绕过统计。
 
 Python 使用临时任务凭据，不保存供应商 Key；模型 Profile 使用服务端固定别名，由 Go 映射真实模型 ID。运行中换模型不会改变已签发任务的映射。DeerFlow adapter 必须将临时凭据绑定当前实例，不复用携带另一个用户凭据的全局客户端。
 

@@ -8,14 +8,17 @@ from typing import Any
 
 import httpx
 
+CONTRACT_VERSION = "2"
+
 
 class GoClient:
-    def __init__(self, run_id: str, task_id: str, task_token: str = ""):
+    def __init__(self, run_id: str, task_id: str, task_token: str = "", protocol: str = ""):
         self.base = os.environ.get("ZHIGU_GO_INTERNAL_URL", "").rstrip("/")
         self.service_token = os.environ.get("ZHIGU_INTERNAL_TOKEN", "zhigu-internal-dev")
         self.run_id = run_id
         self.task_id = task_id
         self.task_token = task_token
+        self.protocol = protocol
 
     def enabled(self) -> bool:
         return bool(self.base)
@@ -25,9 +28,12 @@ class GoClient:
             "Authorization": f"Bearer {self.service_token}",
             "Content-Type": "application/json",
             "X-Request-ID": str(uuid.uuid4()),
+            "X-Zhigu-Contract-Version": CONTRACT_VERSION,
         }
         if self.task_token:
             h["X-Zhigu-Task-Token"] = self.task_token
+        if self.protocol:
+            h["X-Zhigu-Model-Protocol"] = self.protocol
         return h
 
     def unwrap(self, res: httpx.Response) -> Any:
@@ -72,12 +78,14 @@ class GoClient:
             )
         )
 
-    def register_evidence(self, grant_id: str, record: dict[str, Any]) -> list[str]:
+    def register_evidence(self, grant_id: str, record_ids: list[str]) -> list[str]:
+        if not record_ids:
+            return []
         data = self.unwrap(
             httpx.post(
                 f"{self.base}/internal/finance/evidence",
                 headers=self._headers(),
-                json={"grant_id": grant_id, "records": [record]},
+                json={"grant_id": grant_id, "record_ids": record_ids},
                 timeout=15,
             )
         )
@@ -93,7 +101,7 @@ class GoClient:
             )
         )
 
-    def calculate(self, grant_id: str, operation: str, inputs: list[dict[str, Any]]) -> dict[str, Any]:
+    def calculate(self, grant_id: str, operation: str, inputs: dict[str, Any]) -> dict[str, Any]:
         return self.unwrap(
             httpx.post(
                 f"{self.base}/internal/finance/calculate",

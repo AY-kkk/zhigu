@@ -6,15 +6,19 @@ import {
   deleteResearch,
   getEvidence,
   getResearch,
+  listInstruments,
   listResearch,
-  parseClaim
+  parseClaim,
+  patchClaim
 } from '../api/research.js'
-import { buildChats } from '../components/research/chatAdapter.js'
+import { STAGE_A_PUBLIC_MODE } from '../config/publicMode.js'
 import {
   ACTIVE_STATUSES,
+  CANCELABLE_STATUSES,
   countChars,
   mapRequestError
 } from '../utils/researchCopy.js'
+import { evidenceRelation } from '../utils/researchViewModel.js'
 
 let pollTimer = null
 let nextId = 1
@@ -22,9 +26,23 @@ function uid(prefix) {
   nextId += 1
   return `${prefix}-${Date.now()}-${nextId}`
 }
-
 function now() {
   return Date.now()
+}
+function fingerprintCreate(payload) {
+  return JSON.stringify({
+    draft_id: payload.draft_id,
+    revision: payload.revision,
+    parent_run_id: payload.parent_run_id || ''
+  })
+}
+
+function splitHorizon(horizon) {
+  const parts = String(horizon || '').split('/').map((s) => s.trim())
+  if (parts.length === 2 && parts[0] && parts[1]) {
+    return { start: parts[0], end: parts[1] }
+  }
+  return { start: '', end: '' }
 }
 
 export const useResearchConversation = defineStore('researchConversation', {
@@ -32,48 +50,67 @@ export const useResearchConversation = defineStore('researchConversation', {
     draftText: '',
     parseBusy: false,
     parseError: '',
+    parseSeq: 0,
     draft: null,
     parsedText: '',
     instrumentId: '',
     horizon: '',
     confirmBusy: false,
     confirmError: '',
+    createAttempt: null,
     parentRunId: '',
     userMessage: null,
-    confirmMessage: null,
     notice: null,
     currentRunId: '',
     runView: null,
     runError: '',
+    runLoading: false,
+    disconnected: false,
+    loadSeq: 0,
     followups: [],
     questionBusy: false,
     questionError: '',
+    questionLocked: false,
+    questionAttempt: null,
     evidenceOpen: false,
     evidence: null,
     evidenceError: '',
+    evidenceBusy: false,
+    requestedEvidenceId: '',
+    evidenceRelation: '',
+    evidenceSeq: 0,
     evidenceSourceEl: null,
-    historyOpen: false,
     composing: false,
-    lastEvidenceButton: null,
-    activeConflictId: ''
+    activeConflictId: '',
+    instruments: [],
+    catalogReady: false,
+    dataMode: STAGE_A_PUBLIC_MODE,
+    composerFocusToken: 0
   }),
   getters: {
-    chats: (state) => buildChats(state),
     charCount: (state) => countChars(state.draftText),
     staleDraft: (state) => !!state.draft && state.draftText.trim() !== state.parsedText.trim(),
     canParse: (state) => {
       const n = countChars(state.draftText)
       return n >= 20 && n <= 2000 && !state.parseBusy && !state.confirmBusy
     },
-    canStart: (state) => !!state.draft && !!state.instrumentId && !!state.horizon.trim() && !state.confirmBusy && !state.parseBusy && state.draftText.trim() === state.parsedText.trim(),
+    canStart: (state) => {
+      return !!state.draft
+        && !!state.instrumentId
+        && !!state.horizon.trim()
+        && !state.confirmBusy
+        && !state.parseBusy
+        && state.draftText.trim() === state.parsedText.trim()
+    },
     isActiveRun: (state) => ACTIVE_STATUSES.includes(state.runView?.status),
     hasPublishedReport: (state) => !!state.runView?.report,
-    followupCount: (state) => state.followups.length,
-    followupLimited: (state) => state.followups.length >= 3,
+    followupCount: (state) => state.followups.filter((row) => row.answer).length,
+    followupLimited: (state) => state.questionLocked || state.followups.filter((row) => row.answer).length >= 3,
+    displayMode: (state) => state.runView?.mode || state.draft?.mode || state.dataMode || STAGE_A_PUBLIC_MODE,
     composerMode: (state) => {
       if (ACTIVE_STATUSES.includes(state.runView?.status)) return 'busy'
       if (state.runView?.report) {
-        if (state.followups.length >= 3) return 'followup_limit'
+        if (state.questionLocked || state.followups.filter((row) => row.answer).length >= 3) return 'followup_limit'
         return 'followup'
       }
       if (state.currentRunId && state.runView && !state.runView.report) return 'locked'
@@ -83,6 +120,9 @@ export const useResearchConversation = defineStore('researchConversation', {
   actions: {
     resetAll() {
       this.stopPolling()
+      this.parseSeq += 1
+      this.loadSeq += 1
+      this.evidenceSeq += 1
       this.draftText = ''
       this.parseBusy = false
       this.parseError = ''
@@ -92,18 +132,21 @@ export const useResearchConversation = defineStore('researchConversation', {
       this.horizon = ''
       this.confirmBusy = false
       this.confirmError = ''
+      this.createAttempt = null
       this.parentRunId = ''
       this.userMessage = null
-      this.confirmMessage = null
       this.notice = null
       this.currentRunId = ''
       this.runView = null
       this.runError = ''
+      this.runLoading = false
+      this.disconnected = false
       this.followups = []
       this.questionBusy = false
       this.questionError = ''
+      this.questionLocked = false
+      this.questionAttempt = null
       this.closeEvidence()
-      this.historyOpen = false
       this.activeConflictId = ''
     },
     prepareNew(query = {}) {
@@ -118,6 +161,7 @@ export const useResearchConversation = defineStore('researchConversation', {
         }
       }
       if (!parent) this.parentRunId = this.parentRunId || ''
+      this.ensureInstruments()
     },
     setDraftText(text) {
       this.draftText = text
@@ -126,36 +170,79 @@ export const useResearchConversation = defineStore('researchConversation', {
         this.draft = null
         this.instrumentId = ''
         this.horizon = ''
-        this.confirmMessage = null
+        this.createAttempt = null
       }
     },
     fillExample(text) {
       this.setDraftText(text)
     },
+    requestComposerFocus() {
+      this.composerFocusToken += 1
+    },
     setInstrument(id) {
       this.instrumentId = id
     },
+    mergeInstruments(items) {
+      const map = new Map(this.instruments.map((row) => [row.instrument_id, row]))
+      for (const row of items || []) {
+        if (row?.instrument_id) map.set(row.instrument_id, row)
+      }
+      this.instruments = [...map.values()]
+    },
+    async searchInstruments(q) {
+      try {
+        const res = await listInstruments({ q, limit: 20 })
+        const items = res.data.items || []
+        this.mergeInstruments(items)
+        return items
+      } catch {
+        return []
+      }
+    },
     setHorizon(value) {
       this.horizon = value
+    },
+    async ensureInstruments() {
+      if (this.catalogReady) return
+      try {
+        const res = await listInstruments()
+        this.mergeInstruments(res.data.items || [])
+        if (res.data.mode) this.dataMode = res.data.mode
+        this.catalogReady = true
+      } catch {
+        this.instruments = this.instruments || []
+      }
     },
     async parseCurrent() {
       if (!this.canParse) return
       this.parseError = ''
       this.parseBusy = true
+      this.parseSeq += 1
+      const seq = this.parseSeq
       const snapshot = this.draftText
+      this.userMessage = { id: uid('claim'), text: snapshot, createAt: now() }
       try {
         const res = await parseClaim(snapshot)
+        if (seq !== this.parseSeq) return
         this.draft = res.data
         this.parsedText = snapshot
-        this.instrumentId = res.data.candidates?.[0]?.instrument_id || ''
-        this.horizon = res.data.suggested_horizon || ''
-        this.userMessage = { id: uid('claim'), text: snapshot, createAt: now() }
-        this.confirmMessage = { id: uid('confirm'), createAt: now() }
+        const candidates = res.data.candidates || []
+        this.instrumentId = candidates.length === 1 ? candidates[0].instrument_id : this.instrumentId
+        this.mergeInstruments(candidates)
+        if (res.data.horizon_start && res.data.horizon_end) {
+          this.horizon = `${res.data.horizon_start}/${res.data.horizon_end}`
+        } else {
+          this.horizon = res.data.suggested_horizon || ''
+        }
+        await this.ensureInstruments()
         this.notice = null
+        this.createAttempt = null
       } catch (error) {
+        if (error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError') return
+        if (seq !== this.parseSeq) return
         this.parseError = mapRequestError(error, '解析失败，原文已保留，可重试')
       } finally {
-        this.parseBusy = false
+        if (seq === this.parseSeq) this.parseBusy = false
       }
     },
     async startResearch() {
@@ -163,26 +250,40 @@ export const useResearchConversation = defineStore('researchConversation', {
       this.confirmError = ''
       this.confirmBusy = true
       try {
-        const key = crypto.randomUUID()
-        const res = await createResearch({
-          draft_id: this.draft.draft_id,
+        const dates = splitHorizon(this.horizon)
+        const patched = await patchClaim(this.draft.draft_id, {
           revision: this.draft.revision,
           instrument_id: this.instrumentId,
-          horizon: this.horizon,
-          as_of: new Date().toISOString(),
-          parent_run_id: this.parentRunId || '',
-          claim_text: this.draftText
-        }, key)
+          horizon_start: dates.start || undefined,
+          horizon_end: dates.end || undefined,
+          items: this.draft.items || []
+        })
+        this.draft = patched.data
+        const payloadBase = {
+          draft_id: this.draft.draft_id,
+          revision: this.draft.revision,
+          parent_run_id: this.parentRunId || ''
+        }
+        const mark = fingerprintCreate(payloadBase)
+        if (!this.createAttempt || this.createAttempt.fingerprint !== mark) {
+          this.createAttempt = {
+            fingerprint: mark,
+            key: crypto.randomUUID(),
+            payload: payloadBase
+          }
+        }
+        const res = await createResearch(this.createAttempt.payload, this.createAttempt.key)
         this.currentRunId = res.data.run_id
         this.confirmError = ''
+        this.createAttempt = null
         await this.loadRun(res.data.run_id, { keepLocal: true })
         return res.data.run_id
       } catch (error) {
         this.confirmError = mapRequestError(error, '无法开始研究，原文已保留')
         if (error?.code === 'ACTIVE_RUN_EXISTS') {
           const activeId = await this.findActiveRunId()
-          if (activeId) this.confirmError = `已有研究进行中，可返回继续查看。`
           this.activeConflictId = activeId
+          if (activeId) this.confirmError = '已有研究进行中，可返回继续查看。'
         }
         return null
       } finally {
@@ -200,25 +301,36 @@ export const useResearchConversation = defineStore('researchConversation', {
     },
     async loadRun(id, { keepLocal = false } = {}) {
       if (!id) return
+      this.loadSeq += 1
+      const seq = this.loadSeq
       if (!keepLocal && this.currentRunId !== id) {
         this.followups = []
         this.questionError = ''
-        this.confirmMessage = null
+        this.questionLocked = false
+        this.questionAttempt = null
         this.draft = null
         this.notice = null
+        this.runView = null
+        this.runError = ''
+        this.disconnected = false
+        this.closeEvidence()
       }
       this.currentRunId = id
+      if (!this.runView) this.runLoading = true
       try {
         const res = await getResearch(id)
+        if (seq !== this.loadSeq || this.currentRunId !== id) return
         this.runView = res.data
         this.runError = ''
+        this.disconnected = false
+        this.runLoading = false
         if (!keepLocal) {
+          this.draftText = ''
           const text = res.data.claim?.text || ''
           if (text) {
             this.userMessage = this.userMessage?.text === text
               ? this.userMessage
               : { id: `claim-${id}`, text, createAt: now() }
-            this.draftText = this.draftText || text
           }
           this.instrumentId = res.data.instrument_id || this.instrumentId
           this.horizon = res.data.horizon || this.horizon
@@ -226,7 +338,16 @@ export const useResearchConversation = defineStore('researchConversation', {
         if (this.isActiveRun) this.startPolling()
         else this.stopPolling()
       } catch (error) {
-        this.runError = mapRequestError(error, '连接已中断，研究状态可能仍在更新')
+        if (error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError') return
+        if (seq !== this.loadSeq || this.currentRunId !== id) return
+        this.runLoading = false
+        const mapped = mapRequestError(error, '连接中断，显示上次状态')
+        if (this.runView && this.runView.run_id === id) {
+          this.disconnected = true
+          this.runError = '连接中断，显示上次状态'
+        } else {
+          this.runError = mapped
+        }
       }
     },
     startPolling() {
@@ -242,7 +363,7 @@ export const useResearchConversation = defineStore('researchConversation', {
       }
     },
     async cancelCurrent() {
-      if (!this.currentRunId) return
+      if (!this.currentRunId || !CANCELABLE_STATUSES.includes(this.runView?.status)) return
       try {
         await cancelResearch(this.currentRunId)
         await this.loadRun(this.currentRunId, { keepLocal: true })
@@ -250,32 +371,44 @@ export const useResearchConversation = defineStore('researchConversation', {
         this.runError = mapRequestError(error, '取消请求失败，可重试')
       }
     },
-    async deleteCurrent() {
-      if (!this.currentRunId) return false
+    async deleteRun(id) {
+      if (!id) return { ok: false, status: '' }
       try {
-        await deleteResearch(this.currentRunId)
-        this.resetAll()
-        return true
+        const res = await deleteResearch(id)
+        const status = res.data?.deletion_status || 'scheduled'
+        if (id === this.currentRunId) this.resetAll()
+        return { ok: true, status }
       } catch (error) {
-        this.runError = mapRequestError(error, '删除失败，可重试')
-        return false
+        return { ok: false, status: '', error: mapRequestError(error, '删除失败，可重试') }
       }
+    },
+    async deleteCurrent() {
+      const result = await this.deleteRun(this.currentRunId)
+      return result.ok
     },
     async askFollowup(text) {
       const value = (text || '').trim()
       if (!this.hasPublishedReport || this.followupLimited || !value || this.questionBusy) return
+      if (countChars(value) > 2000) return
       this.questionBusy = true
       this.questionError = ''
+      if (!this.questionAttempt || this.questionAttempt.text !== value) {
+        this.questionAttempt = { text: value, key: crypto.randomUUID() }
+      }
       const questionId = uid('q')
       const item = { questionId, answerId: uid('a'), text: value, createAt: now(), answer: null }
       this.followups = this.followups.concat(item)
       try {
-        const res = await askQuestion(this.currentRunId, value, crypto.randomUUID())
-        this.followups = this.followups.map((row) => row.questionId === questionId ? { ...row, answer: res.data } : row)
+        const res = await askQuestion(this.currentRunId, value, this.questionAttempt.key)
+        this.followups = this.followups.map((row) => (
+          row.questionId === questionId ? { ...row, answer: res.data } : row
+        ))
+        this.questionAttempt = null
       } catch (error) {
         this.followups = this.followups.filter((row) => row.questionId !== questionId)
         this.questionError = mapRequestError(error, '追问失败，原文已保留')
         this.draftText = value
+        if (error?.code === 'QUESTION_LIMIT') this.questionLocked = true
       } finally {
         this.questionBusy = false
       }
@@ -283,22 +416,36 @@ export const useResearchConversation = defineStore('researchConversation', {
     async openEvidence(evidenceId, sourceEl) {
       const allowed = new Set(this.runView?.report?.evidence_ids || [])
       if (!allowed.has(evidenceId)) return
-      this.historyOpen = false
+      const runId = this.currentRunId
+      this.evidenceSeq += 1
+      const seq = this.evidenceSeq
+      this.requestedEvidenceId = evidenceId
+      this.evidenceRelation = evidenceRelation(this.runView?.report, evidenceId)
       this.evidenceSourceEl = sourceEl || document.activeElement
       this.evidenceError = ''
-      this.evidenceOpen = true
       this.evidence = null
+      this.evidenceBusy = true
+      this.evidenceOpen = true
       try {
         const res = await getEvidence(evidenceId)
+        if (seq !== this.evidenceSeq || this.requestedEvidenceId !== evidenceId || this.currentRunId !== runId) return
         this.evidence = res.data
+        this.evidenceBusy = false
       } catch (error) {
+        if (error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError') return
+        if (seq !== this.evidenceSeq || this.requestedEvidenceId !== evidenceId) return
+        this.evidenceBusy = false
         this.evidenceError = mapRequestError(error, '证据加载失败，可重试')
       }
     },
     closeEvidence() {
+      this.evidenceSeq += 1
       this.evidenceOpen = false
       this.evidence = null
       this.evidenceError = ''
+      this.evidenceBusy = false
+      this.requestedEvidenceId = ''
+      this.evidenceRelation = ''
       const el = this.evidenceSourceEl
       this.evidenceSourceEl = null
       if (el && typeof el.focus === 'function') {
@@ -306,15 +453,8 @@ export const useResearchConversation = defineStore('researchConversation', {
       }
     },
     retryEvidence() {
-      const id = this.evidence?.evidence_id
+      const id = this.requestedEvidenceId
       if (id) this.openEvidence(id, this.evidenceSourceEl)
-    },
-    openHistory() {
-      this.evidenceOpen = false
-      this.historyOpen = true
-    },
-    closeHistory() {
-      this.historyOpen = false
     }
   }
 })

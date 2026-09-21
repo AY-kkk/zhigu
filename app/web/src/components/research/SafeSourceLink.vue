@@ -13,4 +13,5 @@ const fallback = computed(() => (props.href ? '链接已拦截' : '暂未提供'
 </script>
 <style scoped>
 a, span { overflow-wrap: anywhere; word-break: break-all; }
+a { color: var(--zg-action, #B83A3D); text-underline-offset: 3px; }
 </style>

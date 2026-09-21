@@ -2,7 +2,9 @@
 
 版本 1.0｜2026-09-17｜状态：实施契约，应用尚未开发或联调。
 
-2026-09-18 阶段 B 增补：用户明确允许 OpenAI-compatible Chat Completions API 与 Responses API 双协议接入；模型接口细节以 [阶段 B SPEC B-1.1 第6.1节](阶段B_开发SPEC.md#61-双协议模型适配与兼容性关卡)为准。本增补不追溯改变阶段 A 的历史验收。
+2026-09-21 阶段 B 拍板：范围、底座、数据路径与逐步执行以 [阶段 B SPEC B-1.2](阶段B_开发SPEC.md) 为准。与本文冲突时执行 B-1.2，并在交付包写变更记录。
+
+2026-09-18 阶段 B 增补：用户明确允许 OpenAI-compatible Chat Completions API 与 Responses API 双协议接入；模型接口细节以 [阶段 B SPEC 第7节](阶段B_开发SPEC.md#7-真实模型与有界-deerflowb-14b-17)为准。本增补不追溯改变阶段 A 的历史验收。
 
 **Goal：用户粘贴一个 A 股单公司投资观点，确认研究范围后，获得可追溯的支持证据、反证与未知项。**
 **Architecture：阶段 A 使用独立 zhigu 宿主完成离线闭环；GoSaaS 为已授权后续迁移底座。Eino 是唯一总编排，DeerFlow/fixture 执行两个隔离、有界的研究 Loop。**
@@ -184,7 +186,7 @@ Go → Python（服务身份凭据放 Authorization，临时模型 token 用单�
 
 Python → Go（每个端点都校验 token 的 run/task/purpose/expiry/revocation）：
 - POST /internal/llm/v1/chat/completions：固定别名 finance-research，Go 决定真正 model/base URL/key；stream=false。
-- B-1.1新增 POST /internal/llm/v1/responses：同样由Go统一鉴权/配置/预算，采用Responses原生协议，禁止内置工具和托管会话；完整约束见阶段B SPEC。既有chat入口不因新增协议而取消。
+- B-1.2：`POST /internal/llm/v1/responses` 与 chat 入口并存；完整约束见阶段 B SPEC。证据 live 只收 record_ids，见 B-1.2 §6。
 - 模型请求必须带 X-Request-ID；代理绑定 token 的 task、用途和规范化 body hash。已成功的同 ID 返回缓存结果；同 ID 不同 body 返回 409；处理中/结果未知不再次触达上游。显式新尝试用新 ID，并重新占用额度。
 - POST /internal/finance/tool-grants：{request_id,tool_name,args_hash} → {grant_id,expires_at}，先原子预占工具额度；重复 request_id 返回同一 grant。
 - POST /internal/finance/tool-grants/:id/complete：{status: succeeded|failed|unknown,output_hash}；重复核销幂等，不退款调用次数。
@@ -257,7 +259,7 @@ Go 轮询数据库任务抢占：一用户一活动 run，全局两个活动 run
 - 研究者自报 usage 只做对账，实际次数取代理与 grant ledger。并发争最后额度只允许一个成功。
 - 单次模型请求超时 min(45秒,剩余deadline)；工具 15秒；180 秒是本地总执行截止，不能保证供应商终止。
 
-阶段B模型配置允许 `openai_chat_completions` 与 `openai_responses` 两种协议；每个版本固定一种，切换必须保存新版本并重新测试，不能自动探测/回落。用途 parser/synthesizer/verifier/research 可映射同一供应商。Go 与 Python 共用同一版本解析和 BudgetService；Python API Key 实际是绑定 task 的临时 token，真正供应商 Key 不出 Go。两种adapter与真实验证范围以阶段B SPEC B-1.1及其验收子矩阵为准。
+阶段B模型配置允许 `openai_chat_completions` 与 `openai_responses` 两种协议；每个版本固定一种，切换必须保存新版本并重新测试，不能自动探测/回落。B 样机同一 run 四用途共用一个配置。Go 与 Python 共用同一版本解析和 BudgetService；Python API Key 实际是绑定 task 的临时 token，真正供应商 Key 不出 Go。两种adapter与真实验证范围以阶段B SPEC B-1.2及其验收子矩阵为准。
 
 后台测试必须跑 Go 结构化解析、Python tool-call、无证据样例、错误响应和超时路径。测试本身有管理员独立小额度并计账。任何 key/base_url/model/policy 修改后旧测试失效；运行中切换不影响旧 run。模型 root key 从环境/密钥管理服务注入，用 AES-GCM 等成熟库加密，轮换用 key_version；禁止自制密码算法。
 

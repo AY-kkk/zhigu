@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhigu.local/contracts/internal-v2/record.schema.json",
+  "title": "Zhigu provider record v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "instrument_id", "source_id", "source_url", "source_kind", "title", "locator",
+    "text", "metrics", "published_at", "available_at", "retrieved_at", "data_version", "mode", "basis"
+  ],
+  "properties": {
+    "instrument_id": { "type": "string", "minLength": 1 },
+    "source_id": { "type": "string", "minLength": 1 },
+    "source_url": { "type": "string", "minLength": 1 },
+    "source_kind": { "type": "string", "minLength": 1 },
+    "title": { "type": "string" },
+    "locator": { "type": "string", "minLength": 1 },
+    "text": { "type": "string" },
+    "metrics": { "type": "array", "items": { "type": "object" } },
+    "published_at": { "type": "string", "format": "date-time" },
+    "available_at": { "type": "string", "format": "date-time" },
+    "retrieved_at": { "type": "string", "format": "date-time" },
+    "data_version": { "type": "string", "minLength": 1 },
+    "mode": { "type": "string", "enum": ["fixture", "live"] },
+    "basis": { "type": "object" }
+  }
+}

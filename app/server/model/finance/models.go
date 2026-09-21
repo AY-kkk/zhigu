@@ -18,19 +18,26 @@ type User struct {
 func (User) TableName() string { return "finance_users" }
 
 type ClaimDraft struct {
-	ID             string         `gorm:"column:id;primaryKey"`
-	OwnerID        uint           `gorm:"column:owner_id"`
-	Text           string         `gorm:"column:text"`
-	Horizon        *string        `gorm:"column:horizon"`
-	Items          datatypes.JSON `gorm:"column:items"`
-	Revision       int            `gorm:"column:revision"`
-	AsOf           time.Time      `gorm:"column:as_of"`
-	Mode           string         `gorm:"column:mode"`
-	ParseUsageID   *string        `gorm:"column:parse_usage_id"`
-	ConfirmedRunID *string        `gorm:"column:confirmed_run_id"`
-	ConfigVersions datatypes.JSON `gorm:"column:config_versions"`
-	CreatedAt      time.Time      `gorm:"column:created_at"`
-	UpdatedAt      time.Time      `gorm:"column:updated_at"`
+	ID                 string         `gorm:"column:id;primaryKey"`
+	OwnerID            uint           `gorm:"column:owner_id"`
+	Text               string         `gorm:"column:text"`
+	Horizon            *string        `gorm:"column:horizon"`
+	HorizonStart       *string        `gorm:"column:horizon_start"`
+	HorizonEnd         *string        `gorm:"column:horizon_end"`
+	InstrumentID       *string        `gorm:"column:instrument_id"`
+	Items              datatypes.JSON `gorm:"column:items"`
+	Revision           int            `gorm:"column:revision"`
+	AsOf               time.Time      `gorm:"column:as_of"`
+	Mode               string         `gorm:"column:mode"`
+	ParseStatus        string         `gorm:"column:parse_status"`
+	ModelConfigVersion *string        `gorm:"column:model_config_version"`
+	Protocol           *string        `gorm:"column:protocol"`
+	ScopeOrigin        *string        `gorm:"column:scope_origin"`
+	ParseUsageID       *string        `gorm:"column:parse_usage_id"`
+	ConfirmedRunID     *string        `gorm:"column:confirmed_run_id"`
+	ConfigVersions     datatypes.JSON `gorm:"column:config_versions"`
+	CreatedAt          time.Time      `gorm:"column:created_at"`
+	UpdatedAt          time.Time      `gorm:"column:updated_at"`
 }
 
 func (ClaimDraft) TableName() string { return "finance_claim_drafts" }
@@ -56,6 +63,8 @@ type ResearchRun struct {
 	LeaseOwner      *string        `gorm:"column:lease_owner"`
 	LeaseUntil      *time.Time     `gorm:"column:lease_until"`
 	Version         int64          `gorm:"column:version"`
+	ExecutionEpoch  int64          `gorm:"column:execution_epoch"`
+	ClaimResults    datatypes.JSON `gorm:"column:claim_results"`
 	DeletedAt       *time.Time     `gorm:"column:deleted_at"`
 	CreatedAt       time.Time      `gorm:"column:created_at"`
 	UpdatedAt       time.Time      `gorm:"column:updated_at"`
@@ -220,6 +229,34 @@ type DataRecord struct {
 }
 
 func (DataRecord) TableName() string { return "finance_data_records" }
+
+type ProviderRecordRow struct {
+	ID         string         `gorm:"column:id;primaryKey"`
+	GrantID    string         `gorm:"column:grant_id"`
+	RecordHash string         `gorm:"column:record_hash"`
+	Payload    datatypes.JSON `gorm:"column:payload"`
+	CreatedAt  time.Time      `gorm:"column:created_at"`
+}
+
+func (ProviderRecordRow) TableName() string { return "finance_provider_records" }
+
+type ReportCheck struct {
+	ID               string         `gorm:"column:id;primaryKey"`
+	RunID            string         `gorm:"column:run_id"`
+	Attempt          int            `gorm:"column:attempt"`
+	CandidateHash    string         `gorm:"column:candidate_hash"`
+	Pointer          string         `gorm:"column:pointer"`
+	ClaimType        string         `gorm:"column:claim_type"`
+	EvidenceIDs      datatypes.JSON `gorm:"column:evidence_ids"`
+	NumericBindings  datatypes.JSON `gorm:"column:numeric_bindings"`
+	RuleVersion      string         `gorm:"column:rule_version"`
+	ProgramResult    string         `gorm:"column:program_result"`
+	SemanticResult   *string        `gorm:"column:semantic_result"`
+	FailureReason    *string        `gorm:"column:failure_reason"`
+	CreatedAt        time.Time      `gorm:"column:created_at"`
+}
+
+func (ReportCheck) TableName() string { return "finance_report_checks" }
 
 type Scheduler struct {
 	SingletonID   string    `gorm:"column:singleton_id;primaryKey"`

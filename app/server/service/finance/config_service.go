@@ -155,9 +155,13 @@ func (s *ConfigService) StartTest(ctx context.Context, id string) (map[string]an
 	checks := []map[string]any{}
 	pass := true
 	proto, _ := row.PublicConfig["protocol"].(string)
-	if row.Kind == "model" && proto != "openai-chat-completions" {
-		pass = false
-		checks = append(checks, map[string]any{"name": "protocol", "ok": false})
+	if row.Kind == "model" {
+		if _, err := NormalizeProtocol(proto); err != nil {
+			pass = false
+			checks = append(checks, map[string]any{"name": "protocol", "ok": false})
+		} else {
+			checks = append(checks, map[string]any{"name": "protocol", "ok": true})
+		}
 	} else {
 		checks = append(checks, map[string]any{"name": "protocol", "ok": true})
 	}

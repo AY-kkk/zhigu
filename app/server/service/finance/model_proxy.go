@@ -36,7 +36,7 @@ func NewModelProxy(db *gorm.DB, budget BudgetService) *ModelProxy {
 	}
 }
 
-func (p *ModelProxy) Complete(ctx context.Context, requestID, bodyHash, tokenHash string, body []byte) ([]byte, error) {
+func (p *ModelProxy) Complete(ctx context.Context, requestID, bodyHash, tokenHash string, body []byte, protocol string) ([]byte, error) {
 	var tok modelfinance.InternalToken
 	if err := p.DB.Where("token_hash = ?", tokenHash).Take(&tok).Error; err != nil {
 		return nil, NewError(401, "forbidden", "INVALID_TASK_TOKEN", "内部令牌无效")
@@ -50,6 +50,17 @@ func (p *ModelProxy) Complete(ctx context.Context, requestID, bodyHash, tokenHas
 	}
 	if !runAllowsToolsAt(run, time.Now().UTC()) {
 		return nil, NewError(409, "conflict", "RUN_CLOSED", "研究已结束")
+	}
+	wantProto, err := runProtocol(run)
+	if err != nil {
+		return nil, err
+	}
+	gotProto, err := NormalizeProtocol(protocol)
+	if err != nil {
+		return nil, err
+	}
+	if gotProto != wantProto {
+		return nil, NewError(409, "conflict", "MODEL_PROTOCOL_MISMATCH", "入口与冻结协议不符")
 	}
 	var task modelfinance.ResearchTask
 	if err := p.DB.Where("id = ? AND run_id = ?", tok.TaskID, tok.RunID).Take(&task).Error; err != nil {
@@ -87,16 +98,7 @@ func (p *ModelProxy) Complete(ctx context.Context, requestID, bodyHash, tokenHas
 		_ = p.DB.Model(&modelfinance.ModelCache{}).Where("run_id = ? AND task_id = ? AND request_id = ?", tok.RunID, tok.TaskID, requestID).Update("status", "failed")
 		return nil, err
 	}
-	// Fixture: do not call a real vendor. Return a schema-shaped stub.
-	resp := map[string]any{
-		"id":      "chatcmpl_" + uuid.NewString(),
-		"object":  "chat.completion",
-		"created": time.Now().Unix(),
-		"model":   "finance-research",
-		"choices": []any{map[string]any{"index": 0, "message": map[string]any{"role": "assistant", "content": `{"ok":true}`}, "finish_reason": "stop"}},
-		"usage":   map[string]any{"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
-	}
-	raw, _ := json.Marshal(resp)
+	raw, _ := json.Marshal(fixtureModelResponse(gotProto))
 	_ = p.Budget.Reconcile(ctx, res.ID, ObservedUsage{Unknown: false, ActualInput: intPtr(10), ActualOutput: intPtr(5)})
 	_ = p.DB.Model(&modelfinance.ModelCache{}).Where("run_id = ? AND task_id = ? AND request_id = ?", tok.RunID, tok.TaskID, requestID).Updates(map[string]any{
 		"status": "succeeded", "response": datatypes.JSON(raw), "updated_at": time.Now().UTC(),
@@ -124,4 +126,35 @@ func NormalizeJSONHash(b []byte) string {
 
 func HeaderTokenHash(h string) string {
 	return SHA256Text(strings.TrimSpace(h))
+}
+
+func runProtocol(run modelfinance.ResearchRun) (string, error) {
+	var cfg map[string]string
+	_ = json.Unmarshal(run.ConfigVersions, &cfg)
+	raw := ""
+	if cfg != nil {
+		raw = cfg["protocol"]
+	}
+	return NormalizeProtocol(raw)
+}
+
+func fixtureModelResponse(protocol string) map[string]any {
+	if protocol == ProtocolResponses {
+		return map[string]any{
+			"id":      "resp_" + uuid.NewString(),
+			"object":  "response",
+			"status":  "completed",
+			"model":   ModelAlias(),
+			"output":  []any{map[string]any{"type": "message", "role": "assistant", "content": []any{map[string]any{"type": "output_text", "text": `{"ok":true}`}}}},
+			"usage":   map[string]any{"input_tokens": 10, "output_tokens": 5, "total_tokens": 15},
+		}
+	}
+	return map[string]any{
+		"id":      "chatcmpl_" + uuid.NewString(),
+		"object":  "chat.completion",
+		"created": time.Now().Unix(),
+		"model":   ModelAlias(),
+		"choices": []any{map[string]any{"index": 0, "message": map[string]any{"role": "assistant", "content": `{"ok":true}`}, "finish_reason": "stop"}},
+		"usage":   map[string]any{"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
+	}
 }

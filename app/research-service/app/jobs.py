@@ -279,7 +279,7 @@ def _run(task: ResearchTask, task_token: str = "") -> None:
 def fixture_result(task: ResearchTask) -> ResearchResult:
     from app.schemas import Argument
 
-    unknowns = ["缺少利润、现金流、估值与市场预期资料。"]
+    unknowns = ["无法取数：缺少利润、现金流、估值与市场预期资料。"]
     arguments = []
     if task.role == "supporter" and task.instrument_id == "DEMO:COMPANY":
         arguments = [

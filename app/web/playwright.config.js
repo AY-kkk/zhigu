@@ -1,14 +1,14 @@
-import { defineConfig, devices } from '@playwright/test'
+import { defineConfig } from '@playwright/test'
 
 export default defineConfig({
   testDir: './e2e',
   timeout: 30000,
   use: {
     baseURL: 'http://127.0.0.1:5173',
-    viewport: { width: 390, height: 844 },
+    viewport: { width: 1440, height: 900 },
     channel: process.env.ZHIGU_BROWSER_CHANNEL || undefined
   },
-  projects: [{ name: 'chromium', use: { ...devices['Pixel 7'] } }],
+  projects: [{ name: 'chromium' }],
   webServer: process.env.E2E_NO_SERVER ? undefined : {
     command: 'npm run dev -- --host 127.0.0.1 --port 5173 --strictPort',
     url: 'http://127.0.0.1:5173',

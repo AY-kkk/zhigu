@@ -85,7 +85,10 @@ func CanonicalRecordHashMap(payload map[string]any) (string, error) {
 	return CanonicalRecordHash(rec)
 }
 
-func (s *EvidenceService) Register(ctx context.Context, grantID string, records []EvidenceIn) ([]string, error) {
+func (s *EvidenceService) Register(ctx context.Context, grantID string, recordIDs []string) ([]string, error) {
+	if len(recordIDs) == 0 {
+		return nil, NewError(400, "validation", "EVIDENCE_REJECTED", "须提供 record_ids")
+	}
 	var ids []string
 	err := s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var grant modelfinance.ToolGrant
@@ -105,26 +108,20 @@ func (s *EvidenceService) Register(ctx context.Context, grantID string, records 
 		if !runAllowsToolsAt(run, time.Now().UTC()) {
 			return NewError(409, "conflict", "RUN_CLOSED", "研究已结束，拒绝登记")
 		}
-		for _, rec := range records {
-			wantHash, err := CanonicalRecordHash(rec)
-			if err != nil {
-				return err
+		for _, rid := range recordIDs {
+			var stored modelfinance.ProviderRecordRow
+			if err := tx.Where("id = ? AND grant_id = ?", rid, grantID).Take(&stored).Error; err != nil {
+				return NewError(400, "validation", "UNTRUSTED_RECORD", "证据必须是本 grant 下已保存的 record_id")
 			}
-			var stored modelfinance.DataRecord
-			if err := tx.Where("grant_id = ? AND record_hash = ?", grantID, wantHash).Take(&stored).Error; err != nil {
-				return NewError(400, "validation", "UNTRUSTED_RECORD", "证据必须匹配 grant 下已保存的完整规范化记录")
-			}
-			var trusted EvidenceIn
-			if err := json.Unmarshal(stored.Payload, &trusted); err != nil {
+			var rec ProviderRecord
+			if err := json.Unmarshal(stored.Payload, &rec); err != nil {
 				return NewError(400, "validation", "UNTRUSTED_RECORD", "已保存记录无法解码")
 			}
+			trusted := rec.ToEvidenceIn()
 			if err := s.validateRecord(run, trusted); err != nil {
 				return err
 			}
 			textHash := ContentHash(trusted.Text)
-			if rec.ContentHash != "" && rec.ContentHash != textHash {
-				return NewError(400, "validation", "CONTENT_HASH_MISMATCH", "原文哈希不一致")
-			}
 			now := time.Now().UTC()
 			metrics, _ := json.Marshal(trusted.Metrics)
 			ev := modelfinance.Evidence{
@@ -228,10 +225,11 @@ func (s *EvidenceService) ValidateRole(ctx context.Context, run RunSnapshot, res
 func Calculate(operation string, left, right decimal.Decimal) (decimal.Decimal, string, error) {
 	switch operation {
 	case "growth_rate":
-		if right.IsZero() {
-			return decimal.Zero, "", NewError(422, "validation", "INSUFFICIENT_DENOMINATOR", "零分母")
+		if !right.IsPositive() {
+			return decimal.Zero, "", NewError(422, "validation", "INSUFFICIENT_DENOMINATOR", "零分母或非正基数")
 		}
-		return left.Sub(right).Div(right), "(v1-v0)/v0", nil
+		v := left.Sub(right).Div(right).Mul(decimal.NewFromInt(100)).Round(2)
+		return v, "(current-previous)/previous×100", nil
 	case "ratio":
 		if right.IsZero() {
 			return decimal.Zero, "", NewError(422, "validation", "INSUFFICIENT_DENOMINATOR", "零分母")

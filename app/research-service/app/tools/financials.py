@@ -9,13 +9,16 @@ def get_financials(client: GoClient, metrics: list[str], periods: list[str]) -> 
     args = {"metrics": metrics, "periods": periods}
     grant_id = client.grant("get_financials", args)
     payload = client.data_query(grant_id, "get_financials", args)
-    ids = client.register_evidence(grant_id, payload)
-    client.complete(grant_id, "succeeded", payload.get("content_hash", ""))
+    records = payload.get("records") or []
+    ids = client.register_evidence(grant_id, [r["record_id"] for r in records if r.get("record_id")])
+    first = records[0].get("record") if records else {}
+    client.complete(grant_id, "succeeded", records[0].get("record_hash", "") if records else "")
     return {
-        "data": payload,
+        "data": first,
         "evidence_ids": ids,
-        "as_of": payload.get("available_at"),
-        "data_version": payload.get("data_version"),
-        "quality_status": "verified",
-        "warnings": ["fixture"],
+        "as_of": first.get("available_at") if isinstance(first, dict) else None,
+        "data_version": first.get("data_version") if isinstance(first, dict) else None,
+        "quality_status": payload.get("quality_status") or "verified",
+        "warnings": payload.get("warnings") or [],
+        "unknowns": [] if records else ["无法取数：财务查询未返回已披露记录。"],
     }

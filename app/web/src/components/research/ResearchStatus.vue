@@ -1,50 +1,41 @@
 <template>
-  <section class="status" role="status">
+  <section class="status" aria-live="polite">
     <p class="stage">{{ message }}</p>
-    <p class="note">进度来自服务端阶段，不显示百分比或模拟日志。</p>
-    <ol class="steps">
-      <li v-for="step in steps" :key="step.key" :class="{ done: step.done, current: step.current }">
-        <span class="mark" aria-hidden="true">{{ step.done ? '●' : step.current ? '◉' : '○' }}</span>
-        {{ step.label }}
-      </li>
-    </ol>
-    <p v-if="runError" class="err">{{ runError }}</p>
-    <Button v-if="canCancel" type="danger" theme="light" @click="conversation.cancelCurrent">取消研究</Button>
+    <p v-if="disconnected" class="note">连接中断，显示上次状态</p>
+    <p v-else-if="updatedText" class="note">最近更新 {{ updatedText }}</p>
+    <ResearchStageRail :status="status" :report="report" />
+    <p v-if="runError && !disconnected" class="err">{{ runError }}</p>
+    <button
+      v-if="canCancel"
+      type="button"
+      class="zg-btn zg-btn-danger"
+      :disabled="status === 'canceling'"
+      @click="conversation.cancelCurrent"
+    >
+      {{ status === 'canceling' ? '取消中' : '取消研究' }}
+    </button>
   </section>
 </template>
 <script setup>
 import { computed } from 'vue'
-import { Button } from '@kousum/semi-ui-vue'
 import { useResearchConversation } from '../../stores/researchConversation.js'
-import { STATUS_MESSAGES } from '../../utils/researchCopy.js'
+import { CANCELABLE_STATUSES, STATUS_MESSAGES } from '../../utils/researchCopy.js'
+import { formatDateTime } from '../../utils/researchCopy.js'
+import ResearchStageRail from './ResearchStageRail.vue'
 
 const conversation = useResearchConversation()
 const status = computed(() => conversation.runView?.status || '')
-const message = computed(() => STATUS_MESSAGES[status.value] || '正在读取研究状态')
+const report = computed(() => conversation.runView?.report || null)
+const message = computed(() => STATUS_MESSAGES[status.value] || '暂无法识别研究状态')
 const runError = computed(() => conversation.runError)
-const canCancel = computed(() => ['queued', 'researching', 'verifying', 'canceling'].includes(status.value) && status.value !== 'canceled')
-const steps = computed(() => {
-  const order = ['queued', 'researching', 'verifying']
-  const current = status.value
-  const currentIndex = order.indexOf(current)
-  return [
-    { key: 'queued', label: '排队中' },
-    { key: 'researching', label: '调查中' },
-    { key: 'verifying', label: '核对中' }
-  ].map((step, index) => ({
-    ...step,
-    current: step.key === current,
-    done: currentIndex > index || ['completed', 'incomplete', 'failed', 'canceled'].includes(current)
-  })).filter((step) => step.done || step.current || currentIndex === -1 && step.key === 'queued')
-})
+const disconnected = computed(() => conversation.disconnected)
+const canCancel = computed(() => CANCELABLE_STATUSES.includes(status.value) || status.value === 'canceling')
+const updatedText = computed(() => formatDateTime(conversation.runView?.updated_at))
 </script>
 <style scoped>
-.status { padding: 4px 0 8px; max-width: 100%; }
-.stage { margin: 0 0 4px; font-size: 16px; line-height: 24px; font-weight: 500; }
-.note, .err { margin: 0 0 12px; font-size: 12px; line-height: 18px; color: var(--semi-color-text-1); }
-.err { color: var(--zg-danger); }
-.steps { list-style: none; padding: 0; margin: 0 0 16px; display: grid; gap: 8px; }
-.steps li { color: var(--semi-color-text-1); font-size: 14px; }
-.steps li.current { color: var(--zg-brand-text); font-weight: 500; }
-.mark { margin-right: 8px; }
+.status { padding: 24px; background: var(--zg-surface); border: 1px solid var(--zg-line); border-radius: var(--zg-radius-card); }
+.stage { margin: 0 0 4px; font-size: 18px; line-height: 28px; font-weight: 600; }
+.note, .err { margin: 0 0 12px; font-size: 12px; line-height: 18px; color: var(--zg-text-secondary); }
+.err { color: var(--zg-error-fg); }
+@media (max-width: 767px) { .status { padding: 20px 16px; } }
 </style>

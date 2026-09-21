@@ -80,6 +80,9 @@ func (s *ResearchService) CompleteGrant(ctx context.Context, grantID, status, ou
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", grantID).Take(&grant).Error; err != nil {
 			return NewError(404, "not_found", "GRANT_NOT_FOUND", "授权不存在")
 		}
+		if grant.Status == "unknown" && status == "succeeded" {
+			return NewError(409, "conflict", "GRANT_UNKNOWN", "unknown 不得改成虚假 succeeded")
+		}
 		if grant.OutputHash != nil && *grant.OutputHash != "" {
 			return nil
 		}
@@ -98,7 +101,7 @@ type CalcInput struct {
 	Period     string `json:"period"`
 }
 
-func (s *ResearchService) CalculateMetric(ctx context.Context, grantID, operation string, inputs []CalcInput) (map[string]any, error) {
+func (s *ResearchService) CalculateMetric(ctx context.Context, grantID, operation string, inputs map[string]CalcInput) (map[string]any, error) {
 	if tok := TaskTokenFrom(ctx); tok != "" {
 		var g modelfinance.ToolGrant
 		if err := s.DB.Where("id = ?", grantID).Take(&g).Error; err != nil {
@@ -108,20 +111,27 @@ func (s *ResearchService) CalculateMetric(ctx context.Context, grantID, operatio
 			return nil, err
 		}
 	}
+	leftKey, rightKey, err := calcInputNames(operation)
+	if err != nil {
+		return nil, err
+	}
+	if _, ok := inputs[leftKey]; !ok || len(inputs) != 2 {
+		return nil, NewError(400, "validation", "INVALID_INPUTS", "计算须使用恰好两个有名输入")
+	}
+	if _, ok := inputs[rightKey]; !ok {
+		return nil, NewError(400, "validation", "INVALID_INPUTS", "计算须使用恰好两个有名输入")
+	}
 	var out map[string]any
-	err := s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err = s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		grant, err := s.consumeGrant(tx, grantID, "calculate_metric", map[string]any{"operation": operation, "inputs": inputs})
 		if err != nil {
 			return err
 		}
-		if len(inputs) < 2 {
-			return NewError(400, "validation", "INVALID_INPUTS", "需要两个已登记指标")
-		}
-		left, err := s.metricPoint(tx, grant.RunID, grant.TaskID, inputs[0])
+		left, err := s.metricPoint(tx, grant.RunID, grant.TaskID, inputs[leftKey])
 		if err != nil {
 			return err
 		}
-		right, err := s.metricPoint(tx, grant.RunID, grant.TaskID, inputs[1])
+		right, err := s.metricPoint(tx, grant.RunID, grant.TaskID, inputs[rightKey])
 		if err != nil {
 			return err
 		}
@@ -141,44 +151,51 @@ func (s *ResearchService) CalculateMetric(ctx context.Context, grantID, operatio
 			return err
 		}
 		unit := "ratio"
+		precision := 6
 		if operation == "difference" {
 			unit = left.Unit
+		}
+		if operation == "growth_rate" {
+			unit = "percent"
+			precision = 2
 		}
 		now := s.Clock.Now()
 		inJSON, _ := json.Marshal(inputs)
 		row := modelfinance.Calculation{
-			ID:        "calc_" + uuid.NewString(),
-			RunID:     grant.RunID,
-			TaskID:    grant.TaskID,
-			GrantID:   grantID,
-			Operation: operation,
-			Inputs:    datatypes.JSON(inJSON),
-			Formula:   formula,
-			Precision: 6,
-			Result:    result.String(),
-			Unit:      unit,
-			CreatedAt: now,
-			UpdatedAt: now,
+			ID: "calc_" + uuid.NewString(), RunID: grant.RunID, TaskID: grant.TaskID, GrantID: grantID,
+			Operation: operation, Inputs: datatypes.JSON(inJSON), Formula: formula, Precision: precision,
+			Result: result.StringFixed(int32(precision)), Unit: unit, CreatedAt: now, UpdatedAt: now,
 		}
 		if err := tx.Create(&row).Error; err != nil {
 			if isUnique(err) {
 				var old modelfinance.Calculation
 				if tx.Where("grant_id = ?", grantID).Take(&old).Error == nil {
-					out = map[string]any{"result": old.Result, "formula": old.Formula, "unit": old.Unit, "evidence_ids": []string{inputs[0].EvidenceID, inputs[1].EvidenceID}}
+					out = map[string]any{"calculation_id": old.ID, "value": old.Result, "formula": old.Formula, "unit": old.Unit, "precision": old.Precision, "evidence_ids": []string{inputs[leftKey].EvidenceID, inputs[rightKey].EvidenceID}}
 					return nil
 				}
 			}
 			return err
 		}
 		out = map[string]any{
-			"result":       result.String(),
-			"formula":      formula,
-			"unit":         unit,
-			"evidence_ids": []string{inputs[0].EvidenceID, inputs[1].EvidenceID},
+			"calculation_id": row.ID, "value": row.Result, "formula": formula, "unit": unit, "precision": precision,
+			"evidence_ids": []string{inputs[leftKey].EvidenceID, inputs[rightKey].EvidenceID},
 		}
 		return nil
 	})
 	return out, err
+}
+
+func calcInputNames(operation string) (string, string, error) {
+	switch operation {
+	case "growth_rate":
+		return "current", "previous", nil
+	case "ratio":
+		return "numerator", "denominator", nil
+	case "difference":
+		return "left", "right", nil
+	default:
+		return "", "", NewError(400, "validation", "INVALID_OPERATION", "operation 不支持")
+	}
 }
 
 func comparableMetrics(operation string, left, right Metric) error {

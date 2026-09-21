@@ -30,6 +30,7 @@ type ResearchTask struct {
 	MaxToolCalls        int       `json:"max_tool_calls"`
 	DeadlineAt          time.Time `json:"deadline_at"`
 	TaskToken           string    `json:"-"`
+	Protocol            string    `json:"-"`
 }
 
 type Argument struct {
@@ -114,61 +115,75 @@ func NewValidatedRole(role string, result ResearchResult) ValidatedRole {
 	return ValidatedRole{role: role, result: result, arguments: result.Arguments, evidence: result.EvidenceIDs}
 }
 
-func (v ValidatedRole) Role() string            { return v.role }
-func (v ValidatedRole) Result() ResearchResult  { return v.result }
-func (v ValidatedRole) Arguments() []Argument   { return v.arguments }
-func (v ValidatedRole) EvidenceIDs() []string   { return v.evidence }
+func (v ValidatedRole) Role() string           { return v.role }
+func (v ValidatedRole) Result() ResearchResult { return v.result }
+func (v ValidatedRole) Arguments() []Argument  { return v.arguments }
+func (v ValidatedRole) EvidenceIDs() []string  { return v.evidence }
 
 type CreateResearchInput struct {
-	DraftID      string
-	Revision     int
-	InstrumentID string
-	Horizon      string
-	AsOf         time.Time
-	ParentRunID  string
-	ClaimText    string
+	DraftID     string
+	Revision    int
+	ParentRunID string
 }
 
 type CreateResearchOutput struct {
-	RunID   string `json:"run_id"`
-	Status  string `json:"status"`
-	PollURL string `json:"poll_url"`
+	RunID              string `json:"run_id"`
+	Status             string `json:"status"`
+	PollURL            string `json:"poll_url"`
+	AsOf               string `json:"as_of,omitempty"`
+	ModelConfigVersion string `json:"model_config_version,omitempty"`
 }
 
 type ParseInput struct {
 	Text string
-	AsOf *time.Time
 }
 
 type ParseOutput struct {
-	DraftID           string         `json:"draft_id"`
-	Revision          int            `json:"revision"`
-	Candidates        []Instrument   `json:"candidates"`
-	SuggestedHorizon  string         `json:"suggested_horizon"`
-	Items             []ClaimItem    `json:"items"`
-	NeedsConfirmation bool           `json:"needs_confirmation"`
-	Mode              string         `json:"mode"`
+	DraftID            string       `json:"draft_id"`
+	Revision           int          `json:"revision"`
+	ParseStatus        string       `json:"parse_status"`
+	Candidates         []Instrument `json:"candidates"`
+	Items              []ClaimItem  `json:"items"`
+	InstrumentID       *string      `json:"instrument_id"`
+	HorizonStart       *string      `json:"horizon_start"`
+	HorizonEnd         *string      `json:"horizon_end"`
+	SuggestedHorizon   string       `json:"suggested_horizon"`
+	ModelConfigVersion string       `json:"model_config_version"`
+	Protocol           string       `json:"protocol"`
+	Mode               string       `json:"mode"`
+	NeedsConfirmation  bool         `json:"needs_confirmation"`
+}
+
+type PatchDraftInput struct {
+	Revision     int         `json:"revision"`
+	InstrumentID *string     `json:"instrument_id"`
+	HorizonStart *string     `json:"horizon_start"`
+	HorizonEnd   *string     `json:"horizon_end"`
+	Items        []ClaimItem `json:"items"`
 }
 
 type Instrument struct {
 	ID     string `json:"instrument_id"`
 	Symbol string `json:"symbol"`
 	Name   string `json:"name"`
+	Market string `json:"market,omitempty"`
 }
 
 type ResearchView struct {
-	RunID        string          `json:"run_id"`
-	Status       string          `json:"status"`
-	Stage        string          `json:"stage"`
-	Mode         string          `json:"mode"`
-	AsOf         time.Time       `json:"as_of"`
-	InstrumentID string          `json:"instrument_id,omitempty"`
-	Horizon      string          `json:"horizon,omitempty"`
-	Claim        *Claim          `json:"claim,omitempty"`
-	Report       *VerifiedReport `json:"report"`
-	Warnings     []string        `json:"warnings"`
-	Error        *APIErrorBody   `json:"error"`
-	UpdatedAt    time.Time       `json:"updated_at"`
+	RunID              string          `json:"run_id"`
+	Status             string          `json:"status"`
+	Stage              string          `json:"stage"`
+	Mode               string          `json:"mode"`
+	AsOf               time.Time       `json:"as_of"`
+	InstrumentID       string          `json:"instrument_id,omitempty"`
+	Horizon            string          `json:"horizon,omitempty"`
+	Claim              *Claim          `json:"claim,omitempty"`
+	ClaimResults       []ClaimResult   `json:"claim_results"`
+	Report             *VerifiedReport `json:"report"`
+	Warnings           []string        `json:"warnings"`
+	Error              *APIErrorBody   `json:"error"`
+	UpdatedAt          time.Time       `json:"updated_at"`
+	ModelConfigVersion string          `json:"model_config_version,omitempty"`
 }
 
 type APIErrorBody struct {
@@ -201,11 +216,11 @@ type AdminRunItem struct {
 }
 
 type PolicyView struct {
-	MaxModelCalls        int    `json:"max_model_calls"`
-	MaxToolCalls         int    `json:"max_tool_calls"`
-	RunTimeoutSeconds    int    `json:"run_timeout_seconds"`
-	QueueTimeoutSeconds  int    `json:"queue_timeout_seconds"`
-	Note                 string `json:"note"`
+	MaxModelCalls       int    `json:"max_model_calls"`
+	MaxToolCalls        int    `json:"max_tool_calls"`
+	RunTimeoutSeconds   int    `json:"run_timeout_seconds"`
+	QueueTimeoutSeconds int    `json:"queue_timeout_seconds"`
+	Note                string `json:"note"`
 }
 
 const (

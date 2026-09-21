@@ -22,14 +22,26 @@ func r2Evidence(t *testing.T, s *ResearchService, runID, taskID, req string) str
 	if e != nil {
 		t.Fatal(e)
 	}
-	raw, _ := json.Marshal(out)
-	var rec EvidenceIn
-	_ = json.Unmarshal(raw, &rec)
-	ids, e := NewEvidenceService(s.DB).Register(context.Background(), g.ID, []EvidenceIn{rec})
+	ids, e := NewEvidenceService(s.DB).Register(context.Background(), g.ID, issuedIDs(out))
 	if e != nil {
 		t.Fatal(e)
 	}
 	return ids[0]
+}
+
+func issuedIDs(out DataQueryResult) []string {
+	ids := make([]string, 0, len(out.Records))
+	for _, rec := range out.Records {
+		ids = append(ids, rec.RecordID)
+	}
+	return ids
+}
+
+func namedGrowth(eid string) map[string]CalcInput {
+	return map[string]CalcInput{
+		"current":  {EvidenceID: eid, Metric: "revenue", Period: "2025"},
+		"previous": {EvidenceID: eid, Metric: "revenue", Period: "2024"},
+	}
 }
 
 func TestR2LeaseLostCannotPublish(t *testing.T) {
@@ -70,7 +82,7 @@ func TestR2ModelProxyWorksWithProductionBudget(t *testing.T) {
 		t.Fatal(e)
 	}
 	body := []byte(`{"model":"finance-research","messages":[]}`)
-	_, e = NewModelProxy(s.DB, NewDBBudget(s.DB)).Complete(context.Background(), "r2-model-request", NormalizeJSONHash(body), HeaderTokenHash(token), body)
+	_, e = NewModelProxy(s.DB, NewDBBudget(s.DB)).Complete(context.Background(), "r2-model-request", NormalizeJSONHash(body), HeaderTokenHash(token), body, ProtocolChatCompletions)
 	if e != nil {
 		t.Fatalf("valid fixture model call fails with production DBBudget: %v", e)
 	}
@@ -86,7 +98,7 @@ func TestR2GrantOperationBound(t *testing.T) {
 	}
 	out, e := s.DataQuery(context.Background(), g.ID, "search_filings", p)
 	if e == nil {
-		t.Fatalf("get_financials grant executed search_filings: source=%v", out["source_id"])
+		t.Fatalf("get_financials grant executed search_filings: records=%d", len(out.Records))
 	}
 }
 
@@ -135,7 +147,7 @@ func TestR2CalculationRejectsExpiredGrant(t *testing.T) {
 	r := createMinimalRun(t, s, 1001, "r2-calc")
 	task := reviewTaskID(t, s, r.RunID)
 	eid := r2Evidence(t, s, r.RunID, task, "r2-calc-source")
-	inputs := []CalcInput{{EvidenceID: eid, Metric: "revenue", Period: "2025"}, {EvidenceID: eid, Metric: "revenue", Period: "2024"}}
+	inputs := namedGrowth(eid)
 	h, _ := HashCanonical(map[string]any{"operation": "growth_rate", "inputs": inputs})
 	g, e := s.CreateGrant(context.Background(), r.RunID, task, GrantIn{RequestID: "r2-calc-grant", ToolName: "calculate_metric", ArgsHash: h})
 	if e != nil {
@@ -160,7 +172,7 @@ func TestR2CalculationCannotUseOtherRolesEvidence(t *testing.T) {
 		t.Fatal(e)
 	}
 	ctx := WithTaskToken(context.Background(), token)
-	inputs := []CalcInput{{EvidenceID: eid, Metric: "revenue", Period: "2025"}, {EvidenceID: eid, Metric: "revenue", Period: "2024"}}
+	inputs := namedGrowth(eid)
 	h, _ := HashCanonical(map[string]any{"operation": "growth_rate", "inputs": inputs})
 	g, e := s.CreateGrant(ctx, r.RunID, a, GrantIn{RequestID: "r2-calc-isolation", ToolName: "calculate_metric", ArgsHash: h})
 	if e != nil {
@@ -184,7 +196,7 @@ func TestR2CalculationValidatesUnits(t *testing.T) {
 	metrics[1].Unit = "USD_million"
 	raw, _ := json.Marshal(metrics)
 	s.DB.Model(&ev).Update("metrics", string(raw))
-	inputs := []CalcInput{{EvidenceID: eid, Metric: "revenue", Period: "2025"}, {EvidenceID: eid, Metric: "revenue", Period: "2024"}}
+	inputs := namedGrowth(eid)
 	h, _ := HashCanonical(map[string]any{"operation": "growth_rate", "inputs": inputs})
 	g, e := s.CreateGrant(context.Background(), r.RunID, task, GrantIn{RequestID: "r2-units", ToolName: "calculate_metric", ArgsHash: h})
 	if e != nil {

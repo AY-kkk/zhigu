@@ -1,6 +1,6 @@
 <template>
-  <div>
-    <h2>模型与数据源</h2>
+  <div class="zhigu-page">
+    <h1>模型与数据源</h1>
     <p>密钥只写不回显。保存后可做格式校验。阶段 A 的「测试」只检查协议/密钥是否填写/SSRF，<strong>不等于上游连接成功</strong>。真实模型能力测试属于阶段 B。</p>
     <el-form label-width="120px">
       <el-form-item label="Base URL"><el-input v-model="baseUrl" /></el-form-item>
@@ -13,11 +13,11 @@
     <p v-if="saved">已保存，has_key={{ saved.has_key }}，digest={{ saved.config_digest }}，status={{ saved.test_status }}</p>
     <p v-if="testResult">校验结果：{{ testResult.status }}。{{ testResult.note || '仅格式校验，未验证连接。' }}</p>
     <p v-if="error" class="err">{{ error }}</p>
-    <h3>已保存配置</h3>
+    <h2>已保存配置</h2>
     <ul>
       <li v-for="row in configs" :key="row.id">{{ row.id }} · {{ row.kind }} · {{ row.test_status }} · {{ row.config_digest }}</li>
     </ul>
-    <h3>数据源</h3>
+    <h2>数据源</h2>
     <el-form label-width="120px">
       <el-form-item label="名称"><el-input v-model="sourceName" /></el-form-item>
       <el-form-item label="Key"><el-input v-model="sourceKey" type="password" /></el-form-item>
@@ -100,6 +100,6 @@ async function saveSource() {
 }
 </script>
 <style scoped>
-.err { color: #c45656; }
-li { overflow-wrap: anywhere; }
+.err { color: var(--zg-error-fg); background: var(--zg-error-bg); padding: 8px 12px; border-radius: var(--zg-radius-control); }
+li { overflow-wrap: anywhere; color: var(--zg-text-secondary); font-family: var(--zg-font-number); font-size: 13px; line-height: 22px; }
 </style>

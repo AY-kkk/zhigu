@@ -1,72 +1,77 @@
 <template>
-  <div class="side-wrap">
-    <router-link class="zhigu-brand" to="/app/research/new" aria-label="知股">
-      <span class="zhigu-brand-mark" aria-hidden="true">知</span>
-      <span class="zhigu-brand-name">知股</span>
+  <div class="side-wrap" :class="{ stacked }">
+    <router-link v-if="!stacked" class="zhigu-brand" :to="brandTo" :aria-label="brandLabel">
+      <ZhiguLogo variant="stacked" />
     </router-link>
-    <Nav
-      class="zhigu-side-nav"
-      mode="vertical"
-      :isCollapsed="false"
-      :defaultIsCollapsed="false"
-      :selectedKeys="[selected]"
-      :items="items"
-      :onSelect="onSelect"
-      :onClick="onNavClick"
-      :renderWrapper="wrapItem"
-    />
+    <nav class="zhigu-side-nav" :aria-label="navLabel">
+      <button
+        v-for="item in navItems"
+        :key="item.key"
+        type="button"
+        class="zhigu-nav-item"
+        :class="{ 'is-active': selected === item.key }"
+        :aria-current="selected === item.key ? 'page' : undefined"
+        @click="go(item)"
+      >
+        <ZhiguIcon :name="item.icon" :size="24" />
+        <span>{{ item.text }}</span>
+      </button>
+    </nav>
   </div>
 </template>
 <script setup>
-import { computed, h } from 'vue'
+import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Nav } from '@kousum/semi-ui-vue'
-import { IconComment, IconHistogram, IconUser } from '@kousum/semi-icons-vue'
+import ZhiguLogo from '../brand/ZhiguLogo.vue'
+import ZhiguIcon from '../brand/ZhiguIcon.vue'
 import { useResearchConversation } from '../../stores/researchConversation.js'
 
+const CONSUMER_ITEMS = [
+  { key: 'profile', text: '个人界面', icon: 'account' },
+  { key: 'research', text: '投研观点', icon: 'research' },
+  { key: 'strategies', text: '交易策略', icon: 'strategies' }
+]
+
+const props = defineProps({
+  stacked: { type: Boolean, default: false },
+  items: { type: Array, default: null },
+  brandTo: { type: String, default: '/app/research/new' },
+  brandLabel: { type: String, default: '知股 Zhigu' },
+  navLabel: { type: String, default: '主导航' }
+})
 const emit = defineEmits(['navigated'])
 const route = useRoute()
 const router = useRouter()
 const conversation = useResearchConversation()
+const navItems = computed(() => props.items || CONSUMER_ITEMS)
 
 const selected = computed(() => {
-  if (route.path.startsWith('/app/profile') || route.path.startsWith('/app/history')) return 'profile'
+  if (props.items) {
+    const hit = props.items.find((item) => item.match && route.path.startsWith(item.match))
+    return hit?.key || ''
+  }
+  if (route.path.startsWith('/app/history')) return ''
+  if (route.path.startsWith('/app/profile')) return 'profile'
   if (route.path.startsWith('/app/strategies')) return 'strategies'
-  return 'research'
+  if (route.path.startsWith('/app/research')) return 'research'
+  return ''
 })
 
-const items = [
-  { itemKey: 'profile', text: '个人界面', icon: h(IconUser, { size: 'large' }) },
-  { itemKey: 'research', text: '投研观点', icon: h(IconComment, { size: 'large' }) },
-  { itemKey: 'strategies', text: '交易策略', icon: h(IconHistogram, { size: 'large' }) }
-]
-
-const paths = {
-  profile: '/app/profile',
-  research: '/app/research/new',
-  strategies: '/app/strategies'
-}
-
-function wrapItem({ itemElement, props }) {
-  const current = props.itemKey === selected.value
-  return h('div', { 'aria-current': current ? 'page' : undefined }, [itemElement])
-}
-
-function onNavClick(data) {
-  onSelect(data)
-}
-
-function onSelect(data) {
-  const key = data?.itemKey
-  if (!key || !paths[key]) return
-  if (key === 'research') {
+function go(item) {
+  if (item.to) {
+    if (route.path !== item.to) router.push(item.to)
+    emit('navigated')
+    return
+  }
+  if (item.key === 'research') {
     const runId = conversation.currentRunId
     const target = runId ? `/app/research/${runId}` : '/app/research/new'
     if (route.path !== target) router.push(target)
     emit('navigated')
     return
   }
-  router.push(paths[key])
+  const paths = { profile: '/app/profile', strategies: '/app/strategies' }
+  router.push(paths[item.key])
   emit('navigated')
 }
 </script>
@@ -75,6 +80,18 @@ function onSelect(data) {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--zg-sidebar-bg);
+  background: var(--zg-surface);
+}
+.stacked { width: 100%; }
+.stacked .zhigu-side-nav { width: 100%; }
+.stacked .zhigu-brand { align-items: flex-start; padding: 8px 12px; }
+.stacked .zhigu-nav-item {
+  width: auto;
+  min-height: 44px;
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: 12px;
+  margin: 0 8px 8px;
+  padding: 10px 12px;
 }
 </style>

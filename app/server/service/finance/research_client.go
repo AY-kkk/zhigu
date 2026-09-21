@@ -50,6 +50,10 @@ func (c *HTTPResearchClient) Submit(ctx context.Context, task ResearchTask) (Tas
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, c.Base+"/internal/research/tasks", bytes.NewReader(raw))
 	req.Header.Set("Authorization", "Bearer "+c.Token)
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(ContractVersionHeader, ContractVersion)
+	if task.Protocol != "" {
+		req.Header.Set(ModelProtocolHeader, task.Protocol)
+	}
 	if task.TaskToken != "" {
 		req.Header.Set("X-Zhigu-Task-Token", task.TaskToken)
 	}
@@ -112,6 +116,7 @@ func (c *HTTPResearchClient) Purge(ctx context.Context, taskID string) error {
 		return err
 	}
 	req.Header.Set("Authorization", "Bearer "+c.Token)
+	req.Header.Set(ContractVersionHeader, ContractVersion)
 	res, err := c.Client.Do(req)
 	if err != nil {
 		return NewError(503, "transport", "PYTHON_UNAVAILABLE", err.Error())
@@ -128,6 +133,7 @@ func (c *HTTPResearchClient) Purge(ctx context.Context, taskID string) error {
 }
 
 func (c *HTTPResearchClient) do(req *http.Request) (*http.Response, error) {
+	req.Header.Set(ContractVersionHeader, ContractVersion)
 	cli := c.Client
 	if cli == nil {
 		cli = http.DefaultClient

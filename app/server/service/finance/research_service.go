@@ -37,13 +37,14 @@ type ResearchService struct {
 	Client ResearchClient
 	Budget BudgetService
 	Clock  Clock
+	Live   *LiveSource
 }
 
 func NewService(db *gorm.DB, client ResearchClient, budget BudgetService, _ *FixtureConfig) *ResearchService {
 	if mb, ok := budget.(*MemoryBudget); ok {
 		mb.Attach(db)
 	}
-	return &ResearchService{DB: db, Client: client, Budget: budget, Clock: SystemClock{}}
+	return &ResearchService{DB: db, Client: client, Budget: budget, Clock: SystemClock{}, Live: NewLiveSource()}
 }
 
 func (s *ResearchService) ParseClaim(ctx context.Context, in ParseInput) (ParseOutput, error) {
@@ -66,20 +67,35 @@ func (s *ResearchService) ParseClaim(ctx context.Context, in ParseInput) (ParseO
 	if int(recent) >= ParsePerMinuteMax {
 		return ParseOutput{}, NewError(429, "budget", "PARSE_RATE_LIMIT", "解析每分钟最多 5 次")
 	}
+	mode := DataMode()
 	asOf := DefaultAsOf(now)
-	if in.AsOf != nil {
-		asOf = in.AsOf.UTC()
-	}
-	horizon := SuggestedHorizon(asOf)
+	start, end := HorizonDates(asOf)
+	horizon := start + "/" + end
+	protocol := ProtocolChatCompletions
+	modelVer := "model_fixture_v1"
+	parseStatus := "failed"
+	var instrument *string
 	var candidates []Instrument
-	needs := true
-	if strings.Contains(text, "演示公司") {
-		candidates = []Instrument{{ID: InstrumentDemo, Symbol: "DEMO:COMPANY", Name: "演示公司"}}
+	if mode != ModeLive && strings.Contains(text, "演示公司") {
+		demo := InstrumentDemo
+		instrument = &demo
+		candidates = []Instrument{{ID: InstrumentDemo, Symbol: "DEMO:COMPANY", Name: "演示公司", Market: MarketA}}
+		parseStatus = "succeeded"
+	}
+	if mode == ModeLive {
+		_ = EnsureLiveCatalog(ctx)
+		matched := MatchInstrumentsFromText(text, 8)
+		candidates = toPublicInstruments(matched)
+		if len(matched) == 1 {
+			id := matched[0].ID
+			instrument = &id
+			parseStatus = "succeeded"
+		} else if len(matched) > 0 {
+			parseStatus = "succeeded"
+		}
 	}
 	items := []ClaimItem{{
-		ClaimID:   "claim_1",
-		Text:      truncateRunes(text, 400),
-		ClaimType: "fact",
+		ClaimID: "claim_1", Text: truncateRunes(text, 400), ClaimType: "fact",
 	}}
 	if strings.Contains(text, "股价") {
 		items = append(items, ClaimItem{ClaimID: "claim_2", Text: "收入或基本面变化会推动未来股价。", ClaimType: "inference"})
@@ -89,38 +105,139 @@ func (s *ResearchService) ParseClaim(ctx context.Context, in ParseInput) (ParseO
 	}
 	itemJSON, _ := json.Marshal(items)
 	cfg, _ := json.Marshal(map[string]string{
-		"model":  "model_fixture_v1",
-		"source": "source_fixture_v1",
-		"prompt": "prompt_v1",
-		"policy": "policy_v1",
-		"budget": "budget_v1",
+		"model": modelVer, "source": SourcePolicyVersion, "prompt": "prompt_v1",
+		"policy": "policy_v1", "budget": "budget_v1", "protocol": protocol,
 	})
 	id := "draft_" + uuid.NewString()
+	origin := "parsed"
 	row := modelfinance.ClaimDraft{
-		ID:             id,
-		OwnerID:        owner,
-		Text:           text,
-		Horizon:        &horizon,
-		Items:          datatypes.JSON(itemJSON),
-		Revision:       1,
-		AsOf:           asOf,
-		Mode:           ModeFixture,
-		ConfigVersions: datatypes.JSON(cfg),
-		CreatedAt:      now,
-		UpdatedAt:      now,
+		ID: id, OwnerID: owner, Text: text, Horizon: &horizon, HorizonStart: &start, HorizonEnd: &end,
+		InstrumentID: instrument, Items: datatypes.JSON(itemJSON), Revision: 1, AsOf: asOf, Mode: mode,
+		ParseStatus: parseStatus, ModelConfigVersion: &modelVer, Protocol: &protocol, ScopeOrigin: &origin,
+		ConfigVersions: datatypes.JSON(cfg), CreatedAt: now, UpdatedAt: now,
 	}
 	if err := s.DB.WithContext(ctx).Create(&row).Error; err != nil {
 		return ParseOutput{}, err
 	}
 	return ParseOutput{
-		DraftID:           id,
-		Revision:          1,
-		Candidates:        candidates,
-		SuggestedHorizon:  horizon,
-		Items:             items,
-		NeedsConfirmation: needs || len(candidates) != 1,
-		Mode:              ModeFixture,
+		DraftID: id, Revision: 1, ParseStatus: parseStatus, Candidates: candidates, Items: items,
+		InstrumentID: instrument, HorizonStart: &start, HorizonEnd: &end, SuggestedHorizon: horizon,
+		ModelConfigVersion: modelVer, Protocol: protocol, Mode: mode,
+		NeedsConfirmation: true,
 	}, nil
+}
+
+func (s *ResearchService) GetClaim(ctx context.Context, draftID string) (ParseOutput, error) {
+	owner := UserIDFrom(ctx)
+	var row modelfinance.ClaimDraft
+	if err := s.DB.WithContext(ctx).Where("id = ? AND owner_id = ?", draftID, owner).Take(&row).Error; err != nil {
+		return ParseOutput{}, NewError(404, "not_found", "DRAFT_NOT_FOUND", "草稿不存在")
+	}
+	return draftToParseOutput(row), nil
+}
+
+func (s *ResearchService) PatchClaim(ctx context.Context, draftID string, in PatchDraftInput) (ParseOutput, error) {
+	owner := UserIDFrom(ctx)
+	var out ParseOutput
+	err := s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var row modelfinance.ClaimDraft
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND owner_id = ?", draftID, owner).Take(&row).Error; err != nil {
+			return NewError(404, "not_found", "DRAFT_NOT_FOUND", "草稿不存在")
+		}
+		if row.ConfirmedRunID != nil && *row.ConfirmedRunID != "" {
+			return NewError(409, "conflict", "DRAFT_ALREADY_CONFIRMED", "同一草稿仅可确认一次")
+		}
+		if row.Revision != in.Revision {
+			return NewError(409, "conflict", "DRAFT_REVISION", "草稿版本不匹配")
+		}
+		if in.InstrumentID != nil {
+			norm := NormalizeInstrumentID(*in.InstrumentID)
+			in.InstrumentID = &norm
+			if !CoveredInstrumentMode(*in.InstrumentID, row.Mode) {
+				return NewError(422, "validation", "UNSUPPORTED_INSTRUMENT", "标的不在当前数据源覆盖范围")
+			}
+			row.InstrumentID = in.InstrumentID
+			manual := "manual"
+			row.ScopeOrigin = &manual
+		}
+		if in.HorizonStart != nil || in.HorizonEnd != nil {
+			start := ""
+			end := ""
+			if row.HorizonStart != nil {
+				start = *row.HorizonStart
+			}
+			if row.HorizonEnd != nil {
+				end = *row.HorizonEnd
+			}
+			if in.HorizonStart != nil {
+				start = *in.HorizonStart
+			}
+			if in.HorizonEnd != nil {
+				end = *in.HorizonEnd
+			}
+			if start == "" || end == "" || start > end {
+				return NewError(422, "validation", "INVALID_HORIZON", "期限须为 ISO 日期且开始不晚于结束")
+			}
+			row.HorizonStart = &start
+			row.HorizonEnd = &end
+			h := start + "/" + end
+			row.Horizon = &h
+		}
+		if in.Items != nil {
+			if len(in.Items) < 1 || len(in.Items) > 6 {
+				return NewError(422, "validation", "INVALID_ITEMS", "主张须为 1 至 6 条")
+			}
+			seen := map[string]struct{}{}
+			for _, it := range in.Items {
+				if it.ClaimID == "" || it.Text == "" {
+					return NewError(422, "validation", "INVALID_ITEMS", "主张不完整")
+				}
+				if _, ok := seen[it.ClaimID]; ok {
+					return NewError(422, "validation", "INVALID_ITEMS", "claim_id 须唯一")
+				}
+				seen[it.ClaimID] = struct{}{}
+			}
+			raw, _ := json.Marshal(in.Items)
+			row.Items = datatypes.JSON(raw)
+		}
+		row.Revision++
+		row.UpdatedAt = s.Clock.Now()
+		if err := tx.Save(&row).Error; err != nil {
+			return err
+		}
+		out = draftToParseOutput(row)
+		return nil
+	})
+	return out, err
+}
+
+func draftToParseOutput(row modelfinance.ClaimDraft) ParseOutput {
+	var items []ClaimItem
+	_ = json.Unmarshal(row.Items, &items)
+	cand := []Instrument{}
+	if row.InstrumentID != nil {
+		if inst, ok := LookupInstrument(*row.InstrumentID); ok {
+			cand = []Instrument{{ID: inst.ID, Symbol: inst.Symbol, Name: inst.Name, Market: inst.Market}}
+		}
+	}
+	horizon := ""
+	if row.Horizon != nil {
+		horizon = *row.Horizon
+	}
+	proto := ProtocolChatCompletions
+	if row.Protocol != nil {
+		proto = *row.Protocol
+	}
+	modelVer := "model_fixture_v1"
+	if row.ModelConfigVersion != nil {
+		modelVer = *row.ModelConfigVersion
+	}
+	return ParseOutput{
+		DraftID: row.ID, Revision: row.Revision, ParseStatus: row.ParseStatus, Candidates: cand, Items: items,
+		InstrumentID: row.InstrumentID, HorizonStart: row.HorizonStart, HorizonEnd: row.HorizonEnd,
+		SuggestedHorizon: horizon, ModelConfigVersion: modelVer, Protocol: proto, Mode: row.Mode,
+		NeedsConfirmation: row.ConfirmedRunID == nil,
+	}
 }
 
 func (s *ResearchService) CreateResearch(ctx context.Context, idempotencyKey string, in CreateResearchInput) (CreateResearchOutput, error) {
@@ -130,12 +247,6 @@ func (s *ResearchService) CreateResearch(ctx context.Context, idempotencyKey str
 	}
 	if strings.TrimSpace(idempotencyKey) == "" {
 		return CreateResearchOutput{}, NewError(400, "validation", "MISSING_IDEMPOTENCY_KEY", "缺少 Idempotency-Key")
-	}
-	if strings.TrimSpace(in.Horizon) == "" || in.InstrumentID == "" {
-		return CreateResearchOutput{}, NewError(400, "validation", "SCOPE_REQUIRED", "须明确选择证券和期限")
-	}
-	if !CoveredInstrument(in.InstrumentID) {
-		return CreateResearchOutput{}, NewError(422, "validation", "UNSUPPORTED_INSTRUMENT", "标的不在当前数据源覆盖范围")
 	}
 	reqHash, err := HashCanonical(in)
 	if err != nil {
@@ -149,7 +260,7 @@ func (s *ResearchService) CreateResearch(ctx context.Context, idempotencyKey str
 			if existing.RequestHash != reqHash {
 				return NewError(409, "conflict", "IDEMPOTENCY_CONFLICT", "相同幂等键对应不同请求")
 			}
-			out = CreateResearchOutput{RunID: existing.ID, Status: existing.Status, PollURL: "/api/finance/research/" + existing.ID}
+			out = CreateResearchOutput{RunID: existing.ID, Status: existing.Status, PollURL: "/api/finance/research/" + existing.ID, AsOf: existing.AsOf.UTC().Format(time.RFC3339)}
 			return nil
 		}
 		if !errors.Is(q.Error, gorm.ErrRecordNotFound) {
@@ -171,8 +282,19 @@ func (s *ResearchService) CreateResearch(ctx context.Context, idempotencyKey str
 		if draft.ConfirmedRunID != nil && *draft.ConfirmedRunID != "" {
 			return NewError(409, "conflict", "DRAFT_ALREADY_CONFIRMED", "同一草稿仅可确认一次")
 		}
-		if strings.TrimSpace(in.ClaimText) != "" && strings.TrimSpace(in.ClaimText) != strings.TrimSpace(draft.Text) {
-			return NewError(409, "conflict", "DRAFT_TEXT_MISMATCH", "观点已修改，请重新解析后再确认")
+		if draft.InstrumentID == nil || strings.TrimSpace(*draft.InstrumentID) == "" || draft.HorizonStart == nil || draft.HorizonEnd == nil {
+			return NewError(422, "validation", "SCOPE_REQUIRED", "须明确选择证券和期限")
+		}
+		if *draft.HorizonStart > *draft.HorizonEnd {
+			return NewError(422, "validation", "INVALID_HORIZON", "期限须为 ISO 日期且开始不晚于结束")
+		}
+		if !CoveredInstrumentMode(*draft.InstrumentID, draft.Mode) {
+			return NewError(422, "validation", "UNSUPPORTED_INSTRUMENT", "标的不在当前数据源覆盖范围")
+		}
+		var items []ClaimItem
+		_ = json.Unmarshal(draft.Items, &items)
+		if len(items) < 1 || len(items) > 6 {
+			return NewError(422, "validation", "INVALID_ITEMS", "主张须为 1 至 6 条")
 		}
 		var active int64
 		if err := tx.Model(&modelfinance.ResearchRun{}).
@@ -206,19 +328,25 @@ func (s *ResearchService) CreateResearch(ctx context.Context, idempotencyKey str
 		if int(today) >= DailyResearchMax {
 			return NewError(429, "budget", "DAILY_RESEARCH_LIMIT", "每日最多 10 个研究")
 		}
-		asOf := in.AsOf.UTC()
-		var items []ClaimItem
-		_ = json.Unmarshal(draft.Items, &items)
-		claim := Claim{Text: draft.Text, Horizon: in.Horizon, Items: items}
+		asOf := s.Clock.Now().UTC()
+		horizon := *draft.HorizonStart + "/" + *draft.HorizonEnd
+		claim := Claim{Text: draft.Text, Horizon: horizon, Items: items}
 		claimJSON, _ := json.Marshal(claim)
 		policy, _ := NewConfigService(tx).GetPolicy(ctx)
 		budgetSnap := FreezeBudgetSnapshot(policy)
 		cfg := map[string]string{
-			"model":  "model_fixture_v1",
-			"source": "source_fixture_v1",
-			"prompt": "prompt_v1",
-			"policy": "policy_v1",
-			"budget": "budget_v1",
+			"model":    "model_fixture_v1",
+			"source":   SourcePolicyVersion,
+			"prompt":   "prompt_v1",
+			"policy":   "policy_v1",
+			"budget":   "budget_v1",
+			"protocol": ProtocolChatCompletions,
+		}
+		if draft.ModelConfigVersion != nil && *draft.ModelConfigVersion != "" {
+			cfg["model"] = *draft.ModelConfigVersion
+		}
+		if draft.Protocol != nil && *draft.Protocol != "" {
+			cfg["protocol"] = *draft.Protocol
 		}
 		if policy.MaxToolCalls > 0 {
 			cfg["policy"] = fmt.Sprintf("policy_tools_%d", policy.MaxToolCalls)
@@ -237,10 +365,10 @@ func (s *ResearchService) CreateResearch(ctx context.Context, idempotencyKey str
 			DraftID:        draft.ID,
 			ParentRunID:    parent,
 			ClaimSnapshot:  datatypes.JSON(claimJSON),
-			InstrumentID:   in.InstrumentID,
-			Horizon:        in.Horizon,
+			InstrumentID:   *draft.InstrumentID,
+			Horizon:        horizon,
 			AsOf:           asOf,
-			Mode:           ModeFixture,
+			Mode:           draft.Mode,
 			Status:         StatusQueued,
 			Stage:          "queued",
 			ConfigVersions: datatypes.JSON(cfgJSON),
@@ -248,6 +376,7 @@ func (s *ResearchService) CreateResearch(ctx context.Context, idempotencyKey str
 			IdempotencyKey: idempotencyKey,
 			RequestHash:    reqHash,
 			Version:        1,
+			ExecutionEpoch: 1,
 			CreatedAt:      now,
 			UpdatedAt:      now,
 		}
@@ -258,7 +387,7 @@ func (s *ResearchService) CreateResearch(ctx context.Context, idempotencyKey str
 					if again.RequestHash != reqHash {
 						return NewError(409, "conflict", "IDEMPOTENCY_CONFLICT", "相同幂等键对应不同请求")
 					}
-					out = CreateResearchOutput{RunID: again.ID, Status: again.Status, PollURL: "/api/finance/research/" + again.ID}
+					out = CreateResearchOutput{RunID: again.ID, Status: again.Status, PollURL: "/api/finance/research/" + again.ID, AsOf: again.AsOf.UTC().Format(time.RFC3339)}
 					return nil
 				}
 				return NewError(409, "conflict", "ACTIVE_RUN_EXISTS", "同一用户同时只能有一个活动研究")
@@ -283,7 +412,7 @@ func (s *ResearchService) CreateResearch(ctx context.Context, idempotencyKey str
 		if err := tx.Model(&draft).Updates(map[string]any{"confirmed_run_id": runID, "updated_at": now}).Error; err != nil {
 			return err
 		}
-		out = CreateResearchOutput{RunID: runID, Status: StatusQueued, PollURL: "/api/finance/research/" + runID}
+		out = CreateResearchOutput{RunID: runID, Status: StatusQueued, PollURL: "/api/finance/research/" + runID, AsOf: asOf.Format(time.RFC3339), ModelConfigVersion: cfg["model"]}
 		return nil
 	})
 	if err != nil {
@@ -300,15 +429,9 @@ func (s *ResearchService) GetResearch(ctx context.Context, runID string) (Resear
 		return ResearchView{}, NewError(404, "not_found", "RUN_NOT_FOUND", "研究不存在")
 	}
 	view := ResearchView{
-		RunID:        run.ID,
-		Status:       run.Status,
-		Stage:        run.Stage,
-		Mode:         run.Mode,
-		AsOf:         run.AsOf.UTC(),
-		InstrumentID: run.InstrumentID,
-		Horizon:      run.Horizon,
-		Warnings:     []string{},
-		UpdatedAt:    run.UpdatedAt.UTC(),
+		RunID: run.ID, Status: run.Status, Stage: run.Stage, Mode: run.Mode, AsOf: run.AsOf.UTC(),
+		InstrumentID: run.InstrumentID, Horizon: run.Horizon, Warnings: []string{}, UpdatedAt: run.UpdatedAt.UTC(),
+		ClaimResults: nil,
 	}
 	var claim Claim
 	if json.Unmarshal(run.ClaimSnapshot, &claim) == nil {
@@ -319,6 +442,12 @@ func (s *ResearchService) GetResearch(ctx context.Context, runID string) (Resear
 		var body VerifiedReport
 		if json.Unmarshal(report.Body, &body) == nil {
 			view.Report = &body
+		}
+		if len(run.ClaimResults) > 0 {
+			var crs []ClaimResult
+			if json.Unmarshal(run.ClaimResults, &crs) == nil {
+				view.ClaimResults = crs
+			}
 		}
 	}
 	if run.Status == StatusFailed {
@@ -537,6 +666,16 @@ func (s *ResearchService) Publish(ctx context.Context, runID string, expectedVer
 		if !citationsOK {
 			return NewError(400, "validation", "UNREGISTERED_CITATION", "未知引用，拒绝发布")
 		}
+		if err := ValidateUnknowns(report.Unknowns); err != nil {
+			return err
+		}
+		var claim Claim
+		_ = json.Unmarshal(run.ClaimSnapshot, &claim)
+		results := JudgeClaims(claim.Items, report.Support, report.Challenge)
+		if report.QualityStatus == "completed" {
+			v := JudgeReport(results)
+			report.Verdict = &v
+		}
 		now := s.Clock.Now()
 		body, _ := json.Marshal(report)
 		verification := map[string]any{
@@ -566,10 +705,11 @@ func (s *ResearchService) Publish(ctx context.Context, runID string, expectedVer
 		if report.QualityStatus == "failed" {
 			status = StatusFailed
 		}
+		claimJSON, _ := json.Marshal(results)
 		res := tx.Model(&run).Where("id = ? AND version = ? AND status NOT IN ?", runID, expectedVersion, []string{StatusCanceled, StatusCanceling}).
 			Updates(map[string]any{
 				"status": status, "stage": "done", "version": run.Version + 1, "updated_at": now,
-				"lease_owner": nil, "lease_until": nil,
+				"lease_owner": nil, "lease_until": nil, "claim_results": datatypes.JSON(claimJSON),
 			})
 		if res.Error != nil {
 			return res.Error
