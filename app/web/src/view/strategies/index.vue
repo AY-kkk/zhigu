@@ -26,20 +26,22 @@
         <p v-if="store.ohlcvBusy" class="state">正在加载行情</p>
         <p v-else-if="store.ohlcvError" class="state err">{{ store.ohlcvError }}</p>
         <p v-else-if="!store.instrument" class="state">搜索一只股票，查看 K 线和指标。回测是历史模拟。</p>
-        <ChartPane
-          v-else
-          :bars="store.bars"
-          :series="store.series"
-          :indicators="store.chartIndicators"
-          :fills="store.trades?.fills || []"
-          :orders="store.trades?.orders || []"
-          :signals="store.results?.signals || []"
-          :has-more="Boolean(store.ohlcvMeta?.has_more)"
-          :loading-more="store.ohlcvLoadingMore"
-          :precision="pricePrecision"
-          @crosshair="store.hover = $event"
-          @need-older="store.loadMore()"
-        />
+        <div v-else class="chart-row">
+          <IndicatorPanel :bar="store.hover" :bars="store.bars" :series="store.series" />
+          <ChartPane
+            :bars="store.bars"
+            :series="store.series"
+            :indicators="store.chartIndicators"
+            :fills="store.trades?.fills || []"
+            :orders="store.trades?.orders || []"
+            :signals="store.results?.signals || []"
+            :has-more="Boolean(store.ohlcvMeta?.has_more)"
+            :loading-more="store.ohlcvLoadingMore"
+            :precision="pricePrecision"
+            @crosshair="store.hover = $event"
+            @need-older="store.loadMore()"
+          />
+        </div>
         <div class="ind-dock">
           <span class="dock-label">指标</span>
           <span v-for="row in store.chartIndicators" :key="row.id" class="chip">
@@ -150,12 +152,15 @@
 </template>
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { onBeforeRouteLeave, useRoute } from 'vue-router'
 import InstrumentSearch from '../../components/strategies/InstrumentSearch.vue'
 import QuoteStrip from '../../components/strategies/QuoteStrip.vue'
 import ChartPane from '../../components/strategies/ChartPane.vue'
+import IndicatorPanel from '../../components/strategies/IndicatorPanel.vue'
 import StrategyRail from '../../components/strategies/StrategyRail.vue'
 import { fillSide } from '../../components/strategies/tradeSide.js'
 import { useStrategyWorkspace } from '../../stores/strategyWorkspace.js'
+import { useStrategyMarket } from '../../stores/strategyMarket.js'
 
 const store = useStrategyWorkspace()
 const editId = ref('')
@@ -210,10 +215,33 @@ function addInd(ev) {
   store.addIndicator(type)
 }
 function onResize() { width.value = window.innerWidth }
-onMounted(() => {
+const route = useRoute()
+onMounted(async () => {
   store.boot()
   window.__zgGenerate = () => store.generate()
   window.addEventListener('resize', onResize)
+  // 市场复制深链：加载本人草稿（外人 ID 404），清除旧版本与旧回测结果。
+  if (route.query.draft_id) {
+    await store.loadDraft(String(route.query.draft_id))
+  }
+  // 市场详情「让 AI 解释」：先明确目标草稿（按市场版本复制并等待加载完成），
+  // 再以 explain 模式生成说明；不解释旧草稿（R5）。
+  if (route.query.explain_market) {
+    const mktStore = useStrategyMarket()
+    const vid = String(route.query.explain_version || '')
+    if (vid) {
+      const copied = await mktStore.copy(String(route.query.explain_market), { market_version_id: vid })
+      if (copied?.draft_id) {
+        await store.loadDraft(copied.draft_id)
+        await store.explainDraft()
+      }
+    }
+  }
+})
+// 未保存内容离开提示。
+onBeforeRouteLeave(() => {
+  if (!store.hasUnsavedEdits) return true
+  return window.confirm('有未保存的规则修改，确定离开吗？离开后未保存的修改将丢失。')
 })
 onBeforeUnmount(() => {
   window.removeEventListener('resize', onResize)
@@ -243,6 +271,7 @@ onBeforeUnmount(() => {
 .tabs .on { box-shadow: inset 0 -2px 0 var(--zg-action); }
 .body { flex: 1; min-height: 0; display: flex; }
 .chart-col { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; z-index: 1; overflow: auto; }
+.chart-row { flex: 1 0 auto; min-height: 0; display: flex; align-items: stretch; }
 h2, h3 { margin: 0; font-size: 15px; font-family: var(--zg-font-editorial); }
 .hint { margin: 0; font-size: 12px; color: var(--zg-text-secondary); }
 .err, .state.err { color: var(--zg-error-fg); }

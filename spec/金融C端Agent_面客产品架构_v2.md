@@ -1,6 +1,6 @@
 # 知股 v2：GoSaaS + Eino + DeerFlow 面客产品架构
 
-日期：2026-09-17。状态：源码级设计，未实现或联调。配套 [一期 PRD](金融C端Agent_MVP_PRD.md)。
+日期：2026-09-17。状态：源码级设计，未实现或联调。配套 [一期 PRD](../prd/金融C端Agent_MVP_PRD.md)。
 用户决定保留 GoSaaS 与 Eino，并使用 DeerFlow 研究服务；本文件落实三者的责任边界。目录中“新增”是计划文件，不代表磁盘上已有相应代码。
 
 ## 1. 最终分层：一个业务入口，一个总调度层
@@ -43,7 +43,7 @@ Eino 是总流程编排库，不是额外部署服务；DeerFlow 是研究执行
 - Python：FastAPI；可选研究 Harness extra，见 `app/research-service/pyproject.toml`
 - 前端：Vue 3 与 Semi Vue，见 `app/web/package-lock.json`
 
-私有业务底座快照不随本仓库分发。阶段 A 使用独立 `app/server` 宿主即可启动。第三方许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+私有业务底座快照不随本仓库分发。阶段 A 使用独立 `app/server` 宿主即可启动。第三方许可见 [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md)。
 
 ## 3. 代码目录与所有权
 

@@ -46,6 +46,8 @@ type InstrumentView struct {
 	Last           string   `json:"last,omitempty"`
 	Change         string   `json:"change,omitempty"`
 	ChangePct      string   `json:"change_pct,omitempty"`
+	QuoteBasis     string   `json:"quote_basis,omitempty"`
+	QuoteAsOf      string   `json:"quote_as_of,omitempty"`
 }
 
 type TradingRule struct {

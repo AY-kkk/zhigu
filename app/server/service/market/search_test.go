@@ -73,6 +73,31 @@ func TestSearchFixtureUniverse(t *testing.T) {
 	}
 }
 
+func TestDailyCloseQuotesAboveEight(t *testing.T) {
+	t.Setenv("ZHIGU_MARKET_MODE", "fixture")
+	db := testdb.Start(t)
+	svc := NewService(db)
+	ctx := context.Background()
+	if err := svc.EnsureFixture(ctx); err != nil {
+		t.Fatal(err)
+	}
+	ids := []string{}
+	for _, row := range FixtureUniverse() {
+		ids = append(ids, row.InstrumentID)
+	}
+	ids = append(ids, "missing.SH", "missing.HK")
+	if len(ids) <= 8 {
+		t.Fatalf("need more than 8 ids, got %d", len(ids))
+	}
+	got := svc.dailyCloseQuotes(ctx, ids)
+	if len(got) != len(FixtureUniverse()) {
+		t.Fatalf("got %d want %d", len(got), len(FixtureUniverse()))
+	}
+	if got["600519.SH"].Last == "" {
+		t.Fatal("empty close")
+	}
+}
+
 func TestLastCompleteSessionAfterClose(t *testing.T) {
 	now := time.Date(2026, 9, 18, 10, 0, 0, 0, time.UTC) // 18:00 CST Friday
 	got := LastCompleteSession("CN", now)

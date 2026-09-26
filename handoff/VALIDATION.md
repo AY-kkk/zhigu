@@ -26,7 +26,7 @@ python3 -m unittest discover -s handoff/tests -v
 
 ## 交付索引
 
-- [主 SPEC](../开发交付_SPEC.md)
+- [主 SPEC](../spec/开发交付_SPEC.md)
 - [编程 Agent 启动指令](CODING_AGENT_PROMPT.md)
 - [机器契约](contracts/)
 - [消息示例](examples/)

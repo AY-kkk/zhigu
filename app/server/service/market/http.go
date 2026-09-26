@@ -29,7 +29,7 @@ var quoteHosts = map[string]struct{}{
 	"finance.sina.com.cn":          {},
 	"quotes.sina.cn":               {},
 	"web.ifzq.gtimg.cn":            {},
-	"qt.gtimg.cn":                   {},
+	"qt.gtimg.cn":                  {},
 	"www.szse.cn":                  {},
 	"query.sse.com.cn":             {},
 	"www.bse.cn":                   {},

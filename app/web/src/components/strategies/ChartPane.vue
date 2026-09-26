@@ -447,9 +447,12 @@ onMounted(() => {
     timeScale: {
       borderColor: '#DEDBD4',
       timeVisible: false,
-      rightOffset: 4,
+      rightOffset: 2,
       barSpacing: 8,
       minBarSpacing: 2,
+      fixLeftEdge: true,
+      fixRightEdge: true,
+      lockVisibleTimeRangeOnResize: true,
       shiftVisibleRangeOnNewBar: false
     },
     crosshair: { mode: CrosshairMode.MagnetOHLC },
@@ -464,7 +467,11 @@ onMounted(() => {
   })
   layoutPanes()
   chart.subscribeCrosshairMove((param) => {
-    const row = findBar(param?.time)
+    let row = findBar(param?.time)
+    if (!row && Number.isFinite(param?.logical)) {
+      const i = Math.round(param.logical)
+      row = props.bars[i]
+    }
     if (!row) return
     hoverKey.value = timeKey(row.time)
     emit('crosshair', row)
@@ -504,7 +511,7 @@ defineExpose({ resetView })
 .chart-bar .zg-btn { min-height: 28px; padding: 0 10px; font-size: 12px; }
 .range { font-family: var(--zg-font-number); color: var(--zg-ink); }
 .chart-stage { position: relative; flex: 1 0 auto; min-height: 0; display: flex; }
-.chart-host { flex: 1 0 auto; min-height: 420px; width: 100%; }
+.chart-host { flex: 1 0 auto; min-height: 420px; width: 100%; touch-action: none; overscroll-behavior: contain; }
 .legend {
   position: absolute; z-index: 2; left: 8px; top: 4px; right: 64px;
   display: flex; gap: 12px; overflow: hidden; white-space: nowrap; pointer-events: none;

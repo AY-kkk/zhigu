@@ -17,7 +17,7 @@ const (
 )
 
 type cninfoQueryResp struct {
-	Total         int `json:"totalAnnouncement"`
+	Total         int                  `json:"totalAnnouncement"`
 	Announcements []cninfoAnnouncement `json:"announcements"`
 }
 

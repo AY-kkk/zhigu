@@ -34,19 +34,19 @@ type Metric struct {
 }
 
 type EvidenceIn struct {
-	SourceID    string   `json:"source_id"`
-	Title       string   `json:"title"`
-	SourceURL   string   `json:"source_url"`
-	SourceKind  string   `json:"source_kind"`
-	Locator     string   `json:"locator"`
-	Text        string   `json:"text"`
-	Metrics     []Metric `json:"metrics"`
+	SourceID    string    `json:"source_id"`
+	Title       string    `json:"title"`
+	SourceURL   string    `json:"source_url"`
+	SourceKind  string    `json:"source_kind"`
+	Locator     string    `json:"locator"`
+	Text        string    `json:"text"`
+	Metrics     []Metric  `json:"metrics"`
 	PublishedAt time.Time `json:"published_at"`
 	AvailableAt time.Time `json:"available_at"`
 	RetrievedAt time.Time `json:"retrieved_at"`
-	ContentHash string   `json:"content_hash"`
-	DataVersion string   `json:"data_version"`
-	Mode        string   `json:"mode"`
+	ContentHash string    `json:"content_hash"`
+	DataVersion string    `json:"data_version"`
+	Mode        string    `json:"mode"`
 }
 
 func ContentHash(text string) string {
@@ -156,6 +156,9 @@ func (s *EvidenceService) Register(ctx context.Context, grantID string, recordID
 }
 
 func (s *EvidenceService) validateRecord(run modelfinance.ResearchRun, rec EvidenceIn) error {
+	if rec.AvailableAt.IsZero() || rec.PublishedAt.IsZero() {
+		return NewError(400, "validation", "TIME_GATE", "披露或可用时间未知")
+	}
 	if rec.AvailableAt.After(run.AsOf) || rec.PublishedAt.After(run.AsOf) {
 		return NewError(400, "validation", "FUTURE_EVIDENCE", "拒绝未来证据")
 	}
@@ -245,18 +248,18 @@ func Calculate(operation string, left, right decimal.Decimal) (decimal.Decimal, 
 func FixtureFinancials() map[string]any {
 	text := "Fixture only: revenue 2025 = 100 CNY_million; 2024 = 80 CNY_million."
 	return map[string]any{
-		"source_id":     "source_fixture",
-		"title":         "虚构测试财务数据，不用于投资",
-		"source_url":    "https://example.invalid/fixture/annual-report",
-		"source_kind":   "fixture",
-		"locator":       "fixture:financials:revenue",
-		"text":          text,
-		"content_hash":  ContentHash(text),
-		"data_version":  "fixture_annual_v1",
-		"mode":          ModeFixture,
-		"published_at":  "2026-03-31T00:00:00Z",
-		"available_at":  "2026-03-31T00:00:00Z",
-		"retrieved_at":  "2026-09-17T00:00:00Z",
+		"source_id":    "source_fixture",
+		"title":        "虚构测试财务数据，不用于投资",
+		"source_url":   "https://example.invalid/fixture/annual-report",
+		"source_kind":  "fixture",
+		"locator":      "fixture:financials:revenue",
+		"text":         text,
+		"content_hash": ContentHash(text),
+		"data_version": "fixture_annual_v1",
+		"mode":         ModeFixture,
+		"published_at": "2026-03-31T00:00:00Z",
+		"available_at": "2026-03-31T00:00:00Z",
+		"retrieved_at": "2026-09-17T00:00:00Z",
 		"metrics": []Metric{
 			{Metric: "revenue", PeriodStart: "2025-01-01", PeriodEnd: "2025-12-31", Value: "100", Unit: "CNY_million", ValueType: "actual"},
 			{Metric: "revenue", PeriodStart: "2024-01-01", PeriodEnd: "2024-12-31", Value: "80", Unit: "CNY_million", ValueType: "actual"},

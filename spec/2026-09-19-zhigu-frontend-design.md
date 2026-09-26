@@ -74,7 +74,7 @@ v1.1 增补：依据用户指定的 Semi Vue 开源仓库，明确组件与示�
 | 证据抽屉已包含来源、定位、时间、版本和指标 | 保留信息完整性，改善分组和排版 |
 | 依赖为 Vue 3、Vue Router、Pinia、Element Plus | 保留宿主、路由与状态管理；面客迁移到 Semi Vue，后台暂保留 Element Plus，验证两套样式共存与浮层主题隔离 |
 
-对应源码：[面客布局](../../../app/web/src/layout/consumer/index.vue)、[新研究页](../../../app/web/src/view/research/new.vue)、[详情页](../../../app/web/src/view/research/detail.vue)、[历史页](../../../app/web/src/view/research/history.vue)、[依赖清单](../../../app/web/package.json)。
+对应源码：[面客布局](../app/web/src/layout/consumer/index.vue)、[新研究页](../app/web/src/view/research/new.vue)、[详情页](../app/web/src/view/research/detail.vue)、[历史页](../app/web/src/view/research/history.vue)、[依赖清单](../app/web/package.json)。
 
 ## 4. 页面结构与导航
 
@@ -363,7 +363,7 @@ v1.1 增补：依据用户指定的 Semi Vue 开源仓库，明确组件与示�
 
 ### 9.1 保留的业务流程
 
-本规范调整面客呈现，不改变「观点输入 → 解析 → 人工确认 → 研究 → 发布报告 → 基于证据追问」闭环。业务依据见 [一期 PRD](../../../金融C端Agent_MVP_PRD.md) 与 [阶段 B SPEC](../../../阶段B_开发SPEC.md)。
+本规范调整面客呈现，不改变「观点输入 → 解析 → 人工确认 → 研究 → 发布报告 → 基于证据追问」闭环。业务依据见 [一期 PRD](../prd/金融C端Agent_MVP_PRD.md) 与 [阶段 B SPEC](阶段B_开发SPEC.md)。
 
 保留既有鉴权、草稿版本校验、幂等创建、取消状态、引用绑定和已发布报告限制。模型供应商、API Key、Chat Completions／Responses 协议选择继续由管理后台负责，不增加到面客输入框。
 
@@ -388,7 +388,7 @@ v1.1 增补：依据用户指定的 Semi Vue 开源仓库，明确组件与示�
 
 ### 9.3 当前接口能支持什么，缺什么
 
-依据当前 [前端 API](../../../app/web/src/api/research.js)、[研究服务](../../../app/server/service/finance/research_service.go) 和 [追问服务](../../../app/server/service/finance/questions.go) 阅读结果：
+依据当前 [前端 API](../app/web/src/api/research.js)、[研究服务](../app/server/service/finance/research_service.go) 和 [追问服务](../app/server/service/finance/questions.go) 阅读结果：
 
 | 需求 | 当前可见接口情况 | 本期呈现规则 |
 |---|---|---|

@@ -236,10 +236,38 @@ def _run(task: ResearchTask, task_token: str = "") -> None:
         if executor != "fixture":
             try:
                 adapter.import_harness()
-                adapter.build_client(token=task_token or "fixture-task-token", thread_id=task.task_id)
+                client = adapter.build_client(token=task_token or "fixture-task-token", thread_id=task.task_id)
+                tools = bind_tools(task.run_id, task.task_id, task_token)
+                adapter._tools = tools
+
+                def _get_tools(*, model_name=None, subagent_enabled=False):
+                    return tools
+
+                client._get_tools = _get_tools  # type: ignore[method-assign]
+                trace = adapter.complete_tool_roundtrip(client)
             except Exception as exc:  # noqa: BLE001
                 _save_result(conn, task.task_id, _failed_result(task, "HARNESS_UNAVAILABLE", str(exc)))
                 return
+            result = fixture_result(task)
+            result.usage = Usage(
+                model_calls=0,
+                tool_calls=1,
+                input_tokens=0,
+                output_tokens=0,
+                usage_unknown=False,
+                simulated=False,
+            )
+            ids = [i for i in (trace.get("evidence_ids") or []) if i]
+            if ids:
+                from app.schemas import Argument
+
+                result.evidence_ids = ids
+                result.arguments = [
+                    Argument(claim_type="fact", text=str(trace.get("text") or "tool result"), evidence_ids=ids)
+                ]
+            result.status = "insufficient"
+            _save_result(conn, task.task_id, result)
+            return
         result = fixture_result(task)
         if not gateway:
             if mode == "unit-test":

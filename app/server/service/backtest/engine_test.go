@@ -72,8 +72,8 @@ func TestLedgerNextOpenAndNoSameDayFill(t *testing.T) {
 	again := Run(Input{
 		Doc: doc, Compiled: compiled, Raw: raw,
 		Instrument: market.InstrumentView{InstrumentID: "600519.SH", AssetType: "stock", Currency: "CNY"},
-		Rule: market.TradingRule{LotSize: 1, Tick: "0.01", CommissionRate: "0", CommissionMin: "0", StampBuy: "0", StampSell: "0", TransferRate: "0", Source: "test_zero_commission", Version: "test"},
-		Config: Config{InitialCash: "1200", SlippageBPS: "0", ParticipationCap: "1", Start: "2020-01-02", End: "2020-01-13"},
+		Rule:       market.TradingRule{LotSize: 1, Tick: "0.01", CommissionRate: "0", CommissionMin: "0", StampBuy: "0", StampSell: "0", TransferRate: "0", Source: "test_zero_commission", Version: "test"},
+		Config:     Config{InitialCash: "1200", SlippageBPS: "0", ParticipationCap: "1", Start: "2020-01-02", End: "2020-01-13"},
 	})
 	if again.ResultHash != res.ResultHash {
 		t.Fatal("hash not stable")

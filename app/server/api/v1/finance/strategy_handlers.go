@@ -1,6 +1,7 @@
 package finance
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -213,13 +214,30 @@ func strategyDraftGet(c *gin.Context, hub *workbench.Hub) {
 
 func strategyDraftPatch(c *gin.Context, hub *workbench.Hub) {
 	var req struct {
-		Revision int             `json:"revision"`
-		DSL      json.RawMessage `json:"dsl"`
+		Revision            int             `json:"revision"`
+		EditorSchemaVersion string          `json:"editor_schema_version"`
+		EditorState         json.RawMessage `json:"editor_state"`
+		BacktestConfigDraft json.RawMessage `json:"backtest_config_draft"`
+		DSL                 json.RawMessage `json:"dsl"`
 	}
 	if !httpx.BindJSON(c, &req) {
 		return
 	}
-	out, err := hub.PatchDraft(svcfinance.WithUser(c.Request.Context(), httpx.CurrentUserID(c), roleOf(c)), c.Param("id"), req.Revision, req.DSL)
+	p := workbench.DraftPatch{Revision: req.Revision}
+	if len(bytes.TrimSpace(req.EditorState)) > 0 && !bytes.Equal(bytes.TrimSpace(req.EditorState), []byte("null")) {
+		p.HasEditor = true
+		p.EditorSchemaVersion = req.EditorSchemaVersion
+		p.EditorState = req.EditorState
+		if len(bytes.TrimSpace(req.BacktestConfigDraft)) > 0 {
+			p.HasConfig = true
+			p.BacktestConfigDraft = req.BacktestConfigDraft
+		}
+	}
+	if len(bytes.TrimSpace(req.DSL)) > 0 && !bytes.Equal(bytes.TrimSpace(req.DSL), []byte("null")) {
+		p.HasDSL = true
+		p.DSL = req.DSL
+	}
+	out, err := hub.PatchDraftV2(svcfinance.WithUser(c.Request.Context(), httpx.CurrentUserID(c), roleOf(c)), c.Param("id"), p)
 	if err != nil {
 		fail(c, err)
 		return

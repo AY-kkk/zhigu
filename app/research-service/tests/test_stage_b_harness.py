@@ -55,3 +55,37 @@ def test_stage_b_python_has_no_business_db_credentials():
     assert "finance_users" not in joined
     assert "DATABASE_URL" not in joined
     assert "ZHIGU_RESEARCH_SQLITE" in jobs_src
+
+
+def test_b14_actual_harness_tool_roundtrip(tmp_path, monkeypatch):
+    monkeypatch.setenv("ZHIGU_RESEARCH_SQLITE", str(tmp_path / "jobs.sqlite"))
+    monkeypatch.setenv("ZHIGU_RESEARCH_EXECUTOR", "harness")
+    monkeypatch.setenv("ZHIGU_RESEARCH_MODE", "unit-test")
+    monkeypatch.delenv("ZHIGU_GO_INTERNAL_URL", raising=False)
+    from app import jobs
+    from app.schemas import ResearchTask
+
+    jobs.CONN = None
+    jobs.DB_PATH = tmp_path / "jobs.sqlite"
+    sample = Path(__file__).resolve().parents[3] / "handoff" / "examples" / "research-task.json"
+    task = ResearchTask.model_validate(__import__("json").loads(sample.read_text()))
+    task = task.model_copy(update={"task_id": "task_harness_roundtrip"})
+    jobs.submit(task)
+    import time
+
+    deadline = time.time() + 20
+    snap = None
+    while time.time() < deadline:
+        snap = jobs.get("task_harness_roundtrip")
+        if snap["status"] in {"failed", "insufficient", "succeeded", "canceled"}:
+            break
+        time.sleep(0.05)
+    assert snap is not None
+    result = snap["result"] or {}
+    usage = result.get("usage") or {}
+    assert usage.get("simulated") is not True
+    if snap["status"] == "failed":
+        assert result["errors"][0]["code"] == "HARNESS_UNAVAILABLE"
+    else:
+        assert usage.get("tool_calls") == 1
+    jobs.CONN = None

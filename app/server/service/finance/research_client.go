@@ -31,8 +31,8 @@ func NewHTTPResearchClient() (ResearchClient, error) {
 		token = "zhigu-internal-dev"
 	}
 	return &HTTPResearchClient{
-		Base:  base,
-		Token: token,
+		Base:   base,
+		Token:  token,
 		Client: &http.Client{Timeout: 10 * time.Second},
 	}, nil
 }

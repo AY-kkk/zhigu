@@ -285,7 +285,7 @@ func (o *Orchestrator) synthesize(ctx context.Context, st wfState) (wfState, err
 		QualityStatus: quality, Verdict: verdict, Summary: summary,
 		Support: support, Challenge: challenge, Assumptions: []string{"收入增长转化为股价需要利润、现金流与估值证据。"},
 		ChangeConditions: []string{"补充利润、现金流和估值证据后重新研究。"},
-		Unknowns: unknowns, EvidenceIDs: unique(eids),
+		Unknowns:         unknowns, EvidenceIDs: unique(eids),
 		ModelConfigVersion: "model_fixture_v1", SourcePolicyVersion: SourcePolicyVersion, PromptVersion: "prompt_v1",
 	}
 	return st, nil

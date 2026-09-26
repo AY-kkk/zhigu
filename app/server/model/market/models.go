@@ -28,31 +28,31 @@ type Pointer struct {
 func (Pointer) TableName() string { return "finance_market_pointers" }
 
 type Instrument struct {
-	InstrumentID  string         `gorm:"column:instrument_id;primaryKey"`
-	SecurityID    string         `gorm:"column:security_id"`
-	Exchange      string         `gorm:"column:exchange"`
-	Board         string         `gorm:"column:board"`
-	AssetType     string         `gorm:"column:asset_type"`
-	Code          string         `gorm:"column:code"`
-	Name          string         `gorm:"column:name"`
-	NameEN        string         `gorm:"column:name_en"`
-	Aliases       datatypes.JSON `gorm:"column:aliases"`
-	Pinyin        string         `gorm:"column:pinyin"`
-	PinyinAbbr    string         `gorm:"column:pinyin_abbr"`
-	Currency      string         `gorm:"column:currency"`
-	CalendarID    string         `gorm:"column:calendar_id"`
-	ListingDate   *string        `gorm:"column:listing_date"`
-	DelistingDate *string        `gorm:"column:delisting_date"`
-	TradingStatus string         `gorm:"column:trading_status"`
-	LotSize       int            `gorm:"column:lot_size"`
-	LotRuleID     string         `gorm:"column:lot_rule_id"`
-	TickRuleID    string         `gorm:"column:tick_rule_id"`
-	ValidFrom     string         `gorm:"column:valid_from"`
-	ValidTo       *string        `gorm:"column:valid_to"`
-	CatalogVersion string        `gorm:"column:catalog_version"`
-	SourcePayload datatypes.JSON `gorm:"column:source_payload"`
-	CreatedAt     time.Time      `gorm:"column:created_at"`
-	UpdatedAt     time.Time      `gorm:"column:updated_at"`
+	InstrumentID   string         `gorm:"column:instrument_id;primaryKey"`
+	SecurityID     string         `gorm:"column:security_id"`
+	Exchange       string         `gorm:"column:exchange"`
+	Board          string         `gorm:"column:board"`
+	AssetType      string         `gorm:"column:asset_type"`
+	Code           string         `gorm:"column:code"`
+	Name           string         `gorm:"column:name"`
+	NameEN         string         `gorm:"column:name_en"`
+	Aliases        datatypes.JSON `gorm:"column:aliases"`
+	Pinyin         string         `gorm:"column:pinyin"`
+	PinyinAbbr     string         `gorm:"column:pinyin_abbr"`
+	Currency       string         `gorm:"column:currency"`
+	CalendarID     string         `gorm:"column:calendar_id"`
+	ListingDate    *string        `gorm:"column:listing_date"`
+	DelistingDate  *string        `gorm:"column:delisting_date"`
+	TradingStatus  string         `gorm:"column:trading_status"`
+	LotSize        int            `gorm:"column:lot_size"`
+	LotRuleID      string         `gorm:"column:lot_rule_id"`
+	TickRuleID     string         `gorm:"column:tick_rule_id"`
+	ValidFrom      string         `gorm:"column:valid_from"`
+	ValidTo        *string        `gorm:"column:valid_to"`
+	CatalogVersion string         `gorm:"column:catalog_version"`
+	SourcePayload  datatypes.JSON `gorm:"column:source_payload"`
+	CreatedAt      time.Time      `gorm:"column:created_at"`
+	UpdatedAt      time.Time      `gorm:"column:updated_at"`
 }
 
 func (Instrument) TableName() string { return "finance_market_instruments" }

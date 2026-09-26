@@ -69,7 +69,7 @@ func TestQualitySet30Families(t *testing.T) {
 			}
 		case "missing":
 			_, err := gate.ValidateRole(context.Background(), RunSnapshot{ID: "run_missing"}, ResearchResult{
-				TaskID: "task_missing",
+				TaskID:    "task_missing",
 				Arguments: []Argument{{ClaimType: "fact", Text: "a material fact without citation", EvidenceIDs: nil}},
 			})
 			if err == nil || ErrorCode(err) != "MISSING_CITATION" {

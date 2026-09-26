@@ -2,7 +2,7 @@
 
 ## 环境与启动
 
-主启动入口见 [README](../README.md#快速开始)。Go 1.24.2+（1.24 系列）、Python 3.12、Node 22、PostgreSQL 16。Python fixture 依赖使用 `uv sync --frozen --no-dev`；不要删除 `--frozen` 后在缺少可选上游源码的目录重新解析锁文件。
+主启动入口见 [README](../git-hub说明文档/README.md#快速开始)。Go 1.24.2+（1.24 系列）、Python 3.12、Node 22、PostgreSQL 16。Python fixture 依赖使用 `uv sync --frozen --no-dev`；不要删除 `--frozen` 后在缺少可选上游源码的目录重新解析锁文件。
 
 Go 通过公共模块下载固定 Eino 版本 `v0.10.0-alpha.29`，对应原参考提交 `9d983b36a5112a1c233056b1a099825298fafb8f`，不再依赖本地 `replace`。如需要更改依赖，请提交对应锁文件并运行检查。
 

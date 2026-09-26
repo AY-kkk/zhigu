@@ -221,7 +221,7 @@ func Run(in Input) Result {
 				pend = &pending{side: "sell", signal: "risk_" + raw.Time, exit: true, created: raw.Time, targetFrac: decimal.Zero}
 				continue
 			}
-			exit, ready := strategy.EvalCond(in.Doc.Exit, evalBars, evalSeries, i)
+			exit, ready := strategy.EvalCondWithChecks(in.Doc.Exit, strategy.ChecksUnder(in.Compiled.Continuity, "exit"), evalBars, evalSeries, i)
 			if ready && exit {
 				sigs = append(sigs, Signal{Date: raw.Time, Kind: "exit"})
 				pend = &pending{side: "sell", signal: "exit_" + raw.Time, exit: true, created: raw.Time, targetFrac: decimal.Zero}
@@ -229,7 +229,7 @@ func Run(in Input) Result {
 			}
 		}
 		if posQty.Equal(decimal.Zero) && !soldToday {
-			enter, ready := strategy.EvalCond(in.Doc.Entry, evalBars, evalSeries, i)
+			enter, ready := strategy.EvalCondWithChecks(in.Doc.Entry, strategy.ChecksUnder(in.Compiled.Continuity, "entry"), evalBars, evalSeries, i)
 			if ready && enter {
 				sigs = append(sigs, Signal{Date: raw.Time, Kind: "entry"})
 				pend = &pending{side: "buy", signal: "entry_" + raw.Time, created: raw.Time, targetFrac: entryFrac}

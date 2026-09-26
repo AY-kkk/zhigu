@@ -71,3 +71,43 @@ func TestParsePush2QuoteHK(t *testing.T) {
 		t.Fatalf("%+v", got)
 	}
 }
+
+func TestApplyLiveQuotesKeepsGaps(t *testing.T) {
+	items := []InstrumentView{{InstrumentID: "000001.SZ"}, {InstrumentID: "000022.SZ"}, {InstrumentID: "000043.SZ"}}
+	missing := applyLiveQuotes(items, map[string]QuoteSnapshot{
+		"000001.SZ": {Last: "11.73", Change: "0.06", ChangePct: "0.5"},
+		"000022.SZ": {Last: "16.46", MarketTime: "2018-12-20", Quality: map[string]any{"freshness_status": "daily_close"}},
+	})
+	if items[0].Last != "11.73" || items[0].QuoteBasis != "last" {
+		t.Fatalf("live %+v", items[0])
+	}
+	if items[1].QuoteBasis != "daily_close" || items[1].QuoteAsOf != "2018-12-20" {
+		t.Fatalf("close %+v", items[1])
+	}
+	if len(missing) != 1 || missing[0] != "000043.SZ" {
+		t.Fatalf("%v", missing)
+	}
+}
+
+func TestPreferInstrumentPicksShorterAShare(t *testing.T) {
+	items := []InstrumentView{
+		{InstrumentID: "01036.HK", Name: "万科海外", Exchange: "HKEX", AssetType: "stock"},
+		{InstrumentID: "02202.HK", Name: "万科企业", Exchange: "HKEX", AssetType: "stock"},
+		{InstrumentID: "000002.SZ", Name: "万科A", Exchange: "SZSE", AssetType: "stock"},
+	}
+	if got := PreferInstrument("万科", "万科金叉买入", items); got != "000002.SZ" {
+		t.Fatal(got)
+	}
+	if got := PreferInstrument("万科", "港股万科金叉买入", items); got != "01036.HK" {
+		t.Fatal(got)
+	}
+}
+
+func TestStaleQuoteDate(t *testing.T) {
+	if day, ok := staleQuoteDate("2020-05-27", "2026-09-21", 15); !ok || day != "2020-05-27" {
+		t.Fatalf("%s %v", day, ok)
+	}
+	if _, ok := staleQuoteDate("2026-09-18", "2026-09-22", 15); ok {
+		t.Fatal("recent bar should stay live")
+	}
+}

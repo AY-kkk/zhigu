@@ -43,31 +43,31 @@ type ClaimDraft struct {
 func (ClaimDraft) TableName() string { return "finance_claim_drafts" }
 
 type ResearchRun struct {
-	ID              string         `gorm:"column:id;primaryKey"`
-	OwnerID         uint           `gorm:"column:owner_id"`
-	DraftID         string         `gorm:"column:draft_id"`
-	ParentRunID     *string        `gorm:"column:parent_run_id"`
-	ClaimSnapshot   datatypes.JSON `gorm:"column:claim_snapshot"`
-	InstrumentID    string         `gorm:"column:instrument_id"`
-	Horizon         string         `gorm:"column:horizon"`
-	AsOf            time.Time      `gorm:"column:as_of"`
-	Mode            string         `gorm:"column:mode"`
-	Status          string         `gorm:"column:status"`
-	Stage           string         `gorm:"column:stage"`
-	ConfigVersions  datatypes.JSON `gorm:"column:config_versions"`
-	BudgetSnapshot  datatypes.JSON `gorm:"column:budget_snapshot"`
-	IdempotencyKey  string         `gorm:"column:idempotency_key"`
-	RequestHash     string         `gorm:"column:request_hash"`
-	StartedAt       *time.Time     `gorm:"column:started_at"`
-	DeadlineAt      *time.Time     `gorm:"column:deadline_at"`
-	LeaseOwner      *string        `gorm:"column:lease_owner"`
-	LeaseUntil      *time.Time     `gorm:"column:lease_until"`
-	Version         int64          `gorm:"column:version"`
-	ExecutionEpoch  int64          `gorm:"column:execution_epoch"`
-	ClaimResults    datatypes.JSON `gorm:"column:claim_results"`
-	DeletedAt       *time.Time     `gorm:"column:deleted_at"`
-	CreatedAt       time.Time      `gorm:"column:created_at"`
-	UpdatedAt       time.Time      `gorm:"column:updated_at"`
+	ID             string         `gorm:"column:id;primaryKey"`
+	OwnerID        uint           `gorm:"column:owner_id"`
+	DraftID        string         `gorm:"column:draft_id"`
+	ParentRunID    *string        `gorm:"column:parent_run_id"`
+	ClaimSnapshot  datatypes.JSON `gorm:"column:claim_snapshot"`
+	InstrumentID   string         `gorm:"column:instrument_id"`
+	Horizon        string         `gorm:"column:horizon"`
+	AsOf           time.Time      `gorm:"column:as_of"`
+	Mode           string         `gorm:"column:mode"`
+	Status         string         `gorm:"column:status"`
+	Stage          string         `gorm:"column:stage"`
+	ConfigVersions datatypes.JSON `gorm:"column:config_versions"`
+	BudgetSnapshot datatypes.JSON `gorm:"column:budget_snapshot"`
+	IdempotencyKey string         `gorm:"column:idempotency_key"`
+	RequestHash    string         `gorm:"column:request_hash"`
+	StartedAt      *time.Time     `gorm:"column:started_at"`
+	DeadlineAt     *time.Time     `gorm:"column:deadline_at"`
+	LeaseOwner     *string        `gorm:"column:lease_owner"`
+	LeaseUntil     *time.Time     `gorm:"column:lease_until"`
+	Version        int64          `gorm:"column:version"`
+	ExecutionEpoch int64          `gorm:"column:execution_epoch"`
+	ClaimResults   datatypes.JSON `gorm:"column:claim_results"`
+	DeletedAt      *time.Time     `gorm:"column:deleted_at"`
+	CreatedAt      time.Time      `gorm:"column:created_at"`
+	UpdatedAt      time.Time      `gorm:"column:updated_at"`
 }
 
 func (ResearchRun) TableName() string { return "finance_research_runs" }
@@ -119,18 +119,18 @@ type TaskEvidence struct {
 func (TaskEvidence) TableName() string { return "finance_task_evidence" }
 
 type Calculation struct {
-	ID        string    `gorm:"column:id;primaryKey"`
-	RunID     string    `gorm:"column:run_id"`
-	TaskID    string    `gorm:"column:task_id"`
-	GrantID   string    `gorm:"column:grant_id"`
-	Operation string    `gorm:"column:operation"`
+	ID        string         `gorm:"column:id;primaryKey"`
+	RunID     string         `gorm:"column:run_id"`
+	TaskID    string         `gorm:"column:task_id"`
+	GrantID   string         `gorm:"column:grant_id"`
+	Operation string         `gorm:"column:operation"`
 	Inputs    datatypes.JSON `gorm:"column:inputs"`
-	Formula   string    `gorm:"column:formula"`
-	Precision int       `gorm:"column:precision"`
-	Result    string    `gorm:"column:result;type:numeric"`
-	Unit      string    `gorm:"column:unit"`
-	CreatedAt time.Time `gorm:"column:created_at"`
-	UpdatedAt time.Time `gorm:"column:updated_at"`
+	Formula   string         `gorm:"column:formula"`
+	Precision int            `gorm:"column:precision"`
+	Result    string         `gorm:"column:result;type:numeric"`
+	Unit      string         `gorm:"column:unit"`
+	CreatedAt time.Time      `gorm:"column:created_at"`
+	UpdatedAt time.Time      `gorm:"column:updated_at"`
 }
 
 func (Calculation) TableName() string { return "finance_calculations" }
@@ -203,19 +203,19 @@ type UsageLedger struct {
 func (UsageLedger) TableName() string { return "finance_usage_ledger" }
 
 type ToolGrant struct {
-	ID         string     `gorm:"column:id;primaryKey"`
-	RequestID  string     `gorm:"column:request_id"`
-	RunID      string     `gorm:"column:run_id"`
-	TaskID     string     `gorm:"column:task_id"`
-	ToolName   string     `gorm:"column:tool_name"`
-	ArgsHash   string     `gorm:"column:args_hash"`
-	Status     string     `gorm:"column:status"`
-	ExpiresAt  time.Time  `gorm:"column:expires_at"`
-	OutputHash *string    `gorm:"column:output_hash"`
-	Executed   bool       `gorm:"column:executed"`
-	ParamsHash string     `gorm:"column:params_hash"`
-	CreatedAt  time.Time  `gorm:"column:created_at"`
-	UpdatedAt  time.Time  `gorm:"column:updated_at"`
+	ID         string    `gorm:"column:id;primaryKey"`
+	RequestID  string    `gorm:"column:request_id"`
+	RunID      string    `gorm:"column:run_id"`
+	TaskID     string    `gorm:"column:task_id"`
+	ToolName   string    `gorm:"column:tool_name"`
+	ArgsHash   string    `gorm:"column:args_hash"`
+	Status     string    `gorm:"column:status"`
+	ExpiresAt  time.Time `gorm:"column:expires_at"`
+	OutputHash *string   `gorm:"column:output_hash"`
+	Executed   bool      `gorm:"column:executed"`
+	ParamsHash string    `gorm:"column:params_hash"`
+	CreatedAt  time.Time `gorm:"column:created_at"`
+	UpdatedAt  time.Time `gorm:"column:updated_at"`
 }
 
 func (ToolGrant) TableName() string { return "finance_tool_grants" }
@@ -241,19 +241,19 @@ type ProviderRecordRow struct {
 func (ProviderRecordRow) TableName() string { return "finance_provider_records" }
 
 type ReportCheck struct {
-	ID               string         `gorm:"column:id;primaryKey"`
-	RunID            string         `gorm:"column:run_id"`
-	Attempt          int            `gorm:"column:attempt"`
-	CandidateHash    string         `gorm:"column:candidate_hash"`
-	Pointer          string         `gorm:"column:pointer"`
-	ClaimType        string         `gorm:"column:claim_type"`
-	EvidenceIDs      datatypes.JSON `gorm:"column:evidence_ids"`
-	NumericBindings  datatypes.JSON `gorm:"column:numeric_bindings"`
-	RuleVersion      string         `gorm:"column:rule_version"`
-	ProgramResult    string         `gorm:"column:program_result"`
-	SemanticResult   *string        `gorm:"column:semantic_result"`
-	FailureReason    *string        `gorm:"column:failure_reason"`
-	CreatedAt        time.Time      `gorm:"column:created_at"`
+	ID              string         `gorm:"column:id;primaryKey"`
+	RunID           string         `gorm:"column:run_id"`
+	Attempt         int            `gorm:"column:attempt"`
+	CandidateHash   string         `gorm:"column:candidate_hash"`
+	Pointer         string         `gorm:"column:pointer"`
+	ClaimType       string         `gorm:"column:claim_type"`
+	EvidenceIDs     datatypes.JSON `gorm:"column:evidence_ids"`
+	NumericBindings datatypes.JSON `gorm:"column:numeric_bindings"`
+	RuleVersion     string         `gorm:"column:rule_version"`
+	ProgramResult   string         `gorm:"column:program_result"`
+	SemanticResult  *string        `gorm:"column:semantic_result"`
+	FailureReason   *string        `gorm:"column:failure_reason"`
+	CreatedAt       time.Time      `gorm:"column:created_at"`
 }
 
 func (ReportCheck) TableName() string { return "finance_report_checks" }

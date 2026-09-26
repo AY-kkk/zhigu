@@ -13,9 +13,9 @@
 
 | 输入 | 用途 |
 |---|---|
-| [一期 PRD](金融C端Agent_MVP_PRD.md) | 单公司观点研究闭环、人工确认、研究真实状态、报告标准、历史记录 |
+| [一期 PRD](../prd/金融C端Agent_MVP_PRD.md) | 单公司观点研究闭环、人工确认、研究真实状态、报告标准、历史记录 |
 | [面客架构](金融C端Agent_面客产品架构_v2.md)、[开发交付 SPEC](开发交付_SPEC.md) | 架构与业务边界；不因前端换肤调整服务职责 |
-| [上一版前端设计](docs/superpowers/specs/2026-09-19-zhigu-frontend-design.md) | 三个主导航、Semi Vue 复用基础；与本轮视觉或历史路由冲突时，以本文为准 |
+| [上一版前端设计](2026-09-19-zhigu-frontend-design.md) | 三个主导航、Semi Vue 复用基础；与本轮视觉或历史路由冲突时，以本文为准 |
 | `app/web/src/`、`app/web/package.json` | 实际路由、组件、store、接口调用和依赖 |
 | `app/server/service/finance/types.go`、`research_service.go`、`questions.go` | 面客实际响应字段、取消/删除、追问限制；只读核对 |
 | `handoff/contracts/report.schema.json`、`evidence.schema.json` | 报告完整性、证据字段与数据语义 |

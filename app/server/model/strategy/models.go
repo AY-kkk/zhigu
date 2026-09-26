@@ -19,20 +19,26 @@ type Workspace struct {
 func (Workspace) TableName() string { return "finance_strategy_workspace" }
 
 type Draft struct {
-	ID               string         `gorm:"column:id;primaryKey"`
-	OwnerID          uint           `gorm:"column:owner_id"`
-	Text             string         `gorm:"column:text"`
-	InstrumentID     *string        `gorm:"column:instrument_id"`
-	Status           string         `gorm:"column:status"`
-	Revision         int            `gorm:"column:revision"`
-	GenerationID     *string        `gorm:"column:generation_id"`
-	DSL              datatypes.JSON `gorm:"column:dsl"`
-	Assumptions      datatypes.JSON `gorm:"column:assumptions"`
-	CapabilityErrors datatypes.JSON `gorm:"column:capability_errors"`
-	Clarification    datatypes.JSON `gorm:"column:clarification"`
-	Compiled         datatypes.JSON `gorm:"column:compiled"`
-	CreatedAt        time.Time      `gorm:"column:created_at"`
-	UpdatedAt        time.Time      `gorm:"column:updated_at"`
+	ID                    string         `gorm:"column:id;primaryKey"`
+	OwnerID               uint           `gorm:"column:owner_id"`
+	Text                  string         `gorm:"column:text"`
+	InstrumentID          *string        `gorm:"column:instrument_id"`
+	Status                string         `gorm:"column:status"`
+	Revision              int            `gorm:"column:revision"`
+	GenerationID          *string        `gorm:"column:generation_id"`
+	DSL                   datatypes.JSON `gorm:"column:dsl"`
+	Assumptions           datatypes.JSON `gorm:"column:assumptions"`
+	CapabilityErrors      datatypes.JSON `gorm:"column:capability_errors"`
+	Clarification         datatypes.JSON `gorm:"column:clarification"`
+	Compiled              datatypes.JSON `gorm:"column:compiled"`
+	EditorSchemaVersion   *string        `gorm:"column:editor_schema_version"`
+	EditorState           datatypes.JSON `gorm:"column:editor_state"`
+	FieldSources          datatypes.JSON `gorm:"column:field_sources;default:'{}'"`
+	BacktestConfigDraft   datatypes.JSON `gorm:"column:backtest_config_draft;default:'{}'"`
+	OriginMarketItemID    *string        `gorm:"column:origin_market_item_id"`
+	OriginMarketVersionID *string        `gorm:"column:origin_market_version_id"`
+	CreatedAt             time.Time      `gorm:"column:created_at"`
+	UpdatedAt             time.Time      `gorm:"column:updated_at"`
 }
 
 func (Draft) TableName() string { return "finance_strategy_drafts" }
@@ -56,6 +62,8 @@ type Generation struct {
 	LeaseOwner         *string        `gorm:"column:lease_owner"`
 	LeaseUntil         *time.Time     `gorm:"column:lease_until"`
 	ExecutionEpoch     int            `gorm:"column:execution_epoch"`
+	Mode               string         `gorm:"column:mode;default:generate"`
+	Explanation        *string        `gorm:"column:explanation"`
 	CreatedAt          time.Time      `gorm:"column:created_at"`
 	UpdatedAt          time.Time      `gorm:"column:updated_at"`
 }
@@ -75,16 +83,22 @@ type Strategy struct {
 func (Strategy) TableName() string { return "finance_strategies" }
 
 type Version struct {
-	ID              string         `gorm:"column:id;primaryKey" json:"id"`
-	StrategyID      string         `gorm:"column:strategy_id" json:"strategy_id"`
-	OwnerID         uint           `gorm:"column:owner_id" json:"-"`
-	Revision        int            `gorm:"column:revision" json:"revision"`
-	Name            string         `gorm:"column:name" json:"name"`
-	DSL             datatypes.JSON `gorm:"column:dsl" json:"dsl"`
-	DSLHash         string         `gorm:"column:dsl_hash" json:"dsl_hash"`
-	Compiled        datatypes.JSON `gorm:"column:compiled" json:"compiled"`
-	CompilerVersion string         `gorm:"column:compiler_version" json:"compiler_version"`
-	CreatedAt       time.Time      `gorm:"column:created_at" json:"created_at"`
+	ID                    string         `gorm:"column:id;primaryKey" json:"id"`
+	StrategyID            string         `gorm:"column:strategy_id" json:"strategy_id"`
+	OwnerID               uint           `gorm:"column:owner_id" json:"-"`
+	Revision              int            `gorm:"column:revision" json:"revision"`
+	Name                  string         `gorm:"column:name" json:"name"`
+	DSL                   datatypes.JSON `gorm:"column:dsl" json:"dsl"`
+	DSLHash               string         `gorm:"column:dsl_hash" json:"dsl_hash"`
+	Compiled              datatypes.JSON `gorm:"column:compiled" json:"compiled"`
+	CompilerVersion       string         `gorm:"column:compiler_version" json:"compiler_version"`
+	EditorSchemaVersion   *string        `gorm:"column:editor_schema_version" json:"editor_schema_version,omitempty"`
+	EditorState           datatypes.JSON `gorm:"column:editor_state" json:"editor_state,omitempty"`
+	FieldSources          datatypes.JSON `gorm:"column:field_sources;default:'{}'" json:"field_sources,omitempty"`
+	BacktestConfigDraft   datatypes.JSON `gorm:"column:backtest_config_draft;default:'{}'" json:"backtest_config_draft,omitempty"`
+	OriginMarketItemID    *string        `gorm:"column:origin_market_item_id" json:"origin_market_item_id,omitempty"`
+	OriginMarketVersionID *string        `gorm:"column:origin_market_version_id" json:"origin_market_version_id,omitempty"`
+	CreatedAt             time.Time      `gorm:"column:created_at" json:"created_at"`
 }
 
 func (Version) TableName() string { return "finance_strategy_versions" }
@@ -173,12 +187,13 @@ type Result struct {
 func (Result) TableName() string { return "finance_backtest_results" }
 
 type Idempotency struct {
-	OwnerID        uint      `gorm:"column:owner_id;primaryKey"`
-	Operation      string    `gorm:"column:operation;primaryKey"`
-	IdempotencyKey string    `gorm:"column:idempotency_key;primaryKey"`
-	RequestHash    string    `gorm:"column:request_hash"`
-	ObjectID       string    `gorm:"column:object_id"`
-	CreatedAt      time.Time `gorm:"column:created_at"`
+	OwnerID          uint           `gorm:"column:owner_id;primaryKey"`
+	Operation        string         `gorm:"column:operation;primaryKey"`
+	IdempotencyKey   string         `gorm:"column:idempotency_key;primaryKey"`
+	RequestHash      string         `gorm:"column:request_hash"`
+	ObjectID         string         `gorm:"column:object_id"`
+	ResponseSnapshot datatypes.JSON `gorm:"column:response_snapshot"`
+	CreatedAt        time.Time      `gorm:"column:created_at"`
 }
 
 func (Idempotency) TableName() string { return "finance_strategy_idempotency" }

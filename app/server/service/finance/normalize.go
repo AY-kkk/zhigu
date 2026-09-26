@@ -38,23 +38,11 @@ func NormalizeUnknowns(in []string) []string {
 		if s == "" {
 			continue
 		}
-		if !UnknownLineOK(s) {
-			s = "无法取数：" + strings.TrimPrefix(s, "待核实")
-			if strings.HasPrefix(s, "无法取数：") && len([]rune(s)) <= 5 {
-				s = "无法取数：证据不足，未形成可发布说明。"
-			}
-			if !UnknownLineOK(s) {
-				s = "无法取数：" + strings.TrimSpace(raw)
-			}
-		}
 		if _, ok := seen[s]; ok {
 			continue
 		}
 		seen[s] = struct{}{}
 		out = append(out, s)
-	}
-	if len(out) == 0 {
-		out = []string{"无法取数：现有资料不足以判断已确认主张。"}
 	}
 	return out
 }

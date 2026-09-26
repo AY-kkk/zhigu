@@ -31,7 +31,7 @@
       >
         <strong>{{ row.name }}</strong>
         <span>{{ row.instrument_id }}</span>
-        <b v-if="row.last" data-testid="hit-last" :class="tone(row)">{{ row.last }}<template v-if="row.change_pct"> {{ fmtPct(row.change_pct) }}</template></b>
+        <b v-if="row.last" data-testid="hit-last" :class="tone(row)">{{ row.last }}<template v-if="row.quote_basis === 'daily_close'"> 收盘 {{ row.quote_as_of }}</template><template v-else-if="row.change_pct"> {{ fmtPct(row.change_pct) }}</template></b>
         <em>{{ row.exchange }} · {{ row.currency }} · {{ row.asset_type }}</em>
         <small v-if="row.unsupported_reason">{{ row.unsupported_reason }}</small>
       </li>

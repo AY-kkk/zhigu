@@ -13,13 +13,15 @@ import (
 )
 
 const (
-	SchemaVersion   = "strategy.v1"
-	CompilerVersion = "strategy.compile.v1"
-	PromptVersion   = "strategy.prompt.v2"
-	MaxIndicators   = 20
-	MaxCondNodes    = 100
-	MaxCondDepth    = 8
-	MaxLag          = 250
+	SchemaVersion     = "strategy.v1"
+	SchemaVersionV2   = "strategy.v2"
+	CompilerVersion   = "strategy.compile.v1"
+	CompilerVersionV2 = "strategy.compile.v2"
+	PromptVersion     = "strategy.prompt.v2"
+	MaxIndicators     = 20
+	MaxCondNodes      = 100
+	MaxCondDepth      = 8
+	MaxLag            = 250
 )
 
 type Document struct {
@@ -54,12 +56,13 @@ type Execution struct {
 }
 
 type Compiled struct {
-	Normalized      Document `json:"normalized_rules"`
-	Assumptions     []string `json:"assumptions"`
-	RequiredData    []string `json:"required_data"`
-	WarmupBars      int      `json:"warmup_bars"`
-	CapabilityErrs  []string `json:"capability_errors"`
-	CompilerVersion string   `json:"compiler_version"`
+	Normalized      Document          `json:"normalized_rules"`
+	Assumptions     []string          `json:"assumptions"`
+	RequiredData    []string          `json:"required_data"`
+	WarmupBars      int               `json:"warmup_bars"`
+	CapabilityErrs  []string          `json:"capability_errors"`
+	Continuity      []ContinuityCheck `json:"continuity_checks,omitempty"`
+	CompilerVersion string            `json:"compiler_version"`
 }
 
 func ParseDSL(raw []byte) (Document, error) {
@@ -73,11 +76,19 @@ func ParseDSL(raw []byte) (Document, error) {
 }
 
 func Compile(doc Document) (Compiled, error) {
+	switch doc.SchemaVersion {
+	case SchemaVersion:
+		return compile(doc, 1)
+	case SchemaVersionV2:
+		return compile(doc, 2)
+	default:
+		return Compiled{}, finance.NewError(422, "validation", "STRATEGY_INVALID", "schema_version 必须为 strategy.v1 或 strategy.v2")
+	}
+}
+
+func compile(doc Document, ver int) (Compiled, error) {
 	var caps []string
 	var assume []string
-	if doc.SchemaVersion != SchemaVersion {
-		return Compiled{}, finance.NewError(422, "validation", "STRATEGY_INVALID", "schema_version 必须为 strategy.v1")
-	}
 	if strings.TrimSpace(doc.Name) == "" || strings.TrimSpace(doc.InstrumentID) == "" {
 		return Compiled{}, finance.NewError(422, "validation", "STRATEGY_INVALID", "缺少名称或标的")
 	}
@@ -93,7 +104,7 @@ func Compile(doc Document) (Compiled, error) {
 	default:
 		return Compiled{}, finance.NewError(422, "validation", "STRATEGY_INVALID", "price_basis 仅支持 raw 或 causal_qfq")
 	}
-	if len(doc.Indicators) == 0 || len(doc.Indicators) > MaxIndicators {
+	if len(doc.Indicators) > MaxIndicators || (ver == 1 && len(doc.Indicators) == 0) {
 		return Compiled{}, finance.NewError(422, "validation", "STRATEGY_INVALID", "指标数量须为 1～20")
 	}
 	ids := map[string]indicators.Spec{}
@@ -114,10 +125,10 @@ func Compile(doc Document) (Compiled, error) {
 	}
 	warmup++ // extra bar for cross
 	nodes := 0
-	if err := walkCond(doc.Entry, ids, 0, &nodes); err != nil {
+	if err := walkCond(doc.Entry, ids, 0, &nodes, ver); err != nil {
 		return Compiled{}, err
 	}
-	if err := walkCond(doc.Exit, ids, 0, &nodes); err != nil {
+	if err := walkCond(doc.Exit, ids, 0, &nodes, ver); err != nil {
 		return Compiled{}, err
 	}
 	if nodes > MaxCondNodes {
@@ -149,16 +160,29 @@ func Compile(doc Document) (Compiled, error) {
 	if doc.PriceBasis == "causal_qfq" {
 		req = append(req, "corporate_actions.causal")
 	}
+	if ver == 2 {
+		if m := maxCondLag(doc.Entry); m > maxCondLag(doc.Exit) {
+			warmup += m
+		} else {
+			warmup += maxCondLag(doc.Exit)
+		}
+	}
 	return Compiled{
 		Normalized: doc, Assumptions: assume, RequiredData: req,
-		WarmupBars: warmup, CapabilityErrs: caps, CompilerVersion: CompilerVersion,
+		WarmupBars: warmup, CapabilityErrs: caps, CompilerVersion: compilerVersionFor(ver),
 	}, nil
+}
+
+func compilerVersionFor(ver int) string {
+	if ver == 2 {
+		return CompilerVersionV2
+	}
+	return CompilerVersion
 }
 
 func compiledErr(doc Document, assume, caps []string) Compiled {
 	return Compiled{Normalized: doc, Assumptions: assume, CapabilityErrs: caps, CompilerVersion: CompilerVersion}
 }
-
 func pctOrNil(v *string, name string) error {
 	if v == nil || strings.TrimSpace(*v) == "" {
 		return nil
@@ -170,7 +194,7 @@ func pctOrNil(v *string, name string) error {
 	return nil
 }
 
-func walkCond(raw json.RawMessage, ids map[string]indicators.Spec, depth int, nodes *int) error {
+func walkCond(raw json.RawMessage, ids map[string]indicators.Spec, depth int, nodes *int, ver int) error {
 	if len(bytes.TrimSpace(raw)) == 0 {
 		return finance.NewError(422, "validation", "STRATEGY_INVALID", "缺少入场或退出条件")
 	}
@@ -183,13 +207,13 @@ func walkCond(raw json.RawMessage, ids map[string]indicators.Spec, depth int, no
 		return finance.NewError(422, "validation", "STRATEGY_INVALID", "条件不是对象")
 	}
 	if all, ok := obj["all"]; ok {
-		return walkList(all, ids, depth, nodes)
+		return walkList(all, ids, depth, nodes, ver)
 	}
 	if any, ok := obj["any"]; ok {
-		return walkList(any, ids, depth, nodes)
+		return walkList(any, ids, depth, nodes, ver)
 	}
 	if not, ok := obj["not"]; ok {
-		return walkCond(not, ids, depth+1, nodes)
+		return walkCond(not, ids, depth+1, nodes, ver)
 	}
 	op := strings.Trim(string(obj["op"]), `"`)
 	switch op {
@@ -197,10 +221,10 @@ func walkCond(raw json.RawMessage, ids map[string]indicators.Spec, depth int, no
 	default:
 		return finance.NewError(422, "validation", "STRATEGY_INVALID", "不支持的比较运算")
 	}
-	if err := walkOperand(obj["left"], ids); err != nil {
+	if err := walkOperand(obj["left"], ids, ver); err != nil {
 		return err
 	}
-	if err := walkOperand(obj["right"], ids); err != nil {
+	if err := walkOperand(obj["right"], ids, ver); err != nil {
 		return err
 	}
 	if lagRaw, ok := obj["lag"]; ok {
@@ -215,20 +239,20 @@ func walkCond(raw json.RawMessage, ids map[string]indicators.Spec, depth int, no
 	return nil
 }
 
-func walkList(raw json.RawMessage, ids map[string]indicators.Spec, depth int, nodes *int) error {
+func walkList(raw json.RawMessage, ids map[string]indicators.Spec, depth int, nodes *int, ver int) error {
 	var items []json.RawMessage
 	if err := json.Unmarshal(raw, &items); err != nil || len(items) == 0 {
 		return finance.NewError(422, "validation", "STRATEGY_INVALID", "all/any 必须是非空数组")
 	}
 	for _, it := range items {
-		if err := walkCond(it, ids, depth+1, nodes); err != nil {
+		if err := walkCond(it, ids, depth+1, nodes, ver); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func walkOperand(raw json.RawMessage, ids map[string]indicators.Spec) error {
+func walkOperand(raw json.RawMessage, ids map[string]indicators.Spec, ver int) error {
 	if len(bytes.TrimSpace(raw)) == 0 {
 		return finance.NewError(422, "validation", "STRATEGY_INVALID", "缺少操作数")
 	}
@@ -239,7 +263,36 @@ func walkOperand(raw json.RawMessage, ids map[string]indicators.Spec) error {
 			if _, err := decimal.NewFromString(s); err != nil {
 				return finance.NewError(422, "validation", "STRATEGY_INVALID", "常数必须是十进制字符串")
 			}
+			if len(obj) != 1 {
+				return finance.NewError(422, "validation", "STRATEGY_INVALID", "常数操作数只允许 constant 字段")
+			}
 			return nil
+		}
+		if ver == 2 {
+			ref, ok := obj["ref"].(string)
+			if !ok || ref == "" {
+				return finance.NewError(422, "validation", "STRATEGY_INVALID", "ref 操作数缺少引用")
+			}
+			for k := range obj {
+				if k != "ref" && k != "lag" {
+					return finance.NewError(422, "validation", "STRATEGY_INVALID", "ref 操作数只允许 ref 与 lag 字段")
+				}
+			}
+			if lr, ok := obj["lag"]; ok {
+				lag := 0
+				switch v := lr.(type) {
+				case float64:
+					lag = int(v)
+				case int:
+					lag = v
+				default:
+					return finance.NewError(422, "validation", "STRATEGY_INVALID", "lag 必须是整数")
+				}
+				if lag < 0 || lag > MaxLag {
+					return finance.NewError(422, "validation", "STRATEGY_INVALID", "lag 仅允许 0～250")
+				}
+			}
+			return resolveRef(ref, ids)
 		}
 		return finance.NewError(422, "validation", "STRATEGY_INVALID", "操作数对象仅允许 constant")
 	}

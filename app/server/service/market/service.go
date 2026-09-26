@@ -273,15 +273,135 @@ func (s *Service) attachQuotes(ctx context.Context, items []InstrumentView) {
 		seeds = append(seeds, SeedInstrument{InstrumentID: it.InstrumentID, Exchange: it.Exchange, Code: it.Code, Name: it.Name})
 	}
 	got, err := em.LastQuotes(ctx, seeds)
-	if err != nil {
+	if err != nil || got == nil {
+		got = map[string]QuoteSnapshot{}
+	}
+	missing := applyLiveQuotes(items, got)
+	for id, q := range s.dailyCloseQuotes(ctx, missing) {
+		for i := range items {
+			if items[i].InstrumentID != id || items[i].Last != "" {
+				continue
+			}
+			stampQuote(&items[i], q)
+		}
+	}
+	s.markStaleQuotes(ctx, items)
+}
+
+func applyLiveQuotes(items []InstrumentView, live map[string]QuoteSnapshot) []string {
+	missing := make([]string, 0)
+	for i := range items {
+		q, ok := live[items[i].InstrumentID]
+		if ok && q.Last != "" {
+			stampQuote(&items[i], q)
+			continue
+		}
+		missing = append(missing, items[i].InstrumentID)
+	}
+	return missing
+}
+
+func stampQuote(item *InstrumentView, q QuoteSnapshot) {
+	item.Last, item.Change, item.ChangePct = q.Last, q.Change, q.ChangePct
+	item.QuoteBasis = "last"
+	item.QuoteAsOf = ""
+	if q.Quality == nil {
 		return
 	}
+	fs, _ := q.Quality["freshness_status"].(string)
+	if fs != "daily_close" {
+		return
+	}
+	item.QuoteBasis = "daily_close"
+	item.QuoteAsOf = DayKey(q.MarketTime)
+}
+
+func (s *Service) markStaleQuotes(ctx context.Context, items []InstrumentView) {
+	now := time.Now().UTC()
 	for i := range items {
-		q, ok := got[items[i].InstrumentID]
+		if items[i].Last == "" {
+			continue
+		}
+		q, ok := s.cachedClose(ctx, model.Instrument{InstrumentID: items[i].InstrumentID, Name: items[i].Name, Exchange: items[i].Exchange})
 		if !ok {
 			continue
 		}
-		items[i].Last, items[i].Change, items[i].ChangePct = q.Last, q.Change, q.ChangePct
+		session := LastCompleteSession(CalendarID(items[i].Exchange), now)
+		day, stale := staleQuoteDate(DayKey(q.MarketTime), session, 15)
+		if !stale {
+			continue
+		}
+		items[i].QuoteBasis = "daily_close"
+		items[i].QuoteAsOf = day
+	}
+}
+
+func staleQuoteDate(barDay, sessionDay string, gapDays int) (string, bool) {
+	if barDay == "" || sessionDay == "" || barDay >= sessionDay {
+		return "", false
+	}
+	bar, err1 := time.Parse("2006-01-02", barDay)
+	session, err2 := time.Parse("2006-01-02", sessionDay)
+	if err1 != nil || err2 != nil {
+		return "", false
+	}
+	if session.Sub(bar) < time.Duration(gapDays)*24*time.Hour {
+		return "", false
+	}
+	return barDay, true
+}
+
+func (s *Service) dailyCloseQuotes(ctx context.Context, ids []string) map[string]QuoteSnapshot {
+	out := map[string]QuoteSnapshot{}
+	if len(ids) == 0 {
+		return out
+	}
+	var rows []model.Instrument
+	if err := s.DB.WithContext(ctx).Where("instrument_id IN ?", ids).Find(&rows).Error; err != nil {
+		return out
+	}
+	cold := make([]model.Instrument, 0)
+	for _, row := range rows {
+		if q, ok := s.cachedClose(ctx, row); ok {
+			out[row.InstrumentID] = q
+			continue
+		}
+		cold = append(cold, row)
+	}
+	if len(cold) > 8 {
+		cold = cold[:8]
+	}
+	for _, row := range cold {
+		pack, err := s.loadBars(ctx, row, "1d", "raw")
+		if err != nil || len(pack.Bars) == 0 {
+			continue
+		}
+		last := pack.Bars[len(pack.Bars)-1]
+		out[row.InstrumentID] = closeQuote(row, last.Close, last.Volume, last.Time, last.IsFinal, pack.Source)
+	}
+	return out
+}
+
+func (s *Service) cachedClose(ctx context.Context, row model.Instrument) (QuoteSnapshot, bool) {
+	var snap model.Snapshot
+	err := s.DB.WithContext(ctx).Where("instrument_id = ? AND period = ? AND adjust = ?", row.InstrumentID, "1d", "raw").
+		Order("created_at desc").Take(&snap).Error
+	if err != nil || snap.ID == "" {
+		return QuoteSnapshot{}, false
+	}
+	var bar model.BarRow
+	err = s.DB.WithContext(ctx).Where("snapshot_id = ?", snap.ID).Order("trade_date desc").Take(&bar).Error
+	if err != nil || bar.Close == "" {
+		return QuoteSnapshot{}, false
+	}
+	return closeQuote(row, bar.Close, bar.Volume, bar.TradeDate, bar.IsFinal, snap.SourceID), true
+}
+
+func closeQuote(row model.Instrument, last, volume, day string, final bool, source string) QuoteSnapshot {
+	return QuoteSnapshot{
+		InstrumentID: row.InstrumentID, Name: row.Name, Exchange: row.Exchange,
+		Last: last, Volume: volume, MarketTime: day, IsFinal: final, SourceID: source,
+		Quality: map[string]any{"status": "unverified", "freshness_status": "daily_close"},
 	}
 }
 
@@ -292,6 +412,53 @@ func containsHK(id, q string) bool {
 		}
 	}
 	return false
+}
+
+func PreferInstrument(q, text string, items []InstrumentView) string {
+	wantHK := strings.Contains(text, "港")
+	cand := make([]InstrumentView, 0, len(items))
+	for _, it := range items {
+		if it.AssetType != "" && it.AssetType != "stock" {
+			continue
+		}
+		if it.DelistingDate != nil && *it.DelistingDate != "" {
+			continue
+		}
+		if it.TradingStatus == "delisted" {
+			continue
+		}
+		if it.Name == q || strings.Contains(text, it.Name) || (q != "" && strings.HasPrefix(it.Name, q)) {
+			cand = append(cand, it)
+		}
+	}
+	if len(cand) == 0 {
+		if len(items) == 1 && (items[0].AssetType == "" || items[0].AssetType == "stock") {
+			return items[0].InstrumentID
+		}
+		return ""
+	}
+	best := cand[0]
+	for _, it := range cand[1:] {
+		if preferName(q, wantHK, it, best) {
+			best = it
+		}
+	}
+	return best.InstrumentID
+}
+
+func preferName(q string, wantHK bool, a, b InstrumentView) bool {
+	aHK, bHK := a.Exchange == "HKEX", b.Exchange == "HKEX"
+	if aHK != bHK {
+		if wantHK {
+			return aHK
+		}
+		return !aHK
+	}
+	ar, br := len([]rune(a.Name)), len([]rune(b.Name))
+	if ar != br {
+		return ar < br
+	}
+	return strings.HasPrefix(a.Name, q) && !strings.HasPrefix(b.Name, q)
 }
 
 func toView(r model.Instrument) InstrumentView {
@@ -406,8 +573,20 @@ func (s *Service) GetQuotes(ctx context.Context, ids []string) ([]QuoteSnapshot,
 			}
 			got, err := em.LastQuotes(ctx, seeds)
 			if err == nil {
+				missing := make([]string, 0)
+				have := map[string]QuoteSnapshot{}
 				for _, id := range want {
-					if q, ok := got[id]; ok {
+					if q, ok := got[id]; ok && q.Last != "" {
+						have[id] = q
+					} else {
+						missing = append(missing, id)
+					}
+				}
+				for id, q := range s.dailyCloseQuotes(ctx, missing) {
+					have[id] = q
+				}
+				for _, id := range want {
+					if q, ok := have[id]; ok {
 						out = append(out, q)
 					}
 				}
@@ -512,6 +691,15 @@ func (s *Service) GetOHLCV(ctx context.Context, id, period, adjust, start, end, 
 	}
 	hasMore := false
 	var next *string
+	// 展示窗口含最新时叠加延迟行情的当日未完成 bar；快照本身仍只按完整日判定新鲜度。
+	if s.mode == "live" && end == "" && cursor == "" {
+		if em, ok := s.Adapter.(*EastMoney); ok && em != nil {
+			seed := SeedInstrument{InstrumentID: inst.InstrumentID, Exchange: inst.Exchange, Code: inst.Code, Board: inst.Board, AssetType: inst.AssetType}
+			if q, qerr := em.LastQuote(ctx, seed); qerr == nil {
+				bars = applyIntrabar(bars, q, CalendarID(inst.Exchange), time.Now().UTC())
+			}
+		}
+	}
 	if len(bars) > limit {
 		hasMore = true
 		startIdx := len(bars) - limit
@@ -539,7 +727,7 @@ func (s *Service) GetOHLCV(ctx context.Context, id, period, adjust, start, end, 
 		InstrumentID: inst.InstrumentID, Name: inst.Name, Exchange: inst.Exchange, Currency: inst.Currency,
 		Period: period, Adjust: adjust, DataSnapshotID: pack.SnapshotID,
 		Source:  map[string]any{"source_id": pack.Source, "source_contract_version": SourceContractVersion, "retrieved_at": time.Now().UTC().Format(time.RFC3339)},
-		Quality: map[string]any{"status": status, "freshness_status": fresh, "last_complete_date": last, "missing_dates": []string{}, "warnings": []string{"盘中时效未验证"}, "is_final": true},
+		Quality: map[string]any{"status": status, "freshness_status": fresh, "last_complete_date": last, "missing_dates": []string{}, "warnings": []string{"盘中时效未验证"}, "is_final": len(bars) == 0 || bars[len(bars)-1].IsFinal},
 		Bars:    bars, HasMore: hasMore, NextCursor: next,
 	}, nil
 }
@@ -595,8 +783,9 @@ func (s *Service) loadBars(ctx context.Context, inst model.Instrument, period, a
 	now := time.Now().UTC()
 	var earliest, latest *string
 	if len(use) > 0 {
-		e, l := use[0].Time, use[len(use)-1].Time
-		earliest, latest = &e, &l
+		e := use[0].Time
+		earliest = &e
+		latest = finalCompleteDate(use)
 	}
 	hash := finance.SHA256Text(inst.InstrumentID + period + adjust + strconv.Itoa(len(use)))
 	src := s.mode

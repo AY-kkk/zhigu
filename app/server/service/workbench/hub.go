@@ -208,10 +208,20 @@ type GenerateReq struct {
 	InstrumentID string `json:"instrument_id"`
 	DraftID      string `json:"draft_id"`
 	BaseRevision *int   `json:"base_revision"`
+	Mode         string `json:"mode"`
 }
 
 func (h *Hub) StartGenerate(ctx context.Context, idem string, req GenerateReq) (map[string]any, error) {
 	uid := finance.UserIDFrom(ctx)
+	mode := req.Mode
+	if mode == "" {
+		mode = "generate"
+	}
+	switch mode {
+	case "generate", "modify", "explain":
+	default:
+		return nil, finance.NewError(400, "validation", "INVALID_PARAM", "mode 仅支持 generate/modify/explain")
+	}
 	if strings.TrimSpace(idem) == "" {
 		return nil, finance.NewError(400, "validation", "INVALID_PARAM", "缺少 Idempotency-Key")
 	}
@@ -253,7 +263,7 @@ func (h *Hub) StartGenerate(ctx context.Context, idem string, req GenerateReq) (
 	gid := httpx.NewID("sgen")
 	g := model.Generation{
 		ID: gid, OwnerID: uid, DraftID: draftID, Status: "queued", Text: req.Text,
-		IdempotencyKey: idem, RequestHash: hash, ExecutionEpoch: 1, CreatedAt: now, UpdatedAt: now,
+		IdempotencyKey: idem, RequestHash: hash, ExecutionEpoch: 1, Mode: mode, CreatedAt: now, UpdatedAt: now,
 	}
 	if req.InstrumentID != "" {
 		g.InstrumentID = &req.InstrumentID
@@ -287,6 +297,23 @@ func (h *Hub) runGenerate(id string) {
 	h.DB.Model(&g).Updates(map[string]any{"status": "generating", "updated_at": time.Now().UTC()})
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
+	var startDraft model.Draft
+	if err := h.DB.Where("id = ?", g.DraftID).Take(&startDraft).Error; err != nil {
+		return
+	}
+	// 迟到模型结果按生成开始时的 base_revision CAS（§12.4.8）。
+	baseRevision := startDraft.Revision
+	if g.BaseRevision != nil {
+		baseRevision = *g.BaseRevision
+	}
+	if g.Mode == "explain" {
+		h.finishExplain(g, startDraft)
+		return
+	}
+	if g.Mode == "modify" {
+		h.runModify(g, startDraft, baseRevision)
+		return
+	}
 	inst := ""
 	if g.InstrumentID != nil {
 		inst = *g.InstrumentID
@@ -310,10 +337,6 @@ func (h *Hub) runGenerate(id string) {
 		g.Protocol = &proto
 	}
 	h.DB.Model(&g).Updates(map[string]any{"status": "validating", "updated_at": time.Now().UTC()})
-	var draft model.Draft
-	if err := h.DB.Where("id = ?", g.DraftID).Take(&draft).Error; err != nil {
-		return
-	}
 	now := time.Now().UTC()
 	var latest model.Generation
 	if err := h.DB.Where("id = ?", g.ID).Take(&latest).Error; err != nil {
@@ -322,24 +345,39 @@ func (h *Hub) runGenerate(id string) {
 	if latest.Status == "canceled" {
 		return
 	}
-	draft.Status = out.Status
-	draft.GenerationID = &g.ID
-	draft.Revision++
 	ass, _ := json.Marshal(out.Assumptions)
-	draft.Assumptions = datatypes.JSON(ass)
-	if out.Document != nil {
-		raw, _ := json.Marshal(out.Document)
-		draft.DSL = datatypes.JSON(raw)
-		if c, err := strategy.Compile(*out.Document); err == nil {
-			cr, _ := json.Marshal(c)
-			draft.Compiled = datatypes.JSON(cr)
-		}
-	}
+	clar := datatypes.JSON([]byte("[]"))
 	if len(out.Questions) > 0 {
 		q, _ := json.Marshal(out.Questions)
-		draft.Clarification = datatypes.JSON(q)
-	} else {
-		draft.Clarification = datatypes.JSON([]byte("[]"))
+		clar = datatypes.JSON(q)
+	}
+	draftUpdates := map[string]any{
+		"status": out.Status, "generation_id": g.ID,
+		"assumptions": datatypes.JSON(ass), "clarification": clar,
+		"revision": gorm.Expr("revision + 1"), "updated_at": now,
+	}
+	if out.Document != nil {
+		// R2：生成结果经统一编辑态编译，原子 CAS 写入同一套表示（dsl/compiled/editor_state 一致）。
+		if es, conv := strategy.ConvertToEditor(*out.Document); conv == "convertible" {
+			if er, cerr := strategy.CompileEditor(es, out.Document.InstrumentID); cerr == nil && er.Status == "ready" {
+				esRaw, _ := json.Marshal(es)
+				docRaw, _ := json.Marshal(er.Document)
+				compRaw, _ := json.Marshal(er.Compiled)
+				draftUpdates["editor_state"] = datatypes.JSON(esRaw)
+				draftUpdates["editor_schema_version"] = strategy.EditorSchemaVersion
+				draftUpdates["dsl"] = datatypes.JSON(docRaw)
+				draftUpdates["compiled"] = datatypes.JSON(compRaw)
+				draftUpdates["field_sources"] = datatypes.JSON(fieldSourcesLabeled(startDraft, esRaw, "ai_suggestion"))
+			}
+		}
+		if _, ok := draftUpdates["dsl"]; !ok {
+			raw, _ := json.Marshal(out.Document)
+			draftUpdates["dsl"] = datatypes.JSON(raw)
+			if c, err := strategy.Compile(*out.Document); err == nil {
+				cr, _ := json.Marshal(c)
+				draftUpdates["compiled"] = datatypes.JSON(cr)
+			}
+		}
 	}
 	if out.ErrorCode != "" {
 		g.ErrorCode, g.ErrorMessage = &out.ErrorCode, &out.ErrorMessage
@@ -352,11 +390,149 @@ func (h *Hub) runGenerate(id string) {
 	g.Protocol = &src
 	if out.Status == "failed" && out.ErrorCode == "STRATEGY_UNSUPPORTED" {
 		g.Status = "unsupported"
-		draft.Status = "unsupported"
+		draftUpdates["status"] = "unsupported"
 	}
-	g.UpdatedAt, draft.UpdatedAt = now, now
-	_ = h.DB.Save(&draft).Error
+	g.UpdatedAt = now
+	res := h.DB.Model(&model.Draft{}).
+		Where("id = ? AND owner_id = ? AND revision = ?", startDraft.ID, startDraft.OwnerID, baseRevision).
+		Updates(draftUpdates)
+	if res.Error == nil && res.RowsAffected == 0 {
+		// 草稿已被窗口编辑更新：结果不落草稿。
+		code, msg := "REVISION_CONFLICT", "草稿已被其他编辑更新，生成结果未应用"
+		g.Status = "failed"
+		g.ErrorCode, g.ErrorMessage = &code, &msg
+	}
 	_ = h.DB.Save(&g).Error
+}
+
+// runModify applies an explicit local change goal to the frozen editor state
+// and writes ONE unified representation back under revision CAS (R2). The live
+// model (when configured) only proposes targeted fields; ApplyTargets keeps all
+// other trading semantics identical.
+func (h *Hub) runModify(g model.Generation, startDraft model.Draft, baseRevision int) {
+	now := time.Now().UTC()
+	fail := func(code, msg string) {
+		h.DB.Model(&g).Updates(map[string]any{"status": "failed", "error_code": code, "error_message": msg, "updated_at": now})
+	}
+	base, ok := editorStateOf(startDraft)
+	if !ok {
+		fail("STRATEGY_INVALID", "草稿没有可修改的原规则")
+		return
+	}
+	newEs, targets, assume, err := strategy.ModifyEditorState(base, g.Text)
+	if err != nil {
+		fail(finance.ErrorCode(err), finance.ErrorMessage(err))
+		return
+	}
+	src := "heuristic"
+	if live, okLive := h.liveModel(context.Background()); okLive {
+		live.Mode = "modify"
+		rawBase, _ := json.Marshal(base)
+		live.BaseRules = string(rawBase)
+		live.Text = g.Text
+		live.InstrumentID = instrumentOfEditor(base)
+		out := strategy.GenerateLive(context.Background(), live)
+		src = out.Source
+		if out.Status != "ready" || out.Document == nil {
+			code := out.ErrorCode
+			if code == "" {
+				code = "MODEL_UNAVAILABLE"
+			}
+			msg := out.ErrorMessage
+			if msg == "" {
+				msg = "模型未能完成局部修改"
+			}
+			fail(code, msg)
+			return
+		}
+		if prop, conv := strategy.ConvertToEditor(*out.Document); conv == "convertible" {
+			newEs = strategy.ApplyTargets(newEs, prop, targets)
+		}
+	}
+	inst := instrumentOfEditor(newEs)
+	er, err := strategy.CompileEditor(newEs, inst)
+	if err != nil || er.Status != "ready" {
+		fail("STRATEGY_INVALID", "修改后的规则无法通过编译")
+		return
+	}
+	esRaw, _ := json.Marshal(newEs)
+	docRaw, _ := json.Marshal(er.Document)
+	compRaw, _ := json.Marshal(er.Compiled)
+	ass, _ := json.Marshal(assume)
+	draftUpdates := map[string]any{
+		"status": "ready", "generation_id": g.ID,
+		"assumptions": datatypes.JSON(ass), "clarification": datatypes.JSON([]byte("[]")),
+		"editor_state": datatypes.JSON(esRaw), "editor_schema_version": strategy.EditorSchemaVersion,
+		"dsl": datatypes.JSON(docRaw), "compiled": datatypes.JSON(compRaw),
+		"field_sources": datatypes.JSON(fieldSourcesLabeled(startDraft, esRaw, "ai_suggestion")),
+		"revision":      gorm.Expr("revision + 1"), "updated_at": now,
+	}
+	res := h.DB.Model(&model.Draft{}).
+		Where("id = ? AND owner_id = ? AND revision = ?", startDraft.ID, startDraft.OwnerID, baseRevision).
+		Updates(draftUpdates)
+	proto := src
+	gUpdates := map[string]any{"status": "ready", "protocol": proto, "updated_at": now}
+	if res.Error == nil && res.RowsAffected == 0 {
+		// 迟到/并发编辑：修改结果不落草稿（§12.4.8）。
+		gUpdates = map[string]any{"status": "failed", "error_code": "REVISION_CONFLICT", "error_message": "草稿已被其他编辑更新，修改结果未应用", "protocol": proto, "updated_at": now}
+	}
+	h.DB.Model(&model.Generation{}).Where("id = ?", g.ID).Updates(gUpdates)
+}
+
+func editorStateOf(d model.Draft) (strategy.EditorState, bool) {
+	if len(d.EditorState) > 0 {
+		var es strategy.EditorState
+		if json.Unmarshal(d.EditorState, &es) == nil && (es.Name != "" || len(es.Entry) > 0) {
+			return es, true
+		}
+	}
+	if len(d.DSL) > 0 {
+		var doc strategy.Document
+		if json.Unmarshal(d.DSL, &doc) == nil {
+			if es, status := strategy.ConvertToEditor(doc); status == "convertible" {
+				return es, true
+			}
+		}
+	}
+	return strategy.EditorState{}, false
+}
+
+func instrumentOfEditor(es strategy.EditorState) string {
+	if es.InstrumentID != nil {
+		return *es.InstrumentID
+	}
+	return ""
+}
+
+// finishExplain runs explain mode through the model channel only (R3): without a
+// model configuration it reports MODEL_UNAVAILABLE — the rule card's plain
+// summary stays labeled as a local summary and never counts as AI output.
+func (h *Hub) finishExplain(g model.Generation, draft model.Draft) {
+	now := time.Now().UTC()
+	fail := func(code, msg string) {
+		h.DB.Model(&g).Updates(map[string]any{"status": "failed", "error_code": code, "error_message": msg, "updated_at": now})
+	}
+	if len(draft.DSL) == 0 {
+		fail("STRATEGY_INVALID", "草稿无可解释规则")
+		return
+	}
+	var doc strategy.Document
+	if err := json.Unmarshal(draft.DSL, &doc); err != nil {
+		fail("STRATEGY_INVALID", "草稿规则无法解析")
+		return
+	}
+	live, ok := h.liveModel(context.Background())
+	if !ok {
+		fail("MODEL_UNAVAILABLE", "未配置策略模型，AI 解释不可用（规则卡白话摘要是本地规则摘要，不是 AI 解释）")
+		return
+	}
+	live.Mode = "explain"
+	text, err := strategy.ExplainLive(context.Background(), live, string(draft.DSL))
+	if err != nil {
+		fail(finance.ErrorCode(err), finance.ErrorMessage(err))
+		return
+	}
+	h.DB.Model(&g).Updates(map[string]any{"status": "ready", "explanation": text, "updated_at": now})
 }
 
 func (h *Hub) resolveInstrument(ctx context.Context, text string) string {
@@ -371,28 +547,7 @@ func (h *Hub) resolveInstrument(ctx context.Context, text string) string {
 	if err != nil {
 		return ""
 	}
-	var cand []market.InstrumentView
-	for _, it := range res.Items {
-		if it.AssetType != "" && it.AssetType != "stock" {
-			continue
-		}
-		if it.Name == q || strings.Contains(text, it.Name) {
-			if it.DelistingDate != nil && *it.DelistingDate != "" {
-				continue
-			}
-			if it.TradingStatus == "delisted" {
-				continue
-			}
-			cand = append(cand, it)
-		}
-	}
-	if len(cand) > 0 {
-		return cand[0].InstrumentID
-	}
-	if len(res.Items) == 1 && (res.Items[0].AssetType == "" || res.Items[0].AssetType == "stock") {
-		return res.Items[0].InstrumentID
-	}
-	return ""
+	return market.PreferInstrument(q, text, res.Items)
 }
 
 func (h *Hub) GetGeneration(ctx context.Context, id string) (map[string]any, error) {
@@ -405,11 +560,19 @@ func (h *Hub) GetGeneration(ctx context.Context, id string) (map[string]any, err
 	_ = h.DB.Where("id = ?", g.DraftID).Take(&draft).Error
 	return map[string]any{
 		"generation_id": g.ID, "draft_id": g.DraftID, "status": g.Status, "draft_revision": draft.Revision,
-		"dsl": json.RawMessage(draft.DSL), "assumptions": json.RawMessage(draft.Assumptions),
-		"clarification": json.RawMessage(draft.Clarification), "compiled": json.RawMessage(draft.Compiled),
-		"error_code": g.ErrorCode, "error_message": g.ErrorMessage, "prompt_version": g.PromptVersion,
-		"source": g.Protocol, "model_config_version": g.ModelConfigVersion,
+		"dsl": json.RawMessage(orEmptyJSON(draft.DSL, "null")), "assumptions": json.RawMessage(orEmptyJSON(draft.Assumptions, "[]")),
+		"clarification": json.RawMessage(orEmptyJSON(draft.Clarification, "[]")), "compiled": json.RawMessage(orEmptyJSON(draft.Compiled, "null")),
+		"error_code": derefStr(g.ErrorCode), "error_message": derefStr(g.ErrorMessage), "prompt_version": derefStr(g.PromptVersion),
+		"source": derefStr(g.Protocol), "model_config_version": derefStr(g.ModelConfigVersion),
+		"mode": g.Mode, "explanation": derefStr(g.Explanation),
 	}, nil
+}
+
+func derefStr(p *string) string {
+	if p == nil {
+		return ""
+	}
+	return *p
 }
 
 func (h *Hub) CancelGeneration(ctx context.Context, id string) error {
@@ -426,12 +589,7 @@ func (h *Hub) CancelGeneration(ctx context.Context, id string) error {
 }
 
 func (h *Hub) GetDraft(ctx context.Context, id string) (map[string]any, error) {
-	uid := finance.UserIDFrom(ctx)
-	var d model.Draft
-	if err := h.DB.WithContext(ctx).Where("id = ? AND owner_id = ?", id, uid).Take(&d).Error; err != nil {
-		return nil, finance.NewError(404, "not_found", "NOT_FOUND", "草稿不存在")
-	}
-	return draftView(d), nil
+	return h.GetDraftView(ctx, id)
 }
 
 func (h *Hub) ImportDraft(ctx context.Context, dsl json.RawMessage, inst, text string) (map[string]any, error) {
@@ -467,104 +625,10 @@ func (h *Hub) ImportDraft(ctx context.Context, dsl json.RawMessage, inst, text s
 	return draftView(d), nil
 }
 
+// PatchDraft keeps the legacy {revision,dsl} entry point; all writes go through
+// the CAS implementation in drafts.go.
 func (h *Hub) PatchDraft(ctx context.Context, id string, revision int, dsl json.RawMessage) (map[string]any, error) {
-	uid := finance.UserIDFrom(ctx)
-	var d model.Draft
-	if err := h.DB.WithContext(ctx).Where("id = ? AND owner_id = ?", id, uid).Take(&d).Error; err != nil {
-		return nil, finance.NewError(404, "not_found", "NOT_FOUND", "草稿不存在")
-	}
-	if revision != d.Revision {
-		return nil, finance.NewError(409, "conflict", "REVISION_CONFLICT", "草稿版本冲突")
-	}
-	doc, err := strategy.ParseDSL(dsl)
-	if err != nil {
-		return nil, err
-	}
-	c, err := strategy.Compile(doc)
-	if err != nil {
-		return nil, err
-	}
-	raw, _ := json.Marshal(doc)
-	cr, _ := json.Marshal(c)
-	d.DSL, d.Compiled = datatypes.JSON(raw), datatypes.JSON(cr)
-	d.Revision++
-	d.Status = "ready"
-	d.UpdatedAt = time.Now().UTC()
-	if err := h.DB.Save(&d).Error; err != nil {
-		return nil, err
-	}
-	return draftView(d), nil
-}
-
-func draftView(d model.Draft) map[string]any {
-	return map[string]any{
-		"draft_id": d.ID, "revision": d.Revision, "status": d.Status, "text": d.Text,
-		"instrument_id": d.InstrumentID, "dsl": json.RawMessage(d.DSL),
-		"assumptions": json.RawMessage(d.Assumptions), "compiled": json.RawMessage(d.Compiled),
-		"clarification": json.RawMessage(d.Clarification),
-	}
-}
-
-func (h *Hub) SaveStrategy(ctx context.Context, idem, draftID string, revision int, strategyID, baseVersion string) (map[string]any, error) {
-	uid := finance.UserIDFrom(ctx)
-	if idem == "" {
-		return nil, finance.NewError(400, "validation", "INVALID_PARAM", "缺少 Idempotency-Key")
-	}
-	hash := finance.SHA256Text(draftID + "|" + strings.TrimSpace(strategyID) + "|" + itoa(revision))
-	var rec model.Idempotency
-	if err := h.DB.WithContext(ctx).Where("owner_id = ? AND operation = ? AND idempotency_key = ?", uid, "save_strategy", idem).Take(&rec).Error; err == nil {
-		if rec.RequestHash != hash {
-			return nil, finance.NewError(409, "conflict", "IDEMPOTENCY_CONFLICT", "相同幂等键对应不同请求")
-		}
-		var ver model.Version
-		if err := h.DB.Where("id = ?", rec.ObjectID).Take(&ver).Error; err != nil {
-			return nil, finance.NewError(404, "not_found", "NOT_FOUND", "策略版本不存在")
-		}
-		return map[string]any{"strategy_id": ver.StrategyID, "version_id": ver.ID, "revision": ver.Revision}, nil
-	}
-	var d model.Draft
-	if err := h.DB.WithContext(ctx).Where("id = ? AND owner_id = ?", draftID, uid).Take(&d).Error; err != nil {
-		return nil, finance.NewError(404, "not_found", "NOT_FOUND", "草稿不存在")
-	}
-	if d.Revision != revision || len(d.DSL) == 0 {
-		return nil, finance.NewError(422, "validation", "STRATEGY_INVALID", "草稿未就绪或版本不匹配")
-	}
-	now := time.Now().UTC()
-	if strategyID == "" {
-		strategyID = httpx.NewID("st")
-		st := model.Strategy{ID: strategyID, OwnerID: uid, Name: "未命名策略", CreatedAt: now, UpdatedAt: now}
-		if err := h.DB.Create(&st).Error; err != nil {
-			return nil, err
-		}
-	} else {
-		var st model.Strategy
-		if err := h.DB.Where("id = ? AND owner_id = ? AND deleted_at IS NULL", strategyID, uid).Take(&st).Error; err != nil {
-			return nil, finance.NewError(404, "not_found", "NOT_FOUND", "策略不存在")
-		}
-	}
-	var count int64
-	h.DB.Model(&model.Version{}).Where("strategy_id = ?", strategyID).Count(&count)
-	vid := httpx.NewID("stv")
-	var name string
-	_ = json.Unmarshal(d.DSL, &struct {
-		Name *string `json:"name"`
-	}{})
-	var doc strategy.Document
-	_ = json.Unmarshal(d.DSL, &doc)
-	name = doc.Name
-	ver := model.Version{
-		ID: vid, StrategyID: strategyID, OwnerID: uid, Revision: int(count) + 1, Name: name,
-		DSL: d.DSL, DSLHash: finance.SHA256Text(string(d.DSL)), Compiled: d.Compiled, CompilerVersion: strategy.CompilerVersion, CreatedAt: now,
-	}
-	if err := h.DB.Create(&ver).Error; err != nil {
-		return nil, err
-	}
-	if err := h.DB.Model(&model.Strategy{}).Where("id = ?", strategyID).Updates(map[string]any{"current_version_id": vid, "name": name, "updated_at": now}).Error; err != nil {
-		return nil, err
-	}
-	_ = h.DB.Create(&model.Idempotency{OwnerID: uid, Operation: "save_strategy", IdempotencyKey: idem, RequestHash: hash, ObjectID: vid, CreatedAt: now}).Error
-	_ = baseVersion
-	return map[string]any{"strategy_id": strategyID, "version_id": vid, "revision": ver.Revision}, nil
+	return h.PatchDraftV2(ctx, id, DraftPatch{Revision: revision, HasDSL: true, DSL: dsl})
 }
 
 func itoa(v int) string {
@@ -604,9 +668,26 @@ func (h *Hub) GetStrategy(ctx context.Context, id, versionID string) (map[string
 		q = h.DB.Where("strategy_id = ? AND id = ?", id, versionID)
 	}
 	_ = q.Find(&vers).Error
+	// §12.4.9：服务端显式返回可转换编辑态与转换状态，不靠前端推测。
+	views := make([]map[string]any, 0, len(vers))
+	for _, v := range vers {
+		raw, _ := json.Marshal(v)
+		var m map[string]any
+		_ = json.Unmarshal(raw, &m)
+		m["editor_state_status"] = "not_convertible"
+		var doc strategy.Document
+		if err := json.Unmarshal(v.DSL, &doc); err == nil {
+			if state, status := strategy.ConvertToEditor(doc); status == "convertible" {
+				sraw, _ := json.Marshal(state)
+				m["converted_editor_state"] = json.RawMessage(sraw)
+				m["editor_state_status"] = status
+			}
+		}
+		views = append(views, m)
+	}
 	var runs []model.BacktestRun
 	_ = h.DB.Where("strategy_id = ? AND owner_id = ?", id, uid).Order("created_at desc").Limit(10).Find(&runs).Error
-	return map[string]any{"strategy": st, "versions": vers, "recent_runs": runs}, nil
+	return map[string]any{"strategy": st, "versions": views, "recent_runs": runs}, nil
 }
 
 func (h *Hub) DeleteStrategy(ctx context.Context, id string) (map[string]any, error) {
@@ -693,10 +774,15 @@ func (h *Hub) runBacktest(id string) {
 		h.failRun(run, "STRATEGY_INVALID", "DSL 无法解析")
 		return
 	}
-	compiled, err := strategy.Compile(doc)
-	if err != nil {
-		h.failRun(run, finance.ErrorCode(err), finance.ErrorMessage(err))
-		return
+	// R1：从保存的可信编译产物恢复连续性检查；重编译会丢失编辑态约束。
+	var compiled strategy.Compiled
+	if err := json.Unmarshal(ver.Compiled, &compiled); err != nil || compiled.CompilerVersion == "" {
+		c, cerr := strategy.Compile(doc)
+		if cerr != nil {
+			h.failRun(run, finance.ErrorCode(cerr), finance.ErrorMessage(cerr))
+			return
+		}
+		compiled = c
 	}
 	inst, err := h.Market.Instrument(ctx, cfg.InstrumentID)
 	if err != nil {

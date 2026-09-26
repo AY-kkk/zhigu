@@ -3,8 +3,11 @@ package finance
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -113,6 +116,8 @@ func TestR3MalformedResultsCannotComplete(t *testing.T) {
 
 func TestR3ModelCacheCannotCrossRun(t *testing.T) {
 	s := setup(t)
+	activateTestModel(t, s.DB)
+	t.Setenv("ZHIGU_MODEL_FEE_CAP", "1")
 	a := createMinimalRun(t, s, 1001, "r3-cache-a")
 	b := createMinimalRun(t, s, 1002, "r3-cache-b")
 	ta, e := s.IssueTaskToken(a.RunID, reviewTaskID(t, s, a.RunID), "research")
@@ -124,16 +129,31 @@ func TestR3ModelCacheCannotCrossRun(t *testing.T) {
 		t.Fatal(e)
 	}
 	proxy := NewModelProxy(s.DB, NewDBBudget(s.DB))
+	n := 0
+	proxy.Client = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		n++
+		raw := fmt.Sprintf(`{"id":"chatcmpl_%d","choices":[{"message":{"content":"ok"}}],"usage":{"prompt_tokens":1,"completion_tokens":1}}`, n)
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(raw)), Header: make(http.Header)}, nil
+	})}
 	body := []byte(`{"model":"finance-research","messages":[]}`)
 	first, e := proxy.Complete(context.Background(), "r3-cache-shared-id", NormalizeJSONHash(body), HeaderTokenHash(ta), body, ProtocolChatCompletions)
 	if e != nil {
 		t.Fatal(e)
 	}
 	second, e := proxy.Complete(context.Background(), "r3-cache-shared-id", NormalizeJSONHash(body), HeaderTokenHash(tb), body, ProtocolChatCompletions)
-	if e == nil && NormalizeJSONHash(first) == NormalizeJSONHash(second) {
-		var count int64
-		s.DB.Model(&modelfinance.UsageLedger{}).Where("run_id = ? AND kind = ?", b.RunID, "model").Count(&count)
-		t.Fatalf("user B received user A model response cache with no run-bound validation; B model ledger rows=%d", count)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if n != 2 {
+		t.Fatalf("cross-run request reused upstream, hits=%d", n)
+	}
+	if NormalizeJSONHash(first) == NormalizeJSONHash(second) {
+		t.Fatal("user B received user A model response")
+	}
+	var count int64
+	s.DB.Model(&modelfinance.ModelCache{}).Where("run_id = ?", b.RunID).Count(&count)
+	if count != 1 {
+		t.Fatalf("user B cache rows=%d", count)
 	}
 }
 

@@ -24,25 +24,35 @@
     </section>
 
     <section class="block" data-testid="rule-card" :key="store.draftRev">
-      <template v-if="store.draft?.dsl">
-        <h3>{{ store.draft.dsl.name || '规则' }}</h3>
-        <p class="meta">{{ store.draft.dsl.instrument_id }} · {{ store.draft.dsl.signal_period }} · {{ store.draft.dsl.price_basis }}</p>
-        <p data-testid="position-value">仓位 {{ store.draft.dsl.position?.value }} · 止损 {{ store.draft.dsl.risk?.stop_loss_pct || '未启用' }}</p>
-        <p class="meta">执行 {{ store.draft.dsl.execution?.timing }}，次一交易日开盘</p>
-        <label v-if="store.kdjK !== ''">KDJ K 阈值
-          <input :value="store.kdjK" type="number" min="0" max="100" @change="store.setKdjK($event.target.value)">
-        </label>
-        <ul v-if="assumptions.length" class="plain">
-          <li v-for="a in assumptions" :key="a">{{ a }}</li>
-        </ul>
+      <template v-if="editorState || store.draft?.dsl">
+        <template v-if="store.draft?.dsl">
+          <h3>{{ store.draft.dsl.name || '规则' }}</h3>
+          <p class="meta">{{ store.draft.dsl.instrument_id }} · {{ store.draft.dsl.signal_period }} · {{ store.draft.dsl.price_basis }}</p>
+          <p data-testid="position-value">仓位 {{ store.draft.dsl.position?.value }} · 止损 {{ store.draft.dsl.risk?.stop_loss_pct || '未启用' }}</p>
+          <p class="meta">执行 {{ store.draft.dsl.execution?.timing }}，次一交易日开盘</p>
+          <label v-if="store.kdjK !== ''">KDJ K 阈值
+            <input :value="store.kdjK" type="number" min="0" max="100" @change="store.setKdjK($event.target.value)">
+          </label>
+          <ul v-if="assumptions.length" class="plain">
+            <li v-for="a in assumptions" :key="a">{{ a }}</li>
+          </ul>
+        </template>
+        <template v-else>
+          <h3>{{ editorState?.name || '规则（待补全）' }}</h3>
+          <p class="hint">草稿缺 {{ (store.draft?.missing_fields || []).join('、') || '关键字段' }}，在规则窗口补全后保存。</p>
+        </template>
+        <p v-if="originText" class="meta">{{ originText }}</p>
         <div class="actions">
-          <button type="button" class="zg-btn zg-btn-ghost" @click="store.applyDraft()">应用修改</button>
-          <button type="button" class="zg-btn zg-btn-ghost" :disabled="store.saveBusy" @click="store.saveCurrent()">保存策略</button>
-          <button type="button" class="zg-btn zg-btn-ghost" @click="store.showAdvanced = !store.showAdvanced">{{ store.showAdvanced ? '隐藏 DSL' : '查看 DSL' }}</button>
+          <button type="button" class="zg-btn zg-btn-ghost" data-testid="open-rules" @click="rulesOpen = true">配置买卖规则</button>
+          <template v-if="store.draft?.dsl">
+            <button type="button" class="zg-btn zg-btn-ghost" @click="store.applyDraft()">应用修改</button>
+            <button type="button" class="zg-btn zg-btn-ghost" :disabled="store.saveBusy" @click="store.saveCurrent()">保存策略</button>
+            <button type="button" class="zg-btn zg-btn-ghost" @click="store.showAdvanced = !store.showAdvanced">{{ store.showAdvanced ? '隐藏 DSL' : '查看 DSL' }}</button>
+          </template>
         </div>
         <p v-if="store.saveNotice" class="meta">{{ store.saveNotice }}</p>
         <p v-if="store.saveError" class="err">{{ store.saveError }}</p>
-        <textarea v-if="store.showAdvanced" v-model="store.dslText" class="dsl" rows="10" aria-label="策略 DSL"></textarea>
+        <textarea v-if="store.showAdvanced && store.draft?.dsl" v-model="store.dslText" class="dsl" rows="10" aria-label="策略 DSL"></textarea>
       </template>
       <p v-else class="hint">生成后在这里改入场、退出和仓位。</p>
     </section>
@@ -50,10 +60,10 @@
     <section class="block">
       <h3>回测</h3>
       <p class="hint">按初始资金和起止日期，在当前这一只股票上找出买点和卖点。</p>
-      <div class="dates">
-        <label>起始 <input v-model="store.start" type="date"></label>
-        <label>结束 <input v-model="store.end" type="date"></label>
-      </div>
+        <div class="dates">
+          <label>起始 <input v-model="store.start" type="date" data-testid="backtest-start"></label>
+          <label>结束 <input v-model="store.end" type="date" data-testid="backtest-end"></label>
+        </div>
       <label>初始资金 <input v-model="store.initialCash" inputmode="decimal"></label>
       <details>
         <summary>费用假设</summary>
@@ -65,10 +75,25 @@
         <button v-if="store.btBusy" type="button" class="zg-btn zg-btn-ghost" @click="store.cancelBacktest()">取消回测</button>
       </div>
     </section>
+    <section v-if="store.explanation" class="block">
+      <h3>AI 解释（只读）</h3>
+      <p class="hint">{{ store.explanation }}</p>
+    </section>
+
+    <RuleEditor
+      v-if="rulesOpen && editorState"
+      window-mode
+      :state="editorState"
+      :conflict="store.ruleConflict"
+      :fallback-instrument="store.instrument?.instrument_id || ''"
+      @apply="onApplyRules"
+      @cancel="rulesOpen = false"
+    />
   </aside>
 </template>
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import RuleEditor from './RuleEditor.vue'
 import { useStrategyWorkspace } from '../../stores/strategyWorkspace.js'
 
 defineProps({
@@ -77,9 +102,41 @@ defineProps({
 })
 
 const store = useStrategyWorkspace()
+const rulesOpen = ref(false)
 const busyGen = computed(() => store.genStatus === 'generating' || store.genStatus === 'queued')
 const questions = computed(() => (Array.isArray(store.draft?.clarification) ? store.draft.clarification : []))
 const assumptions = computed(() => (Array.isArray(store.draft?.assumptions) ? store.draft.assumptions : []))
+
+// 规则窗口读取编辑态（与 §12.4.5 编辑表示一一对应），不靠 readK 推测。
+// 优先使用服务端保存的 editor_state（待补全草稿也可开窗补缺项）。
+const editorState = computed(() => {
+  const d = store.draft
+  if (d?.editor_state) return d.editor_state
+  const dsl = d?.dsl
+  if (!dsl) return null
+  return {
+    name: dsl.name || '',
+    instrument_id: dsl.instrument_id || null,
+    signal_period: dsl.signal_period || '1d',
+    price_basis: dsl.price_basis || 'raw',
+    indicators: dsl.indicators || [],
+    entry: dsl.entry,
+    exit: dsl.exit,
+    position: dsl.position,
+    risk: dsl.risk,
+    execution: dsl.execution
+  }
+})
+const originText = computed(() => {
+  const o = store.draft?.origin
+  if (!o) return ''
+  const gone = o.market_status === 'withdrawn' ? '；原条目已下架' : ''
+  return `来源：市场策略 ${o.market_version_id} 的原版参数，修改不影响原版${gone}`
+})
+async function onApplyRules(state) {
+  await store.patchEditorState(state)
+  rulesOpen.value = false
+}
 </script>
 <style scoped>
 .side {

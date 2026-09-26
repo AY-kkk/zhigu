@@ -2,7 +2,7 @@
 
 版本 1.0｜2026-09-17｜状态：实施契约，应用尚未开发或联调。
 
-2026-09-21 阶段 B 拍板：范围、底座、数据路径与逐步执行以 [阶段 B SPEC B-1.2](阶段B_开发SPEC.md) 为准。与本文冲突时执行 B-1.2，并在交付包写变更记录。
+2026-09-23 阶段 B 更新：范围、底座、数据路径与逐步执行以 [阶段 B SPEC B-1.7](阶段B_开发SPEC.md) 为准；策略市场、数据库与前端映射统一见其 §12。与本文旧范围冲突时执行 B-1.7，并在交付包写变更记录。
 
 2026-09-18 阶段 B 增补：用户明确允许 OpenAI-compatible Chat Completions API 与 Responses API 双协议接入；模型接口细节以 [阶段 B SPEC 第7节](阶段B_开发SPEC.md#7-真实模型与有界-deerflowb-14b-17)为准。本增补不追溯改变阶段 A 的历史验收。
 
@@ -13,10 +13,10 @@
 
 ## 0. 阅读顺序与不可变约束
 
-1. [一期 PRD v2](金融C端Agent_MVP_PRD.md)。
+1. [一期 PRD v2](../prd/金融C端Agent_MVP_PRD.md)。
 2. [面客架构 v2](金融C端Agent_面客产品架构_v2.md)。
-3. 本文 → [仓库清单](references/README.md) → [机器契约](handoff/contracts/) → [验收案例](handoff/acceptance-cases.json)。
-4. [直接交给编程 Agent 的指令](handoff/CODING_AGENT_PROMPT.md)。
+3. 本文 → [仓库清单](../references/README.md) → [机器契约](../handoff/contracts/) → [验收案例](../handoff/acceptance-cases.json)。
+4. [直接交给编程 Agent 的指令](../handoff/CODING_AGENT_PROMPT.md)。
 
 优先级：用户最新指令 > PRD v2 > 架构 v2 > 本文的实现细化。冲突需指出，不静默修改。旧《技术设计与开源复用》只作历史源码线索，不能恢复成自选股一期或单 Go Agent 方案。
 

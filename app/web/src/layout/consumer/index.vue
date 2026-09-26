@@ -16,7 +16,7 @@
                 @delete-research="onDelete"
               />
             </LayoutHeader>
-            <LayoutContent class="zhigu-content" :class="{ 'is-scrollable': !isWorkspace }">
+            <LayoutContent class="zhigu-content" :class="{ 'is-scrollable': scrollable }">
               <div id="zg-main" class="zg-main-inner" tabindex="-1">
               <DataModeNotice v-if="!route.path.startsWith('/app/strategies')" />
               <router-view />
@@ -95,6 +95,12 @@ const isMobile = computed(() => viewport.value < 768)
 const navWidth = computed(() => (viewport.value >= 768 && viewport.value < 1024 ? 72 : 88))
 const isResearch = computed(() => route.path.startsWith('/app/research'))
 const isWorkspace = computed(() => isResearch.value || route.path.startsWith('/app/strategies'))
+// 市场列表／详情（scrollMode=page）整页滚动；工作台（fixed）保持行情布局。
+const scrollable = computed(() => {
+  if (route.meta?.scrollMode === 'page') return true
+  if (route.meta?.scrollMode === 'fixed') return false
+  return !isWorkspace.value
+})
 const isHistory = computed(() => route.path.startsWith('/app/history'))
 const evidenceIndex = computed(() => {
   const map = evidenceIndexMap(conversation.runView?.report)

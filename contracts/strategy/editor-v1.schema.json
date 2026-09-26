@@ -1,0 +1,141 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "strategy.editor.v1",
+  "title": "strategy.editor.v1 规则编辑状态",
+  "description": "可视化规则编辑器状态。未知字段拒绝（与 ParseEditorState 的 DisallowUnknownFields 一致）。ui_metadata 只承载界面节点 ID/展开状态，不参与交易语义 hash。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["name", "signal_period", "price_basis", "indicators", "entry", "exit", "position", "risk", "execution"],
+  "properties": {
+    "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+    "instrument_id": { "type": ["string", "null"] },
+    "signal_period": { "type": "string", "minLength": 1 },
+    "price_basis": { "enum": ["raw", "causal_qfq", ""] },
+    "indicators": {
+      "type": "array",
+      "maxItems": 20,
+      "items": { "$ref": "#/$defs/spec" }
+    },
+    "entry": { "$ref": "#/$defs/node" },
+    "exit": { "$ref": "#/$defs/node" },
+    "position": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "value"],
+      "properties": {
+        "type": { "const": "equity_fraction" },
+        "value": { "type": "string", "description": "0～1 十进制字符串；草稿可为空串表示待补充" }
+      }
+    },
+    "risk": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["check"],
+      "properties": {
+        "check": { "const": "close" },
+        "stop_loss_pct": { "type": ["string", "null"], "description": "0～1 比例；null/空 = 明确未启用" },
+        "take_profit_pct": { "type": ["string", "null"] },
+        "max_holding_bars": { "type": ["integer", "null"], "minimum": 1 }
+      }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["timing", "priority"],
+      "properties": {
+        "timing": { "const": "next_session_open" },
+        "priority": { "const": "exit_first" }
+      }
+    },
+    "ui_metadata": {}
+  },
+  "$defs": {
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "params"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "type": { "type": "string", "minLength": 1 },
+        "params": {
+          "type": "object",
+          "additionalProperties": { "type": "integer" },
+          "description": "参数键值须满足指标 registry 的类型与范围"
+        }
+      }
+    },
+    "operand": {
+      "oneOf": [
+        { "type": "string", "description": "裸字符串引用，等价 lag=0，如 kdj.j / close / volume" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["constant"],
+          "properties": { "constant": { "type": "string", "description": "十进制字符串常数" } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["ref"],
+          "properties": {
+            "ref": { "type": "string", "minLength": 1 },
+            "lag": { "type": "integer", "minimum": 0, "maximum": 250 }
+          }
+        }
+      ]
+    },
+    "node": {
+      "oneOf": [
+        { "$ref": "#/$defs/group_all" },
+        { "$ref": "#/$defs/group_any" },
+        { "$ref": "#/$defs/group_not" },
+        { "$ref": "#/$defs/leaf" },
+        { "$ref": "#/$defs/shortcut" }
+      ]
+    },
+    "group_all": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["all"],
+      "properties": {
+        "all": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/node" } }
+      }
+    },
+    "group_any": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["any"],
+      "properties": {
+        "any": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/node" } }
+      }
+    },
+    "group_not": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["not"],
+      "properties": { "not": { "$ref": "#/$defs/node" } }
+    },
+    "leaf": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op", "left", "right"],
+      "properties": {
+        "op": { "enum": ["gt", "gte", "lt", "lte", "eq", "crosses_above", "crosses_below"] },
+        "left": { "$ref": "#/$defs/operand" },
+        "right": { "$ref": "#/$defs/operand" },
+        "lag": { "type": "integer", "minimum": 0, "maximum": 250 },
+        "repeat": { "type": "integer", "minimum": 1, "maximum": 20, "description": "展开为 0..repeat-1 滞后偏移的 all 组，内部引用 lag 叠加偏移" }
+      }
+    },
+    "shortcut": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "days"],
+      "properties": {
+        "kind": { "const": "volume_increase" },
+        "days": { "type": "integer", "minimum": 1, "maximum": 20, "description": "连续放量 N 天，需 N+1 根比较 bar，编译为逐日量比较 + 可信连续性检查" },
+        "repeat": { "type": "integer", "minimum": 1, "maximum": 20 }
+      }
+    }
+  }
+}

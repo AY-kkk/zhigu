@@ -1,20 +1,24 @@
 # 知股一期 · 阶段 B 开发 SPEC
 
-版本：B-1.6 · 2026-09-21（覆盖目录扩至全 A 股+港股，财务取数覆盖年度三表关键科目；不改公开 report Schema）  
-状态：**已写入拍板决定的开发契约；不是完成报告。** 应用实现、真实调用与样机效果均不因本文被认定通过。G0～G5 初始均为 `not_started`。
+版本：B-1.7 · 2026-09-23（统一纳入策略市场、数据库与前端代码合同；研究协议与公开 report Schema 保持不变）
+状态：**已写入拍板决定的开发契约；不是完成报告。** 应用实现、真实调用与样机效果均不因本文被认定通过。研究 G0～G5 与策略 BS0～BS4 分别记录状态；本次文档更新不提升任何实现或签收状态。
 
-目标：普通用户粘贴一个 **A 股或港股** 单公司投资观点，经确认后，通过真实模型、受控公开数据与两个独立研究 Agent，获得一份**观点裁判型研报**：裁决对象是用户确认的主张，交付物是带证据、反证、未知原因与四态判断的已发布报告。知股不生产平行的投资评级、目标价或卖方深度。
+研究线目标：普通用户粘贴一个 **A 股或港股** 单公司投资观点，经确认后，通过真实模型、受控公开数据与两个独立研究 Agent，获得一份**观点裁判型研报**：裁决对象是用户确认的主张，交付物是带证据、反证、未知原因与四态判断的已发布报告。知股不生产平行的投资评级、目标价或卖方深度。
 
-继承关系：B-1.6 替代 B-1.5。相对 B-1.5 只放宽研究数据覆盖：全 A 股（含北交所）+ 港股目录，以及已披露年度利润表 / 资产负债表 / 现金流量表关键科目。不改公开 report Schema、不加工具、不把策略日 K 并入研究关口。冲突时以本文 §2 为准。配套只有两份：
+策略线目标：用户在「交易策略」二级策略市场浏览有来源的完整规则，复制为私有草稿，用 AI 和可视化窗口制作策略，再运行并查看历史回测。优先完成市场浏览，再打通制作与回测。
 
-- [验收与接入清单](handoff/stage-b/验收与接入清单.md)：D 清单、测试矩阵、证据包。
-- [给 Cursor 的开发指令](handoff/stage-b/CURSOR开发指令.md)：执行节奏、暂停条件、汇报格式。
+继承关系：B-1.7 替代 B-1.6，新增 §12 的数据库、接口、前端代码与验收合同。研究线继续全 A 股+港股目录和年度三表，保留三工具、双协议、预算与报告质量线。策略日 K、回测和市场统一纳入阶段 B 的策略线，不接入研究 Agent 工具或 report Schema。
 
-交易策略日 K 不在本阶段范围，独立契约：[策略模块_开发SPEC.md](策略模块_开发SPEC.md)。不得借 B 关口加工具或改 report Schema。研究目录的全 A+港股扩围见 §2.2。
+文档优先级：本文 §2 管研究线、§12 管策略线；共同权限与基础设施遵循本文。配套文档：
 
-产品/架构仍继承 [PRD v2](金融C端Agent_MVP_PRD.md)、[面客架构 v2](金融C端Agent_面客产品架构_v2.md)、[总 SPEC](开发交付_SPEC.md)。旧文档中的 GoSaaS 迁移、完整 records 登记、operation 短名、确认时改用新模型等冲突条款，在阶段 B 按本文执行；交付时记录差异。
+- [验收与接入清单](验收与接入清单.md)：研究 B-ID 与策略 B-S-ID 的测试和证据。
+- [给 Cursor 的开发指令](CURSOR开发指令.md)：按当前工作线推进。
+- [交易策略 PRD](../prd/策略模块_PRD.md)：用户流程与产品验收。
+- [策略模块计算与交互附录](策略模块_开发SPEC.md)：行情、指标、撮合细则；作为本文的策略专项附录。其旧有「不属于阶段 B」及「只改本文件」表述失效；数据库、路由、版本迁移和开发关口有冲突时以本文 §12 为准。
 
-B-\* 是需求 ID，验收附件逐项对应。开发者只能把关口标到 `ready_for_review`，`accepted` 由用户签收。
+产品/架构仍继承 [PRD v2](../prd/金融C端Agent_MVP_PRD.md)、[面客架构 v2](金融C端Agent_面客产品架构_v2.md)、[总 SPEC](开发交付_SPEC.md)。旧文档中的 GoSaaS 迁移、完整 records 登记、operation 短名、确认时改用新模型等冲突条款，在阶段 B 按本文执行；交付时记录差异。
+
+研究需求 ID 为 B-01～B-35，策略需求 ID 为 B-S-01～B-S-10，验收附件逐项对应。开发者只能把关口标到 `ready_for_review`，`accepted` 由用户签收。
 
 ---
 
@@ -22,16 +26,18 @@ B-\* 是需求 ID，验收附件逐项对应。开发者只能把关口标到 `r
 
 ### 1.1 必须交付 / 明确不做
 
+本表为研究线范围，策略线新增范围见 §12；研究线的排除项不用于否定策略线已明确要求。
+
 | 必须交付 | 明确不做 |
 |---|---|
 | 粘贴观点→解析→确认股票/期限/主张→双路研究→**观点裁判型研报**→证据抽屉 | 自选股持续追踪、用户画像、长期偏好记忆、主动通知、卖方深度/评级/目标价 |
 | **独立宿主** `app/server` 为唯一运行入口；Eino DAG；DeerFlow 真实 Harness；Chat Completions **与** Responses 两个 adapter | 迁入 GoSaaS 进程、第二套用户系统、第二套 Supervisor、DeerFlow 通用聊天前端 |
-| 至少一套已验证模型配置（用途可共用）；财务三表关键科目 + 公告检索两条数据能力 | 多厂商自动容灾、任意网页浏览、任意 MCP、Computer Use、交易、收益承诺 |
+| 至少一套已验证模型配置（用途可共用）；财务三表关键科目 + 公告检索两条数据能力 | 多厂商自动容灾、任意网页浏览、任意 MCP、Computer Use、实盘交易、收益承诺 |
 | 角色提示词写成可执行步骤；合成提示词含三条质量检查；未知项过发布正则 | 任意 MCP、Computer Use、子 Agent、Wind/iFinD/S&P、Excel/PPT/HTML 导出、Hosted Agents 替换本架构 |
-| 历史、取消、删除、报告内追问；后台保存→测试→启用 | 量化回测、荐股榜、全市场选股扫描、扫描件 OCR、公网开放、业绩点评/持仓早报入口 |
+| 历史、取消、删除、报告内追问；后台保存→测试→启用 | 在研究报告内执行回测、荐股榜、全市场选股扫描、扫描件 OCR、公网开放、业绩点评/持仓早报入口 |
 | 私有环境可复现的技术样机 | 合规结论、大规模吞吐、「零幻觉」、阶段 C 运营加固 |
 
-分关口纵向闭环：每关有独立负例和证据，全部 `accepted` 才完成 B。不在最后集中联调，不先建通用 Agent 平台。
+分关口纵向闭环：研究 G0～G5 与策略 BS0～BS4 各有独立负例和证据，两线必需项全部 `accepted` 才完成 B。不在最后集中联调，不先建通用 Agent 平台。
 
 **时间盒：** 不承诺日历天数内做完 B。每个工作日结束时必须停在明确的 `in_progress` / `blocked` / `ready_for_review`。禁止为赶时间删除断言、降低阈值、用 fixture 顶 live，或把本关失败标到阶段 C。
 
@@ -55,7 +61,7 @@ B-\* 是需求 ID，验收附件逐项对应。开发者只能把关口标到 `r
 
 ---
 
-## 2. 已拍板决定（B-1.6）
+## 2. 研究线已拍板决定（继承 B-1.6）
 
 以下条款开发中不得再猜。要改必须升 SPEC 版本并改对应测试。
 
@@ -66,7 +72,7 @@ B-\* 是需求 ID，验收附件逐项对应。开发者只能把关口标到 `r
 | 唯一启动进程 | PostgreSQL 16 + `app/server`（Go）+ `app/research-service`（研究执行器）+ `app/web`；可选 `app/data-connector`（仅 Go 可访问） |
 | 账号表 | 继续使用现有 `finance_users` 与演示账号 `invitee` / `admin` |
 | GoSaaS | **本阶段不迁移、不作为启动依赖。** 不引入 Casbin / MySQL / Redis。私有快照不得拷进可分发仓库 |
-| G0 的 A 复核 | 以 [app/IMPLEMENTATION_STATUS.md](app/IMPLEMENTATION_STATUS.md) + 重跑阶段 A 回归为准。不依赖仓库中不存在的 `reviews/阶段A交付审查_2026-09-17.md` |
+| G0 的 A 复核 | 以 [app/IMPLEMENTATION_STATUS.md](../app/IMPLEMENTATION_STATUS.md) + 重跑阶段 A 回归为准。不依赖仓库中不存在的 `reviews/阶段A交付审查_2026-09-17.md` |
 | A 产品书面签收 | 可与 G1 并行；**不挡** 数据样本与 adapter 编码。挡的是把 B 标为 accepted |
 
 ### 2.2 数据源（D-03 / D-04 / G1 / G3）
@@ -161,7 +167,7 @@ DeepSeek Responses 与本项目约束对齐处（G1 核验，不当作已测通�
 
 ### 2.7 交付物：观点裁判型研报
 
-B 的面客完成物是**已发布报告**，不是聊天气泡，也不是公司深度或投资建议。读者读完必须能回答：哪些已披露事实成立、哪些推断没绑住、还缺什么证据。
+研究线的面客完成物是**已发布报告**，不是聊天气泡，也不是公司深度或投资建议。读者读完必须能回答：哪些已披露事实成立、哪些推断没绑住、还缺什么证据。
 
 报告必需块（沿用已有字段，不改 v1 `report.schema.json`）：原观点与确认范围、`claim_results`、四态 verdict、`summary`、`support`、`challenge`、`change_conditions`、`unknowns`、证据列表与 `as_of`。`summary` 不新增事实、不输出买卖指令或目标价。
 
@@ -190,7 +196,7 @@ B 的面客完成物是**已发布报告**，不是聊天气泡，也不是公�
 
 ## 3. 逐步执行（B-02）
 
-状态只允许：`not_started / in_progress / blocked / ready_for_review / accepted`。编码按下表依赖推进，签收单独记录，不要求逐关人工批准才能编码。任一关阻塞只阻断其依赖项；记录缺项、影响与恢复动作。B 最终 accepted 仍需 G0～G5 全部签收。
+状态只允许：`not_started / in_progress / blocked / ready_for_review / accepted`。编码按下表依赖推进，签收单独记录，不要求逐关人工批准才能编码。任一关阻塞只阻断其依赖项；记录缺项、影响与恢复动作。研究线 accepted 需 G0～G5 全部签收；阶段 B 总签收还需 §12 的 BS0～BS4。
 
 | 工作 | 开始条件 |
 |---|---|
@@ -528,7 +534,7 @@ B 只做当前研究时点。`published_at`、`available_at` ≤ `as_of`。
 
 质量集 30 例、live 20 次、人工 90% 见 §3.6 与验收清单。阈值是 B 拟定验收线，跑完后不得降低。
 
-脚本：`bash app/scripts/verify-stage-b.sh {offline|integration|live|all}`（待实现）。退出：0 通过；1 断言失败；2 环境/凭据/授权阻塞；3 必需 skip/空集/证据不全。0 不等于用户已签收。
+脚本：`bash app/scripts/verify-stage-b.sh {offline|integration|live|all}` 已存在基础入口，但当前 integration 未覆盖完整浏览器／跨进程验收；须补齐本节和 §12.10 的分项，不能把现有退出 0 当全阶段通过。退出：0 通过；1 断言失败；2 环境/凭据/授权阻塞；3 必需 skip/空集/证据不全。0 不等于用户已签收。
 
 证据包目录见验收清单。公开包只留脱敏摘要与 hash。
 
@@ -538,8 +544,195 @@ B 只做当前研究时点。`published_at`、`available_at` ≤ `as_of`。
 
 ## 11. 签收
 
-当前完成的是 **B-1.5 开发契约**。G0～G5、真实效果、费用与人工标注均未通过。
+当前交付为 **B-1.7 开发契约整合**。本次只做源码静态核对与文档检查，未运行迁移、应用测试、真实模型或人工质量验收。既有证据仍按对应版本核查，不以文档更新重置或补写通过状态。
 
-开发按§3依赖表推进；G0～G5分别提交执行证据，最终由YUFAN标注并签收。数据源确切字段仍由G1样本验证，本文件不冒充接口实测结果。
+研究按 §3、策略按 §12.10 的依赖表推进；G0～G5 与 BS0～BS4 分别提交执行证据，最终由 YUFAN 标注并签收。数据源确切字段仍由G1样本验证，本文件不冒充接口实测结果。
 
 阶段 B 完成只表示私有技术样机，不表示公网许可、全面合规或可用于自动投资决策。
+
+---
+
+## 12. 策略市场、数据库与前端开发合同（B-S-01～B-S-10）
+
+本节将策略市场与制作／回测纳入阶段 B。表中「现有」只表示本次读取到源码；「新增／修改」是待开发要求，不是已完成能力。仍采用 PostgreSQL 16、Go/Gin/GORM、Vue 3/Pinia/Vue Router，共用 `finance_users`，不引入第二套用户系统或 Python 策略执行器。策略生成保留 Chat Completions 与 Responses 两种底层协议，使用独立身份／预算，不创建假 research run。
+
+本节阅读顺序：§12.1核对现状 → §12.2～12.3数据库 → §12.4～12.6规则与API → §12.7后端文件 → §12.8前端文件 → §12.9～12.10验收与实施。
+
+### 12.1 源码基线与差距
+
+静态核对日期 2026-09-23，HEAD=`2e0b329`，工作区有用户未提交修改。后续开发必须重新记录 SHA 与 dirty 清单；不得覆盖现有行情、图表或研究改动。
+
+| 范围 | 已有代码 | 本次需要补齐 |
+|---|---|---|
+| 数据库 | `app/server/model/strategy/models.go`、`migrations/finance/004_strategy.sql`；含 workspace、draft、generation、strategy、version、backtest、idempotency | 市场条目／不可变版本／审核证据／操作日志，草稿编辑态与来源字段，可靠增量迁移 |
+| API 与编排 | `api/v1/finance/strategy_handlers.go` 的 `RegisterStrategy`，`service/workbench/hub.go`；`main.go` 注册 | 独立市场读写服务与路由、原子复制；修复复用路径中的并发版本检查 |
+| 规则计算 | `service/strategy/dsl.go`、`eval.go` 与 `service/backtest/`；当前 `strategy.v1` | 当前操作数对象仅支持 constant，lag 位于条件节点；不能宣称支持 `{ref,lag}`。新增 v2 编译／求值，保留旧版本重放 |
+| 前端 | `src/view/strategies/index.vue`、`api/strategies.js`、`stores/strategyWorkspace.js`、`components/strategies/StrategyRail.vue` | 市场列表／详情、二级导航、通用规则窗口、复制草稿深链加载；当前 K 值专用修改函数不能代表通用编辑器 |
+| 路由与布局 | `src/router/finance.js` 仅有工作台；消费者布局将全部 `/app/strategies*` 视为固定工作台 | 新增市场路由，市场页允许纵向滚动；保留工作台行情与移动端页签 |
+| 现有缺口 | `PatchDraft` 先读后写；`SaveStrategy` 忽略 base_version 且多步非事务；迁移器简单按分号切句并吞部分 SQL 错误 | 草稿 CAS、保存事务与 base_version 校验；新增迁移不得依赖原有错误吞噬实现成功 |
+
+### 12.2 数据表与约束（B-S-02）
+
+新增显式迁移 `app/server/migrations/finance/005_strategy_market.sql`，不改写已部署的 004。使用现有 text ID 习惯（如 `smi_`、`smv_`），用户 FK 使用与 `finance_users.id` 一致的 INTEGER。JSONB 内禁止存密钥，十进制数用字符串，时间用 UTC TIMESTAMPTZ；业务日期用 DATE。以下字段为最低合同，分号分组中的同名字段类型一致。
+
+| 新表 | 最低字段与类型 | 约束／索引 |
+|---|---|---|
+| `finance_strategy_market_items` | `id TEXT PK`；`slug TEXT`；`status TEXT`；`current_version_id TEXT NULL`；`revision INTEGER`；`created_by INTEGER FK`；`created_at,updated_at TIMESTAMPTZ`；`published_at,withdrawn_at TIMESTAMPTZ NULL` | slug 唯一；status=`draft/published/withdrawn`；revision≥1。索引 `(status,updated_at DESC,id DESC)`；已发布必须有当前版本 |
+| `finance_strategy_market_versions` | `id TEXT PK`；`item_id TEXT FK`；`version_no INTEGER`；`name,summary,category TEXT`；`tags,markets JSONB`；`signal_period TEXT`；`description,hypothesis,failure_cases TEXT`；`sources JSONB`；`rights_note TEXT`；`editor_schema_version TEXT`；`rule_template,backtest_defaults JSONB`；`content_hash TEXT`；`validation_status TEXT`；`validation_report JSONB`；`created_by INTEGER FK`；`created_at TIMESTAMPTZ`；`validated_at,published_at TIMESTAMPTZ NULL` | UNIQUE(item_id,version_no)、UNIQUE(item_id,id)；validation_status=`pending/passed/failed`；名称1～80字、摘要1～160字；模板／来源等内容插入后不可改，修改创建新版本并重验；索引 category、signal_period、item_id |
+| `finance_strategy_market_evidence` | `id TEXT PK`；`item_id,market_version_id TEXT`；`status TEXT`；`validation_instrument_id TEXT`；`bound_dsl_hash TEXT`；`config,manifest,metrics,equity,trades,limitations JSONB`；`result_hash,evidence_hash TEXT`；`review_note TEXT`；`created_by INTEGER FK`；`reviewed_by INTEGER FK NULL`；`created_at,reviewed_at TIMESTAMPTZ`（后者可空） | 复合 FK(item_id,market_version_id)→versions(item_id,id)；status=`pending/approved/rejected/revoked`；索引 `(market_version_id,status,created_at DESC,id DESC)`。无证据不建伪记录，不存「零收益」占位 |
+| `finance_strategy_market_audit` | `id TEXT PK`；`item_id TEXT FK`；`market_version_id TEXT NULL`；`actor_id INTEGER FK`；`action,request_id TEXT`；`before_revision,after_revision INTEGER`；`reason TEXT`；`payload_hash TEXT`；`created_at TIMESTAMPTZ` | action=`create_version/validate/publish/withdraw/approve_evidence/revoke_evidence`；同版本归属校验；管理员只读审计，应用禁止 UPDATE／DELETE；不记录整段用户文本 |
+
+先创建 items（current_version 暂不加 FK），再建 versions，最后添加 `(id,current_version_id)`→versions`(item_id,id)` 的复合 FK，避免指向其他条目的版本。版本、证据、来源引用用 RESTRICT，市场下架不用物理删除；私人草稿删除不得级联删除市场内容。JSONB 对象／数组形状设 CHECK，具体字段白名单由同版本 JSON Schema 严格校验。
+
+扩展现有表，不新建平行的个人策略／回测表：
+
+| 现有表 | 新增列 | 使用规则 |
+|---|---|---|
+| `finance_strategy_drafts` | `editor_schema_version TEXT NULL`、`editor_state JSONB NULL`、`field_sources JSONB NOT NULL DEFAULT '{}'`、`backtest_config_draft JSONB NOT NULL DEFAULT '{}'`、`origin_market_item_id TEXT NULL`、`origin_market_version_id TEXT NULL` | 两个来源 ID 同为空或同非空，复合 FK 指向同一市场版本；服务端赋值且不可由普通 PATCH 改写。旧记录允许 editor_state=NULL |
+| `finance_strategy_versions` | 同上六列 | 保存时冻结草稿编辑态、配置建议与来源；新保存仍必须有完整可执行 DSL；旧版本不回填推测来源 |
+| `finance_strategy_generations` | `mode TEXT NOT NULL DEFAULT 'generate'`、`explanation TEXT NULL` | mode=`generate/modify/explain`；解释成功保存文本但不改草稿规则与revision |
+| `finance_strategy_idempotency` | 新增 `response_snapshot JSONB NULL`，复用 `(owner_id,operation,idempotency_key)` 唯一键 | 新 operation=`market_copy`，object_id 为私人 draft_id；请求 hash 覆盖 item_id、market_version_id 和规范化 overrides；新操作保存首次响应便于稳定重放，返回前仍校验对象可见性／未删除，旧记录按原对象查询兼容 |
+
+来源显示状态由查询关联市场条目计算，不写进历史版本内容；市场参数更新不影响副本。若后续删除用户草稿，对应幂等重试返回 410，不以相同 key 新建草稿。
+
+`rule_template` 使用独立 `strategy.market.v1` 信封，包含 `editor_state`、`instrument_binding={mode:select_one,markets:[...]}`，不填写假 instrument_id。`sources[]` 至少含 title、URL 或内部记录号、整理日期、原版／改编说明；`backtest_defaults` 只允许本模块可配置字段。审核状态、发布时间、能力标记、content_hash 不接受客户端自证。
+
+### 12.3 迁移与数据生命周期（B-S-02／03）
+
+- 修改 `initialize/db.go`：增加 `finance_schema_migrations(version TEXT PK,checksum TEXT,applied_at TIMESTAMPTZ)`，事务级数据库锁确保单执行者，每个迁移文件原子执行后登记 checksum；失败回滚且阻止启动，不把 duplicate key 等数据问题一概当成功。
+- 新库执行 001～005；已有库先只读核对 001～004 的实际表／列／约束与预期，确认一致才登记历史基线，再运行 005。若存在历史部分迁移，明确报差异并修复后继续，不能按文件名盲目补登记。已登记 checksum 改变时停止。
+- 替换不支持 SQL 复合语句的简单分号切割方式，使用可处理完整迁移的执行器；保留已提交迁移内容。对空库、已有004库、重复启动、并发启动和中途错误回滚做真实 PostgreSQL 测试。
+- 部署顺序：先兼容性迁移→后端新读写→前端入口。旧策略仍可读；关闭市场入口是应用回退方式，不删新表或市场来源列。实施前保存备份并在隔离库验证恢复；本次文档交付不执行备份或迁移。
+- 默认 seed 不发布策略、不写收益。测试样例仅存测试 fixtures；正式市场没有审核内容时保留空态。
+
+### 12.4 规则版本、草稿与 AI 合同（B-S-05／06）
+
+1. 保留 `strategy.v1` 解析、编译、求值与旧回测重放；新增 `strategy.v2` 支持 `{"ref":"volume","lag":1}`，字符串引用视为 lag=0，常数仍为 decimal string。两版本均严格校验互斥节点、未知字段、类型和范围。v1 的节点 lag 语义不得重解释；显式升级时计算等价映射并保存新版本。
+2. 新建 `strategy.editor.v1`：字段含 name、可空 instrument_id、signal_period、price_basis、indicators、entry、exit、position、risk、execution。条件组／操作数采用 v2 结构，叶节点另可带 `repeat:1..20`；连续放量作为受限快捷节点 `{kind:volume_increase,days:N}`。界面节点 ID／展开状态放独立 ui_metadata，不参加交易语义 hash。
+3. 服务端将编辑态编译为 v2 与 compiled。repeat 按滞后偏移展开，连续放量按策略附录的 N+1 日口径生成比较与交易日连续性检查；连续性检查写入可信 compiled 并参与其 hash，不能由浏览器随意传入，求值必须执行这些检查。展开后仍≤100条件节点、8层、lag≤250；J不裁到0～100。
+4. 草稿允许缺标的或阈值，返回 `needs_clarification` 与字段级 missing_fields；此时 DSL／compiled 不可执行。完整校验后 `ready` 只代表规则完整，回测还需数据和费用门禁。缺字段与非法完整输入分开处理。
+5. `PATCH /strategy-drafts/:id` 扩展为 `{revision,editor_schema_version,editor_state,backtest_config_draft?}`，或兼容旧 `{revision,dsl}`；两种表示不可同时提交。owner由鉴权取得，SQL更新必须匹配 id＋owner＋revision，成功revision+1；冲突409，返回的最新草稿仍经owner校验。
+6. GET/PATCH 草稿在原返回字段上增加 editor_schema_version、editor_state、field_sources、backtest_config_draft、missing_fields、origin。field_sources 由服务端维护，值为 user/context/system_default/market_default/ai_suggestion；origin含市场ID、版本及当前上架状态。不能让请求自行设置审核状态或市场来源。
+7. 保存策略复用现有 POST `/strategies`、`/strategies/:id/versions`，在同一事务中锁定草稿与策略、核对 revision 和 base_version_id、写版本／指针／幂等记录。无效引用不留空策略；并发同请求只写一版本，异体同key409。模型迟到结果也按其 base_revision CAS，不能覆盖窗口编辑。
+8. AI仍通过既有 generation 路径，接收最新编辑态、指标目录及明确变更目标；生成结果经同一编译器。市场详情的「让 AI 解释」进入工作台的草稿上下文，以 explain 模式运行现有生成服务：只返回 explanation、不修改规则；生成请求新增 mode=`generate/modify/explain`，默认generate，GET generation返回mode与explanation，解释成功仅使generation终态ready，不改草稿revision。计入独立策略模型预算。没有Key可复制／手动编辑，不伪装AI解释成功。
+9. 老版本打开时由服务端显式返回可转换编辑态与转换状态；不能仅通过前端 readK／walkSetK 推测完整规则。保存转换结果创建新版本，原版不改。
+
+### 12.5 市场 API 与 DTO（B-S-03／04）
+
+新增路由前缀 `/api/finance/strategy-market`，与行情 `/api/finance/market` 区分。沿用 `httpx.Envelope{data,error,trace_id}`、Bearer和未知字段拒绝规则；返回新DTO而非直接序列化GORM对象。前端 `utils/http.js` 已解一层信封，组件只读取 `res.data`，不得再次猜测 data.data。
+
+| 方法／路径（相对上述前缀） | 请求 | 成功 data |
+|---|---|---|
+| GET `/items` | `q`≤100字；category、market、period、validation、evidence、cursor；limit默认20、最大50 | `{items:[MarketCard],next_cursor}`；只查已发布当前版本 |
+| GET `/items/:id` | 无必需query | `MarketDetail`：当前版本、完整只读规则与来源、能力／copyable、证据摘要 |
+| GET `/items/:id/evidence/:evidenceId` | section=`overview/equity/trades`，后两者cursor＋limit≤100 | 审核通过且属于该当前版本的证据；概览含配置／manifest／指标／限制，曲线及成交分页读取 |
+| POST `/items/:id/copies` | `Idempotency-Key`；`{market_version_id,overrides?:{instrument_id,initial_cash,currency,start,end}}`，字符串金额／ISO日期 | 201 `{draft_id,revision,status,origin,next_path}`；next_path=`/app/strategies?draft_id=...`；重试同体200同一草稿 |
+
+MarketCard字段：`id,market_version_id,version_no,name,summary,category,tags,markets,signal_period,validation_status,backtest_status,published_at,updated_at,copyable,copy_disabled_reason`。`backtest_status=not_tested/has_evidence`仅从approved证据导出，不等于策略有效；列表不加收益排行。MarketDetail增加description、hypothesis、failure_cases、sources、rights_note、editor_schema_version、editor_state、backtest_defaults、evidence_summaries。用户密钥、私人run_id、创建人内部身份不进入这些DTO。说明文本按纯文本或经过净化的Markdown渲染，禁止原样v-html；来源URL只允许http/https，内部来源编号不可拼成任意外链。
+
+列表默认 `(updated_at DESC,id DESC)` 游标分页，游标绑定筛选条件，改变筛选从第一页重查；非法枚举／游标400，不当空结果。未发布或从未存在条目404，曾发布后下架410，仅返回最小状态；不继续公开未审核新版本。数据库发布指针为列表和详情唯一当前版本依据。
+
+复制事务：先按用户＋operation＋key做数据库级串行化并查幂等记录；已有同体记录可返回原副本（即使源随后下架），不产生新复制；异体409。新请求锁定市场条目，核验 published、请求版本为current、validation=passed、引擎支持，再原子写来源草稿＋幂等。并发下架使用同一条目锁。更换股票只改变私人草稿，不改变市场原版或证据；缺股票时允许创建待补全草稿，绝不拿验证样本股票自动替用户选择。
+
+错误至少包括：401 `UNAUTHENTICATED`；403 `FORBIDDEN`；404 `NOT_FOUND`；409 `REVISION_CONFLICT/MARKET_VERSION_CHANGED/IDEMPOTENCY_CONFLICT`；410 `MARKET_ITEM_WITHDRAWN/COPY_TARGET_GONE`；422 `STRATEGY_INVALID/STRATEGY_UNSUPPORTED/MARKET_NOT_COPYABLE`；503 `CONFIG_NOT_READY`。用户输入有误400，数据不足使用既有回测终态，不返回伪成功。
+
+### 12.6 上架与证据维护入口（B-S-03／08）
+
+首版复用现有管理员身份，通过受保护 API 完成内容维护，不强制新增后台页面；不能靠直接改数据库或消费者上传来完成验收。前缀 `/api/admin/strategy-market`，必须同时经过 AuthRequired 与 AdminRequired；响应仍用统一信封。
+
+| 方法／路径 | 请求和处理 |
+|---|---|
+| POST `/items` | `{slug,version}`；version包含§12.2的可写内容字段；同事务建draft条目与首个不可变版本；201返回item_id/version_id/revision |
+| POST `/items/:id/versions` | `{revision,version}`；校验条目revision，创建新版本并revision+1；不自动改变已发布指针 |
+| POST `/items/:id/versions/:versionId/validate` | `{revision,validation_instrument_id}`；在受支持真实目录标的上绑定规则并编译、核对来源和必填字段，生成服务端报告／hash，revision+1；不运行回测、不声称数据就绪 |
+| POST `/items/:id/publish` | `{revision,market_version_id,reason}`；版本属于条目、来源／权限信息完整、内容hash匹配、规则校验通过才原子切换当前指针并发布；可无回测证据，显示未回测 |
+| POST `/items/:id/withdraw` | `{revision,reason}`；原子下架并revision+1，停止新复制，保留副本与历史 |
+| POST `/items/:id/versions/:versionId/evidence` | `{revision,source_run_id,rights_note}`；仅允许管理员自己持有的、用于策略验证的succeeded回测记录，核验绑定DSL／标的与该市场版本一致；提取白名单配置、manifest、净值／交易，不复制私有输入，创建pending审核快照 |
+| POST `/items/:id/evidence/:evidenceId/review` | `{revision,decision:approve/reject/revoke,reason}`；批准须有完整manifest、结果hash及披露权限记录；撤销后公开查询不得返回原内容；更新revision与审计 |
+
+上表所有写入要求 Idempotency-Key，复用策略幂等表但operation分离（如market_publish、market_evidence_review）；请求hash包含路径、revision和完整规范化请求体。版本/证据内容不原地修改，审核结果与状态更新留审计；失败回滚。source_run_id仅作受控导入请求与私有审计引用，不返回C端；导入snapshot后不依赖私人回测API展示证据。
+
+证据导入不自动拉取外站或运行任意文件／URL；导入前检查记录用途、来源授权及敏感字段，公开DTO禁止输出原始用户文本、模型凭证、owner信息。若无法取得合格历史回测记录，允许发布“未回测”的规则条目；不得用手填收益完成证据状态。策略解释和参数明确均不构成投资有效性验证。
+
+### 12.7 后端代码职责映射（B-S-02～08）
+
+以下路径均相对仓库根；新增文件不得据此声称已经存在。
+
+| 文件／目录 | 动作与职责 |
+|---|---|
+| `app/server/migrations/finance/005_strategy_market.sql` | 新增4张市场表、现有表增量列／FK／索引；配合迁移账本，不塞默认推荐策略 |
+| `app/server/initialize/db.go`、`migrations/embed.go` | 修改迁移执行与核对逻辑，沿用嵌入SQL；账本、锁、事务和checksum测试 |
+| `app/server/model/strategy/market.go`（新）与 `models.go` | 市场GORM模型；扩展Draft/Version，JSONB映射与SQL字段一致 |
+| `app/server/service/strategy_market/{service,types,publication,copy,evidence}.go`（新） | 市场查询DTO、审核发布／下架、原子复制／幂等、证据脱敏与审核；共享DB但不混进finance研究服务 |
+| `app/server/api/v1/finance/strategy_market_handlers.go`（新） | 消费者与管理员路由、输入校验、HTTP错误；在 `app/server/main.go` 注入并注册；不误改无实际接线的router_biz占位 |
+| `app/server/service/strategy/{dsl_v2,editor}.go`（新）、`dsl.go`、`eval.go` | v1兼容、v2操作数和求值、编辑态编译与升级、连续窗口校验；generation/prompt同步同版本Schema |
+| `app/server/service/workbench/{hub,drafts,versions}.go`（后两者新） | 从hub拆出或明确封装草稿CAS、保存事务、来源传播；保留既有行情方法和HTTP兼容入口 |
+| `app/server/api/v1/finance/strategy_handlers.go` | 扩展草稿请求／返回，解释模式与新版字段，拒绝客户端owner和来源伪造 |
+| `app/server/service/backtest/engine.go`、`causal.go` | 按冻结规则版本调用求值器、执行连续性检查；不同编译版本进入manifest/hash |
+| `app/server/contracts/strategy/`（新） | `editor-v1.schema.json`、`dsl-v2.schema.json`、`market-v1.schema.json`、`market.openapi.yaml`；必须与运行时校验一致，覆盖请求／DTO／错误 |
+
+### 12.8 前端页面、组件与状态合同（B-S-01／05～07）
+
+沿用 Vue SFC＋JavaScript 与现有组件库，不为本轮切换框架或整站重构。
+
+| 文件／路由 | 动作与职责 |
+|---|---|
+| `app/web/src/router/finance.js` | 新增 `/app/strategies/market`→market.vue、`/app/strategies/market/:id`→marketDetail.vue；保留工作台。市场路由meta `strategySection=market`、`scrollMode=page`，工作台`workspace`；共用登录守卫 |
+| `app/web/src/view/strategies/market.vue`（新） | 市场列表、搜索／筛选、游标分页、加载／错误／空态；URL query保留筛选，返回保持滚动位置 |
+| `app/web/src/view/strategies/marketDetail.vue`（新） | 只读规则、来源、假设、证据分页；复制／解释操作；版本变化、下架、证据撤销即时明确提示 |
+| `app/web/src/components/strategies/StrategySubnav.vue`（新） | 市场／工作台二级导航，详情归属市场；沿用一级SideNav，不新增一级菜单 |
+| `StrategyMarketCard.vue`、`StrategyProvenance.vue`、`StrategyEvidencePanel.vue`（同目录新增） | 卡片只展示有依据状态；来源安全链接；只读历史证据与私人回测结果分开 |
+| `RuleEditor.vue`、`RuleGroup.vue`、`RuleConditionRow.vue`（同目录新增） | 同一规则组件支持只读与编辑；桌面抽屉、手机全屏；完整字段／AND/OR/NOT、持续条件；窗口副本、应用／取消／冲突处理 |
+| `app/web/src/api/strategyMarket.js`（新） | §12.5端点封装；AbortSignal、Idempotency-Key；不在组件拼URL／手动解多层信封 |
+| `app/web/src/stores/strategyMarket.js`（新） | 列表与详情独立busy/error；请求序号防旧响应覆盖，筛选切换清空旧游标；稳定复制key、草稿跳转、证据加载；不持久化私人副本内容到共享市场缓存 |
+| `app/web/src/stores/strategyWorkspace.js`、`api/strategies.js` | 增加 `loadDraft(draft_id)`、通用编辑态与CAS、origin、配置草稿、字段来源和解释；复用保存／回测，替换K专用编辑路径；不改变图表指标与策略指标的隔离 |
+| `app/web/src/view/strategies/index.vue`、`StrategyRail.vue` | 接收query draft_id深链，刷新从后端加载本人草稿，外人ID404；规则编辑入口及来源提示；未保存内容离开提示；新草稿清除旧策略versionId和旧回测结果 |
+| `app/web/src/layout/consumer/index.vue` | 将当前 `/app/strategies*` 一律固定布局改为按route meta区分；列表／详情可滚到页尾，工作台仍保持行情布局 |
+| `app/web/src/components/workspace/{SideNav,WorkspaceHeader}.vue` | 保持策略路径一级高亮及标题；必要时显示二级面包屑，不改研究导航行为 |
+
+规则窗口读取编辑态，展示完整参数、字段来源和白话摘要，不在前端重新计算回测或推测指标；本地预校验仅为输入反馈，服务端为最终判定。连续放量和J值口径沿用专项附录，不以样例参数做市场推荐。
+
+交互状态必须验收：搜索防抖300ms并取消旧请求；请求失败显示重试而非空态；复制中禁重复按钮、网络超时使用原key重试，直到确定结果后才清除key；改请求体需新key。切到其他账号清空两个store、复制key和缓存。市场版本变化409后重新载入并让用户核对，不能无提示改复制对象。
+
+详情复制成功进入 `?draft_id=`；原工作台有未保存编辑时先保存或由用户选择放弃／取消导航，取消导航不重复复制。挂载市场页不启动行情轮询或回测，卸载工作台清理计时器／未完成请求；后台运行中的回测状态从服务器恢复，不因切页取消。应用规则不自动运行回测。
+
+### 12.9 可执行验收项（B-S-01～10）
+
+| ID | 必须覆盖 | 最低证据 |
+|---|---|---|
+| B-S-01 | 二级路由、筛选返回、详情、登录、桌面／手机滚动、失败／空／下架状态 | Playwright截图＋网络trace；包括窄屏页尾操作 |
+| B-S-02 | 新库／旧004库迁移、checksum、并发启动、失败原子回滚、FK／唯一约束 | 隔离真实PostgreSQL测试与升级前后数据断言 |
+| B-S-03 | 管理员上架／下架、版本不可变、来源审核、普通用户写403、draft不可见 | API＋DB＋审计记录；无正式内容空态 |
+| B-S-04 | 同key同体只一副本、异体409、并发下架、跨用户隔离、已删副本不重建、旧版本冲突 | 并发HTTP与数据库行数／owner断言 |
+| B-S-05 | AI→窗口→保存→重开无损、局部修改、草稿CAS、base_version冲突、两协议生成／解释 | 受控模型请求与持久化比对；live按凭据另记 |
+| B-S-06 | v1重放不变、v2类型／lag／未知字段、连续窗口／预热、J边界与负值、取消编辑 | 人工可算序列＋Schema负例＋规则往返测试 |
+| B-S-07 | 市场复制→个人编辑→保存→回测→结果；切股票／版本清理旧结果，取消／恢复与错误 | 真Vue→Go→PostgreSQL／worker链路；fixture必须标明 |
+| B-S-08 | 证据仅approved且版本匹配、撤销后不可读、私有run不外泄、无证据不填收益 | API负例、DTO字段断言、公开结果hash／manifest核对 |
+| B-S-09 | 原研究三工具／report／双协议不变，个人策略owner守卫、现有行情工作台回归 | 相关研究回归＋既有strategy测试，无必需skip |
+| B-S-10 | 正式内容来源／使用权限、数据覆盖、真实生成与真实回测的验证层级可追踪 | 内容清单与证据分层；测试夹具不能作为上架策略 |
+
+### 12.10 实施顺序、脚本与完成定义
+
+| 关口 | 依赖 | 交付与签收 |
+|---|---|---|
+| BS0 基线与合同 | 当前SHA／dirty清单及G0账号／宿主检查 | 核对§12.1、Schemas／DTO、迁移方案；只记录实际证据 |
+| BS1 数据库与市场服务 | BS0；隔离PostgreSQL | 表／迁移、内容维护、列表／详情、证据审核；B-S-02／03／08相关项 |
+| BS2 市场浏览 | BS0可先按合同做UI；与BS1通过后联调 | 列表／详情／二级入口／真实空态；B-S-01。mock UI通过不等于服务联调完成 |
+| BS3 复制与制作 | BS1；规则v2与草稿／保存事务就绪 | 原子复制、来源、AI／规则窗口、版本兼容；B-S-04／05／06 |
+| BS4 回测与联合验收 | BS2／BS3、专项附录行情与回测对应关口通过 | B-S-01～10、受影响研究回归、用户签收；BS2浏览完成不能代替BS4 |
+
+研究G1真实模型或数据阻塞不挡无外部依赖的市场／编辑器开发。策略付费调用仍需D-02／D-05就绪，策略行情源与研究源分别记录能力，不借研究探针证明回测数据完整。无合格策略内容可验收市场空态与受控功能；B-S-10及正式内容闭环保持缺口，不要求为凑数伪造策略。
+
+新增测试文件建议：`app/server/initialize/migrations_test.go`、`service/strategy_market/*_test.go`、`api/v1/finance/strategy_market_handlers_test.go`、`service/strategy/editor_test.go`、`app/web/e2e/strategy-market.spec.js`。复用已存在 `service/workbench/http_test.go`、`service/strategy/dsl_test.go`、`service/backtest/engine_test.go`、`app/web/e2e/strategy.spec.js`；新增路径只是待开发入口。
+
+扩展现有 `app/scripts/verify-stage-b.sh` 为阶段B统一证据入口，在manifest分别报告 research与strategy。研究保留§10的标准；策略至少运行如下检查：
+
+| 模式 | 策略线命令／要求 |
+|---|---|
+| offline | `cd app/server && go test ./...`；`cd app/web && npm run build`；Schema与规则测试不可空集 |
+| integration | 隔离PostgreSQL执行迁移／并发／事务测试；`go test -race ./service/strategy_market/... ./service/workbench/...`；启动真实Go+Web后 `npx playwright test e2e/strategy-market.spec.js e2e/strategy.spec.js`。替身上游只可标controlled |
+| live | 市场来源审核、真实行情／费用／公司行动覆盖、实际模型生成与样本回测另存证据；两协议可用性分开记录，无Key不伪通过 |
+
+原策略专项附录S-01～S-13及其细分项继续作为计算和回测验收细则，由manifest映射到B-S-ID，不因新增市场缩减。现有脚本退出0不证明新增测试已运行；manifest必须列出精确测试节点和数量。退出码、证据路径沿用§10及验收清单。
+
+阶段B总完成需研究G0～G5和策略BS0～BS4的必需项全部有证据并由用户accepted。允许分线／分关口报告进展；本次文档整合只完成开发规范，不执行迁移、不更改运行中的应用、不认定策略有效性。

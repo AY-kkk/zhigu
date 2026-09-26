@@ -28,6 +28,8 @@ type LiveInput struct {
 	Model        string
 	ConfigID     string
 	Call         ModelCall
+	Mode         string // generate | modify | explain
+	BaseRules    string // modify: frozen current editor state JSON
 }
 
 func precheckGenerate(in GenerateInput) *GenerateResult {
@@ -78,6 +80,10 @@ func GenerateLive(ctx context.Context, in LiveInput) GenerateResult {
 		defer cancel()
 	}
 	user := "instrument_id=" + in.InstrumentID + "\n用户描述：\n" + in.Text
+	if in.Mode == "modify" {
+		// 局部修改：请求必须携带冻结的当前编辑态与明确改动目标（§12.4.8）。
+		user = "instrument_id=" + in.InstrumentID + "\n当前规则(JSON)：\n" + in.BaseRules + "\n改动目标（只改这里要求的字段，其余原样保留）：\n" + in.Text
+	}
 	body := chatBody(proto, in.Model, livePrompt, user)
 	raw, err := call(ctx, proto, in.BaseURL, in.APIKey, in.Model, body)
 	if err != nil {
@@ -109,6 +115,80 @@ func GenerateLive(ctx context.Context, in LiveInput) GenerateResult {
 		}
 	}
 	return out
+}
+
+const explainSystem = "你是交易策略解释助手。只输出对给定规则的白话解释：买卖逻辑、风险与假设；不修改规则，不给投资建议，不输出买卖指令。"
+
+// ExplainLive asks the model to explain frozen rules. No local text is passed
+// off as AI output: without a model configuration this returns MODEL_UNAVAILABLE
+// (R3), and the rule card's plain summary stays labeled as a local summary.
+func ExplainLive(ctx context.Context, in LiveInput, rulesJSON string) (string, error) {
+	if strings.TrimSpace(in.APIKey) == "" || strings.TrimSpace(in.BaseURL) == "" {
+		return "", finance.NewError(503, "unavailable", "MODEL_UNAVAILABLE", "没有可用的策略模型配置，AI 解释不可用")
+	}
+	proto, err := finance.NormalizeProtocol(in.Protocol)
+	if err != nil {
+		return "", finance.NewError(503, "unavailable", "MODEL_UNAVAILABLE", err.Error())
+	}
+	call := in.Call
+	if call == nil {
+		call = defaultModelCall
+	}
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, 45*time.Second)
+		defer cancel()
+	}
+	user := "当前规则(JSON)：\n" + rulesJSON + "\n请解释这条策略的买卖逻辑、风险与假设。"
+	body := chatBody(proto, in.Model, explainSystem, user)
+	raw, err := call(ctx, proto, in.BaseURL, in.APIKey, in.Model, body)
+	if err != nil {
+		return "", err
+	}
+	text := extractText(raw)
+	if strings.TrimSpace(text) == "" {
+		return "", finance.NewError(503, "unavailable", "MODEL_UNAVAILABLE", "模型未返回解释文本")
+	}
+	return text, nil
+}
+
+// extractText pulls the assistant text from chat-completions or responses
+// payloads (plain text is returned as-is).
+func extractText(raw []byte) string {
+	var payload map[string]any
+	if json.Unmarshal(raw, &payload) != nil {
+		return strings.TrimSpace(string(raw))
+	}
+	if c, ok := payload["choices"].([]any); ok && len(c) > 0 {
+		if m, ok := c[0].(map[string]any); ok {
+			if msg, ok := m["message"].(map[string]any); ok {
+				if t, ok := msg["content"].(string); ok {
+					return strings.TrimSpace(t)
+				}
+			}
+		}
+	}
+	if out, ok := payload["output"].([]any); ok {
+		var b strings.Builder
+		for _, item := range out {
+			m, _ := item.(map[string]any)
+			if content, ok := m["content"].([]any); ok {
+				for _, part := range content {
+					pm, _ := part.(map[string]any)
+					if t, ok := pm["text"].(string); ok {
+						b.WriteString(t)
+					}
+				}
+			}
+		}
+		if b.Len() > 0 {
+			return strings.TrimSpace(b.String())
+		}
+	}
+	if t, ok := payload["text"].(string); ok {
+		return strings.TrimSpace(t)
+	}
+	return strings.TrimSpace(string(raw))
 }
 
 func failLive(src, code, msg string) GenerateResult {

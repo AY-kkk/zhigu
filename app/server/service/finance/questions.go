@@ -94,6 +94,9 @@ func (s *ResearchService) CreateGrant(ctx context.Context, runID, taskID string,
 	err := s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var existing modelfinance.ToolGrant
 		if err := tx.Where("request_id = ?", in.RequestID).Take(&existing).Error; err == nil {
+			if existing.ArgsHash != in.ArgsHash || existing.RunID != runID || existing.TaskID != taskID || existing.ToolName != in.ToolName {
+				return NewError(409, "conflict", "GRANT_PAYLOAD_CONFLICT", "相同请求对应不同授权")
+			}
 			grant = existing
 			return nil
 		}

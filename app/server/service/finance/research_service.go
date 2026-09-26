@@ -348,6 +348,19 @@ func (s *ResearchService) CreateResearch(ctx context.Context, idempotencyKey str
 		if draft.Protocol != nil && *draft.Protocol != "" {
 			cfg["protocol"] = *draft.Protocol
 		}
+		if active, err := NewConfigService(tx).Active(ctx, "model"); err == nil && active.ID != "" {
+			cfg["model_config_id"] = active.ID
+			var pub map[string]any
+			_ = json.Unmarshal(active.PublicConfig, &pub)
+			if name, _ := pub["model"].(string); name != "" {
+				cfg["model"] = name
+			}
+			if rawProto, _ := pub["protocol"].(string); rawProto != "" {
+				if proto, nerr := NormalizeProtocol(rawProto); nerr == nil {
+					cfg["protocol"] = proto
+				}
+			}
+		}
 		if policy.MaxToolCalls > 0 {
 			cfg["policy"] = fmt.Sprintf("policy_tools_%d", policy.MaxToolCalls)
 			cfg["budget"] = fmt.Sprintf("budget_tools_%d", policy.MaxToolCalls)
@@ -667,6 +680,13 @@ func (s *ResearchService) Publish(ctx context.Context, runID string, expectedVer
 			return NewError(400, "validation", "UNREGISTERED_CITATION", "未知引用，拒绝发布")
 		}
 		if err := ValidateUnknowns(report.Unknowns); err != nil {
+			return err
+		}
+		var prior int64
+		if err := tx.Model(&modelfinance.ReportCheck{}).Where("run_id = ?", runID).Count(&prior).Error; err != nil {
+			return err
+		}
+		if err := gateReport(tx, runID, int(prior)+1, report, allowed); err != nil {
 			return err
 		}
 		var claim Claim

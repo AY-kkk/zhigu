@@ -41,8 +41,11 @@ func TestUnknownsPublishGate(t *testing.T) {
 		t.Fatal("prefix without explanation must fail")
 	}
 	got := NormalizeUnknowns([]string{"缺少年报正文"})
-	if len(got) != 1 || !ValidUnknown(got[0]) {
-		t.Fatalf("normalize %v", got)
+	if len(got) != 1 || got[0] != "缺少年报正文" || ValidUnknown(got[0]) {
+		t.Fatalf("invalid unknown must stay invalid, got %v", got)
+	}
+	if err := ValidateUnknowns(got); err == nil {
+		t.Fatal("rewritten unknown must not pass the publish gate")
 	}
 	if err := ValidateUnknowns([]string{"无法取数：东方财富未返回 2024 年报营业收入。"}); err != nil {
 		t.Fatal(err)
@@ -54,6 +57,21 @@ func TestJudgeOutlookInsufficient(t *testing.T) {
 	got := JudgeClaim(item, []Argument{{ClaimType: "fact", Text: "利润增长", EvidenceIDs: []string{"ev_1"}}}, nil)
 	if got.Verdict != "insufficient" {
 		t.Fatalf("outlook must be insufficient, got %+v", got)
+	}
+	same := ClaimItem{ClaimID: "c2", Text: "利润增长", ClaimType: "fact"}
+	agree := JudgeClaim(same,
+		[]Argument{{ClaimType: "fact", Text: "利润增长", EvidenceIDs: []string{"ev_1"}}},
+		[]Argument{{ClaimType: "fact", Text: "现金流下降", EvidenceIDs: []string{"ev_2"}}},
+	)
+	if agree.Verdict != "supported" {
+		t.Fatalf("different facts must not be mixed, got %+v", agree)
+	}
+	conflict := JudgeClaim(same,
+		[]Argument{{ClaimType: "fact", Text: "利润增长", EvidenceIDs: []string{"ev_1"}}},
+		[]Argument{{ClaimType: "fact", Text: "利润下降", EvidenceIDs: []string{"ev_1"}}},
+	)
+	if conflict.Verdict != "mixed" {
+		t.Fatalf("same fact contradiction must be mixed, got %+v", conflict)
 	}
 }
 
@@ -149,9 +167,19 @@ func TestStageBDecimalAndMetricBasis(t *testing.T) {
 	); err == nil {
 		t.Fatal("mixed currency must be rejected")
 	}
+	yuan, err := ScaleYuan("1", "万元")
+	if err != nil || !yuan.Equal(decimal.NewFromInt(10000)) {
+		t.Fatalf("1万元 want 10000元, got %s %v", yuan, err)
+	}
 	if err := comparableMetrics("growth_rate",
-		Metric{Metric: "revenue", Unit: "CNY", ValueType: "actual"},
-		Metric{Metric: "revenue", Unit: "CNY", ValueType: "estimate"},
+		Metric{Metric: "revenue", Unit: "万元", ValueType: "actual", PeriodStart: "2023-01-01", PeriodEnd: "2023-12-31"},
+		Metric{Metric: "revenue", Unit: "元", ValueType: "actual", PeriodStart: "2022-01-01", PeriodEnd: "2022-12-31"},
+	); err != nil {
+		t.Fatalf("万元 and 元 are the same currency: %v", err)
+	}
+	if err := comparableMetrics("growth_rate",
+		Metric{Metric: "revenue", Unit: "CNY", ValueType: "actual", PeriodStart: "2024-01-01", PeriodEnd: "2024-12-31"},
+		Metric{Metric: "revenue", Unit: "CNY", ValueType: "estimate", PeriodStart: "2023-01-01", PeriodEnd: "2023-12-31"},
 	); err == nil {
 		t.Fatal("estimate must not compare as actual")
 	}

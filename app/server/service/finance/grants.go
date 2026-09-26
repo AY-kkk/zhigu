@@ -146,6 +146,7 @@ func (s *ResearchService) CalculateMetric(ctx context.Context, grantID, operatio
 		if err != nil {
 			return NewError(400, "validation", "INVALID_DECIMAL", "指标必须为十进制字符串")
 		}
+		lv, rv = scaleCNYPair(left.Unit, right.Unit, lv, rv)
 		result, formula, err := Calculate(operation, lv, rv)
 		if err != nil {
 			return err
@@ -202,7 +203,9 @@ func comparableMetrics(operation string, left, right Metric) error {
 	if left.Metric != right.Metric {
 		return NewError(400, "validation", "INCOMPARABLE_METRIC", "指标名称不一致")
 	}
-	if left.Unit != right.Unit {
+	_, lok := cnyScale(left.Unit)
+	_, rok := cnyScale(right.Unit)
+	if !(lok && rok) && left.Unit != right.Unit {
 		return NewError(400, "validation", "UNIT_MISMATCH", "币种或单位不可比，拒绝换算")
 	}
 	if left.ValueType != right.ValueType {
@@ -215,6 +218,42 @@ func comparableMetrics(operation string, left, right Metric) error {
 		return nil
 	}
 	return nil
+}
+
+func cnyScale(unit string) (decimal.Decimal, bool) {
+	switch strings.TrimSpace(unit) {
+	case "CNY", "元":
+		return decimal.NewFromInt(1), true
+	case "万元":
+		return decimal.NewFromInt(10000), true
+	case "CNY_million":
+		return decimal.NewFromInt(1000000), true
+	case "亿元":
+		return decimal.NewFromInt(100000000), true
+	default:
+		return decimal.Zero, false
+	}
+}
+
+func scaleCNYPair(leftUnit, rightUnit string, left, right decimal.Decimal) (decimal.Decimal, decimal.Decimal) {
+	ls, lok := cnyScale(leftUnit)
+	rs, rok := cnyScale(rightUnit)
+	if lok && rok {
+		return left.Mul(ls), right.Mul(rs)
+	}
+	return left, right
+}
+
+func ScaleYuan(value, unit string) (decimal.Decimal, error) {
+	v, err := decimal.NewFromString(strings.TrimSpace(value))
+	if err != nil {
+		return decimal.Zero, NewError(400, "validation", "INVALID_DECIMAL", "指标必须为十进制字符串")
+	}
+	scale, ok := cnyScale(unit)
+	if !ok {
+		return decimal.Zero, NewError(400, "validation", "UNIT_MISMATCH", "不是人民币金额单位")
+	}
+	return v.Mul(scale), nil
 }
 
 func (s *ResearchService) metricPoint(tx *gorm.DB, runID, taskID string, in CalcInput) (Metric, error) {

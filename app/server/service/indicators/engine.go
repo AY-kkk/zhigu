@@ -30,25 +30,25 @@ type Spec struct {
 }
 
 type Series struct {
-	ID                string
-	Type              string
-	Params            map[string]int
-	Fields            map[string][]*decimal.Decimal
-	Ready             []bool
-	Warmup            int
-	CalculationStart  string
-	EngineVersion     string
+	ID               string
+	Type             string
+	Params           map[string]int
+	Fields           map[string][]*decimal.Decimal
+	Ready            []bool
+	Warmup           int
+	CalculationStart string
+	EngineVersion    string
 }
 
 type Descriptor struct {
-	Type         string         `json:"type"`
-	Pane         string         `json:"pane"`
-	Params       map[string]int `json:"default_params"`
-	ParamRange   map[string][2]int `json:"param_range"`
-	Outputs      []string       `json:"outputs"`
-	Warmup       string         `json:"warmup_rule"`
-	FormulaVersion string       `json:"formula_version"`
-	StrategyOK   bool           `json:"strategy_capable"`
+	Type           string            `json:"type"`
+	Pane           string            `json:"pane"`
+	Params         map[string]int    `json:"default_params"`
+	ParamRange     map[string][2]int `json:"param_range"`
+	Outputs        []string          `json:"outputs"`
+	Warmup         string            `json:"warmup_rule"`
+	FormulaVersion string            `json:"formula_version"`
+	StrategyOK     bool              `json:"strategy_capable"`
 }
 
 func Registry() []Descriptor {

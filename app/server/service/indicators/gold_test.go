@@ -11,8 +11,8 @@ func barsFromCloses(cs ...string) []Bar {
 	for i, c := range cs {
 		v := decimal.RequireFromString(c)
 		out[i] = Bar{
-			Time:   "2020-01-0" + string(rune('1'+i)),
-			Open:   v, High: v, Low: v, Close: v,
+			Time: "2020-01-0" + string(rune('1'+i)),
+			Open: v, High: v, Low: v, Close: v,
 			Volume: decimal.NewFromInt(int64((i + 1) * 100)),
 		}
 	}
@@ -21,10 +21,10 @@ func barsFromCloses(cs ...string) []Bar {
 
 func ohlc(h, l, c string, vol int64) Bar {
 	return Bar{
-		High: decimal.RequireFromString(h),
-		Low:  decimal.RequireFromString(l),
-		Open: decimal.RequireFromString(c),
-		Close: decimal.RequireFromString(c),
+		High:   decimal.RequireFromString(h),
+		Low:    decimal.RequireFromString(l),
+		Open:   decimal.RequireFromString(c),
+		Close:  decimal.RequireFromString(c),
 		Volume: decimal.NewFromInt(vol),
 	}
 }

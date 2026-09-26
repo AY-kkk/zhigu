@@ -1,6 +1,7 @@
 package finance
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -75,6 +76,8 @@ func TestR2LeaseLostCannotPublish(t *testing.T) {
 
 func TestR2ModelProxyWorksWithProductionBudget(t *testing.T) {
 	s := setup(t)
+	activateTestModel(t, s.DB)
+	t.Setenv("ZHIGU_MODEL_FEE_CAP", "1")
 	r := createMinimalRun(t, s, 1001, "r2-model")
 	task := reviewTaskID(t, s, r.RunID)
 	token, e := s.IssueTaskToken(r.RunID, task, "research")
@@ -82,9 +85,14 @@ func TestR2ModelProxyWorksWithProductionBudget(t *testing.T) {
 		t.Fatal(e)
 	}
 	body := []byte(`{"model":"finance-research","messages":[]}`)
-	_, e = NewModelProxy(s.DB, NewDBBudget(s.DB)).Complete(context.Background(), "r2-model-request", NormalizeJSONHash(body), HeaderTokenHash(token), body, ProtocolChatCompletions)
+	proxy := NewModelProxy(s.DB, NewDBBudget(s.DB))
+	proxy.Client = stubModelClient(`{"id":"chatcmpl_r2","choices":[{"message":{"content":"ok"}}],"usage":{"prompt_tokens":3,"completion_tokens":1}}`)
+	out, e := proxy.Complete(context.Background(), "r2-model-request", NormalizeJSONHash(body), HeaderTokenHash(token), body, ProtocolChatCompletions)
 	if e != nil {
-		t.Fatalf("valid fixture model call fails with production DBBudget: %v", e)
+		t.Fatalf("configured model call fails with production DBBudget: %v", e)
+	}
+	if !bytes.Contains(out, []byte("chatcmpl_r2")) {
+		t.Fatalf("response did not come from upstream: %s", out)
 	}
 }
 

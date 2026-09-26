@@ -5,13 +5,13 @@ import (
 )
 
 type RecordBasis struct {
-	OriginalValue      string  `json:"original_value"`
-	OriginalUnit       string  `json:"original_unit"`
-	ScaleFactor        string  `json:"scale_factor"`
-	Consolidation      string  `json:"consolidation"`
-	RevisionID         *string `json:"revision_id"`
-	DatePrecision      string  `json:"date_precision"`
-	AvailabilityBasis  string  `json:"availability_basis"`
+	OriginalValue     string  `json:"original_value"`
+	OriginalUnit      string  `json:"original_unit"`
+	ScaleFactor       string  `json:"scale_factor"`
+	Consolidation     string  `json:"consolidation"`
+	RevisionID        *string `json:"revision_id"`
+	DatePrecision     string  `json:"date_precision"`
+	AvailabilityBasis string  `json:"availability_basis"`
 }
 
 type ProviderRecord struct {
@@ -64,7 +64,7 @@ func (r ProviderRecord) CanonicalMap() map[string]any {
 	return map[string]any{
 		"instrument_id": r.InstrumentID, "source_id": r.SourceID, "source_url": r.SourceURL,
 		"source_kind": r.SourceKind, "title": r.Title, "locator": r.Locator, "text": r.Text,
-		"metrics": metrics,
+		"metrics":      metrics,
 		"published_at": r.PublishedAt.UTC().Format(time.RFC3339),
 		"available_at": r.AvailableAt.UTC().Format(time.RFC3339),
 		"retrieved_at": r.RetrievedAt.UTC().Format(time.RFC3339),

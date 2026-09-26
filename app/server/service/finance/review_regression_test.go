@@ -334,9 +334,9 @@ func TestRolesRunConcurrently(t *testing.T) {
 
 type parallelClient struct {
 	*FakeResearchClient
-	mu        sync.Mutex
-	inflight  int
-	maxSeen   int
+	mu       sync.Mutex
+	inflight int
+	maxSeen  int
 }
 
 func (p *parallelClient) Submit(ctx context.Context, task ResearchTask) (TaskReceipt, error) {

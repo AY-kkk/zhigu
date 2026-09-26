@@ -91,6 +91,7 @@ export const useStrategyWorkspace = defineStore('strategyWorkspace', {
     ohlcvBusy: false,
     ohlcvError: '',
     ohlcvLoadingMore: false,
+    barsReloadDay: '',
     seq: 0,
     period: '1d',
     adjust: 'raw',
@@ -106,6 +107,9 @@ export const useStrategyWorkspace = defineStore('strategyWorkspace', {
     generationId: '',
     draft: null,
     draftRev: 0,
+    savedDraftRev: 0,
+    ruleConflict: '',
+    explanation: '',
     dslText: '',
     showAdvanced: false,
     sidebarOpen: true,
@@ -147,6 +151,9 @@ export const useStrategyWorkspace = defineStore('strategyWorkspace', {
     },
     kdjK(state) {
       return readK(state.draft?.dsl?.entry)
+    },
+    hasUnsavedEdits(state) {
+      return Boolean(state.draft) && state.draftRev > state.savedDraftRev
     }
   },
   actions: {
@@ -249,8 +256,9 @@ export const useStrategyWorkspace = defineStore('strategyWorkspace', {
         if (this.bars.length) {
           const last = this.bars[this.bars.length - 1]
           this.hover = last
-          if (!this.end) this.end = last.time
-          if (!this.start && this.bars.length > 1) this.start = this.bars[Math.max(0, this.bars.length - 250)].time
+          this.end = timeKey(this.end) || timeKey(last.time)
+          if (!timeKey(this.start)) this.start = timeKey(this.bars[Math.max(0, this.bars.length - 250)].time)
+          else this.start = timeKey(this.start)
         }
         if (this.instrument?.instrument_id && !this.watchlist.includes(this.instrument.instrument_id)) {
           this.watchlist = [this.instrument.instrument_id, ...this.watchlist].slice(0, 12)
@@ -285,8 +293,49 @@ export const useStrategyWorkspace = defineStore('strategyWorkspace', {
         const res = await api.getQuote({ instrument_id: id })
         if (seq && seq !== this.seq) return
         this.quote = res.data || null
+        this.mergeQuoteIntoBars(this.quote)
       } catch {
         if (seq && seq !== this.seq) return
+      }
+    },
+    // 延迟行情合入最后一根 bar，K 线随最新价变化；已定格 bar 不覆盖。
+    // 新交易日改由后端重拉判定（休市日不追加假 bar），每日期间只触发一次。
+    mergeQuoteIntoBars(q) {
+      const day = timeKey(q?.market_time || q?.observed_at)
+      if (!day || !q?.last || !this.bars.length) return
+      const today = timeKey((Date.now() + 8 * 3600 * 1000) / 1000)
+      if (day > today) return
+      const last = this.bars[this.bars.length - 1]
+      const lastDay = timeKey(last.time)
+      if (day < lastDay) return
+      if (day > lastDay) {
+        if (this.barsReloadDay === day) return
+        this.barsReloadDay = day
+        this.reloadBars()
+        return
+      }
+      if (last.is_final) return
+      this.bars = [...this.bars.slice(0, -1), {
+        ...last,
+        open: q.open || last.open,
+        high: q.high || last.high,
+        low: q.low || last.low,
+        close: q.last,
+        volume: q.volume || last.volume
+      }]
+      if (timeKey(this.hover?.time) === lastDay) this.hover = this.bars[this.bars.length - 1]
+    },
+    // 重拉展示窗口 bars（含后端盘中 overlay），拉取失败保留现有数据。
+    async reloadBars() {
+      const id = this.instrument?.instrument_id
+      if (!id) return
+      try {
+        const ohlcv = await api.getOHLCV({ instrument_id: id, period: this.period, adjust: this.adjust, limit: 400 })
+        this.bars = ohlcv.data.bars || []
+        this.ohlcvMeta = ohlcv.data
+        await this.refreshIndicators(this.seq)
+      } catch {
+        /* 下轮报价轮询再试 */
       }
     },
     async loadMore() {
@@ -456,10 +505,99 @@ export const useStrategyWorkspace = defineStore('strategyWorkspace', {
         this.draft = { ...this.draft, ...res.data }
         if (res.data.dsl) this.dslText = JSON.stringify(res.data.dsl, null, 2)
         this.draftRev += 1
+        this.savedDraftRev = this.draftRev
         this.saveNotice = `规则已更新，修订 ${res.data.revision}`
       } catch (e) {
         this.genError = errText(e)
       }
+    },
+    // 规则窗口应用：PATCH 编辑态（服务端 CAS），冲突时提示差异不静默覆盖。
+    async patchEditorState(editorState) {
+      if (!this.draft?.draft_id) return
+      this.ruleConflict = ''
+      try {
+        const res = await api.patchDraft(this.draft.draft_id, {
+          revision: this.draft.revision,
+          editor_schema_version: 'strategy.editor.v1',
+          editor_state: editorState
+        })
+        this.draft = { ...res.data }
+        this.dslText = res.data.dsl ? JSON.stringify(res.data.dsl, null, 2) : ''
+        this.draftRev += 1
+        this.savedDraftRev = this.draftRev
+        this.saveNotice = `规则已更新，修订 ${res.data.revision}`
+      } catch (e) {
+        if (e?.code === 'REVISION_CONFLICT') {
+          this.ruleConflict = '窗口打开期间草稿已被更新（可能是 AI 修改），已载入最新内容，请核对后重试应用。'
+          await this.loadDraft(this.draft.draft_id)
+          return
+        }
+        this.genError = errText(e)
+      }
+    },
+    // explain 模式：只生成解释文本，不改草稿规则与 revision。
+    async explainDraft() {
+      if (!this.draft?.draft_id) {
+        this.genError = '请先生成或复制规则，再使用 AI 解释'
+        return
+      }
+      this.genStatus = 'queued'
+      this.genError = ''
+      try {
+        const res = await api.generateDraft(
+          {
+            text: this.prompt || '解释当前规则',
+            instrument_id: this.instrument?.instrument_id || '',
+            draft_id: this.draft.draft_id,
+            base_revision: this.draft.revision,
+            mode: 'explain'
+          },
+          newKey()
+        )
+        const started = payloadOf(res)
+        for (let i = 0; i < 40; i += 1) {
+          const g = payloadOf(await api.getGeneration(started.generation_id))
+          this.genStatus = g.status || this.genStatus
+          if (g.explanation) this.explanation = g.explanation
+          if (['ready', 'failed', 'unsupported', 'needs_clarification', 'canceled'].includes(g.status)) break
+          await new Promise((r) => setTimeout(r, 250))
+        }
+      } catch (e) {
+        this.genStatus = 'failed'
+        this.genError = errText(e)
+      }
+    },
+    // 深链加载本人草稿（外人 ID 由后端统一 404）；新草稿清除旧策略 versionId 与旧回测结果。
+    async loadDraft(draftId) {
+      if (!draftId) return
+      try {
+        const res = await api.getDraft(draftId)
+        const data = res.data
+        this.draft = data
+        this.dslText = data?.dsl ? JSON.stringify(data.dsl, null, 2) : ''
+        this.draftRev += 1
+        this.savedDraftRev = this.draftRev
+        this.strategyId = ''
+        this.versionId = ''
+        this.backtest = null
+        this.results = null
+        this.trades = null
+        this.genStatus = ''
+        this.genError = ''
+        if (data?.dsl?.instrument_id) await this.selectInstrument(data.dsl.instrument_id)
+      } catch (e) {
+        this.saveError = errText(e)
+      }
+    },
+    // 放弃未保存修改：从后端重载草稿；没有草稿时清空本地编辑。
+    async discardEdits() {
+      if (this.draft?.draft_id) {
+        await this.loadDraft(this.draft.draft_id)
+        return
+      }
+      this.draft = null
+      this.dslText = ''
+      this.savedDraftRev = this.draftRev
     },
     async saveCurrent() {
       if (!this.draft?.draft_id) {
@@ -475,6 +613,7 @@ export const useStrategyWorkspace = defineStore('strategyWorkspace', {
           : await api.saveStrategy(payload, newKey())
         this.strategyId = saved.data.strategy_id
         this.versionId = saved.data.version_id
+        this.savedDraftRev = this.draftRev
         this.saveNotice = `已保存版本 ${saved.data.revision}`
         await this.refreshStrategies()
         return saved.data
@@ -526,6 +665,10 @@ export const useStrategyWorkspace = defineStore('strategyWorkspace', {
       }
       if (!this.start || !this.end) {
         this.btError = '请填写回测起止日期'
+        return
+      }
+      if (this.start > this.end) {
+        this.btError = '起始日期不能晚于结束日期'
         return
       }
       if (!this.initialCash || Number(this.initialCash) <= 0) {
