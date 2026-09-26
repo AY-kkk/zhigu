@@ -1,3 +1,39 @@
+# GitHub README 三大核心模块介绍 Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Rewrite the repository root README around 投研观点、交易策略、事件追踪, attach the latest interaction video, and remove all legacy interface presentation.
+
+**Architecture:** Replace only `README.md` with a single-page GitHub landing document. The page leads with the latest interaction video, then explains the three user modules, boundaries, architecture, setup, and documentation. No application code or contracts change.
+
+**Tech Stack:** GitHub Markdown, HTML5 video fallback, Mermaid, Go, Python, Vue 3, PostgreSQL.
+
+## Global Constraints
+
+- Core module names are exactly `投研观点`, `交易策略`, `事件追踪`.
+- The latest video path is `artifacts/intel/投资事件情报演示_60s.webm`.
+- Remove the legacy `产品界面` section, old interface screenshots, and the old Stage A capability table from `README.md`.
+- Do not modify `app/`, `contracts/`, `prd/`, `spec/`, or GitHub root compliance files.
+- Distinguish shipped engineering, fixture/demo behavior, and unverified live behavior.
+- Validate with `git diff --check`, link/path assertions, and `python3 scripts/check-public-tree.py`.
+
+---
+
+### Task 1: Rewrite the GitHub landing README
+
+**Files:**
+- Modify: `README.md`
+- Reference: `docs/superpowers/specs/2026-09-26-github-readme-three-modules-design.md`
+
+**Interfaces:**
+- Consumes: the approved README information architecture and naming rules.
+- Produces: the complete root README shown below.
+
+- [ ] **Step 1: Replace `README.md` with the complete approved content**
+
+Use exactly this content:
+
+````markdown
 <div align="center">
 
 # 知股 Zhigu
@@ -159,3 +195,112 @@ artifacts/             交互演示和可复核验证产物
 ## 许可
 
 原创代码的许可状态见 [许可说明](LICENSE.md)。第三方依赖分别遵循各自许可证，详见 [第三方说明](THIRD_PARTY_NOTICES.md)。
+
+````
+
+- [ ] **Step 2: Run content assertions**
+
+Run:
+
+```bash
+python3 - <<'PY'
+from pathlib import Path
+text = Path('README.md').read_text(encoding='utf-8')
+required = [
+    '### 1. 投研观点',
+    '### 2. 交易策略',
+    '### 3. 事件追踪',
+    'artifacts/intel/投资事件情报演示_60s.webm',
+    '## 技术架构',
+    '## 快速开始',
+]
+for value in required:
+    assert value in text, value
+for forbidden in ['## 产品界面', '阶段 A 离线演示', '<img']:
+    assert forbidden not in text, forbidden
+assert text.count('<video') == 1
+assert text.count('观看完整交互视频') == 1
+print('README content checks passed')
+PY
+```
+
+Expected: `README content checks passed`.
+
+- [ ] **Step 3: Validate whitespace and repository links**
+
+Run:
+
+```bash
+git diff --check
+python3 - <<'PY'
+from pathlib import Path
+text = Path('README.md').read_text(encoding='utf-8')
+for rel in [
+    'artifacts/intel/投资事件情报演示_60s.webm',
+    'prd/金融C端Agent_MVP_PRD.md',
+    'prd/策略模块_PRD.md',
+    'prd/投资事件情报与证据时间线_PRD_严格研发测试评审_2026-09-25.md',
+    'spec/策略模块_开发SPEC.md',
+    'spec/投资事件情报与证据时间线_开发SPEC.md',
+    'spec/阶段B_开发SPEC.md',
+    'spec/development.md',
+    'app/IMPLEMENTATION_STATUS.md',
+    'docs/release-validation.md',
+]:
+    assert Path(rel).exists(), rel
+print('README link targets exist')
+PY
+```
+
+Expected: no `git diff --check` output and `README link targets exist`.
+
+- [ ] **Step 4: Commit the README update**
+
+```bash
+git add README.md
+git commit -m "docs: 重构 GitHub 三模块项目介绍"
+```
+
+### Task 2: Run public release validation
+
+**Files:**
+- Validate: `README.md`
+- Validate: all tracked public files
+
+**Interfaces:**
+- Consumes: the committed README from Task 1.
+- Produces: a verified public tree ready to merge into `main`.
+
+- [ ] **Step 1: Run the public tree checker against the committed tree**
+
+The current workspace contains unrelated local deletions, so run the checker in a clean tree built from `HEAD`:
+
+```bash
+tree=$(git rev-parse HEAD)
+tmp=$(mktemp -d /tmp/zhigu-readme-public.XXXXXX)
+git archive "$tree" | tar -x -C "$tmp"
+git -C "$tmp" init -q
+git -C "$tmp" add -A
+python3 "$tmp/scripts/check-public-tree.py"
+```
+
+Expected: `Public tree checked: ... tracked files` and exit code 0. Keep the temporary directory for traceability; do not delete unrelated workspace files.
+
+- [ ] **Step 2: Review the final README diff**
+
+Run:
+
+```bash
+git show --stat --oneline HEAD
+git show --format= -- README.md | sed -n '1,260p'
+```
+
+Expected: the commit contains only `README.md`; the diff adds three modules and the current video while removing legacy interface presentation.
+
+- [ ] **Step 3: Push the feature branch**
+
+```bash
+git push origin feat/zhigu-editorial-frontend
+```
+
+Expected: the branch updates successfully.
