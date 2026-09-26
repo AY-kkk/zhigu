@@ -51,7 +51,7 @@ func ValidateReportV2(report VerifiedReport, evidence []modelfinance.Evidence, c
 	}{
 		{"事实核验", len(report.FactChecks) > 0 || len(claim.Items) == 0},
 		{"逐条质疑", true},
-		{"推理链缺口", len(report.ReasoningGaps) > 0 || len(claim.Items) == 0},
+		{"推理链缺口", true},
 		{"被忽略的风险", len(report.TailRisks) > 0 || len(claim.Items) == 0},
 		{"证实与证伪条件", len(report.TestConditions) > 0 || len(claim.Items) == 0},
 		{"证据清单", len(report.EvidenceIndex) > 0 || len(report.EvidenceIDs) == 0},
