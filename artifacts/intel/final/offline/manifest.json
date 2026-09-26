@@ -1,8 +1,8 @@
 {
-  "run_id": "20260926T110524065771Z-offline",
+  "run_id": "20260926T110829098043Z-offline",
   "mode": "offline",
   "status": "pass",
-  "commit": "c3d030be6bf26a25a81c6978e758732ea775a9c4",
+  "commit": "11b6bc897062b6ffaea1d8ea09e1870facb21de2",
   "branch": "feat/zhigu-editorial-frontend",
   "dirty_files_hash": "17667a01c7e934215a8b20585a25f98d93061b692d891c1974982e0cb6f8663c",
   "dirty_file_count": 134,
@@ -39,5 +39,5 @@
     "No public URL or production deploy is claimed by this manifest.",
     "Source/provider rights and live request IDs must be added before production sign-off."
   ],
-  "generated_at": "2026-09-26T11:05:24.138944+00:00"
+  "generated_at": "2026-09-26T11:08:29.165016+00:00"
 }
