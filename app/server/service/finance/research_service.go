@@ -38,13 +38,14 @@ type ResearchService struct {
 	Budget BudgetService
 	Clock  Clock
 	Live   *LiveSource
+	Docs   *DocumentService
 }
 
 func NewService(db *gorm.DB, client ResearchClient, budget BudgetService, _ *FixtureConfig) *ResearchService {
 	if mb, ok := budget.(*MemoryBudget); ok {
 		mb.Attach(db)
 	}
-	return &ResearchService{DB: db, Client: client, Budget: budget, Clock: SystemClock{}, Live: NewLiveSource()}
+	return &ResearchService{DB: db, Client: client, Budget: budget, Clock: SystemClock{}, Live: NewLiveSource(), Docs: NewDocumentService(db)}
 }
 
 func (s *ResearchService) ParseClaim(ctx context.Context, in ParseInput) (ParseOutput, error) {

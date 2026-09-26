@@ -26,6 +26,8 @@ func Register(engine *gin.Engine, svc *finance.ResearchService, proxy *finance.M
 
 	consumer := engine.Group("/api/finance")
 	consumer.Use(httpx.AuthRequired())
+	consumer.POST("/research-documents", a.UploadResearchDocument)
+	consumer.GET("/research-documents/:id", a.GetResearchDocument)
 	consumer.POST("/claims/parse", a.Parse)
 	consumer.GET("/claims/:id", a.GetClaim)
 	consumer.PATCH("/claims/:id", a.PatchClaim)
@@ -175,6 +177,49 @@ func (a *API) Delete(c *gin.Context) {
 		return
 	}
 	httpx.OK(c, http.StatusAccepted, gin.H{"deletion_status": status})
+}
+
+func (a *API) UploadResearchDocument(c *gin.Context) {
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 22<<20)
+	fileHeader, err := c.FormFile("file")
+	if err != nil {
+		httpx.Fail(c, http.StatusBadRequest, "INVALID_MULTIPART", "缺少研报文件")
+		return
+	}
+	file, err := fileHeader.Open()
+	if err != nil {
+		httpx.Fail(c, http.StatusBadRequest, "INVALID_MULTIPART", "无法读取研报文件")
+		return
+	}
+	defer file.Close()
+	content, err := io.ReadAll(io.LimitReader(file, 20*1024*1024+1))
+	if err != nil {
+		httpx.Fail(c, http.StatusBadRequest, "INVALID_MULTIPART", "读取研报文件失败")
+		return
+	}
+	ctx := finance.WithUser(c.Request.Context(), httpx.CurrentUserID(c), roleOf(c))
+	out, err := a.Svc.Docs.Upload(ctx, finance.UploadDocumentInput{
+		Filename: fileHeader.Filename,
+		MediaType: fileHeader.Header.Get("Content-Type"),
+		ByteSize: fileHeader.Size,
+		Content: content,
+		DraftID: c.PostForm("draft_id"),
+	})
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	httpx.OK(c, http.StatusCreated, out)
+}
+
+func (a *API) GetResearchDocument(c *gin.Context) {
+	ctx := finance.WithUser(c.Request.Context(), httpx.CurrentUserID(c), roleOf(c))
+	out, err := a.Svc.Docs.Get(ctx, c.Param("id"))
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	httpx.OK(c, http.StatusOK, out)
 }
 
 func (a *API) Evidence(c *gin.Context) {
