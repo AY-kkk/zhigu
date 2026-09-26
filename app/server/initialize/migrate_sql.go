@@ -209,7 +209,17 @@ func (exp *schemaExpect) parseAlterTable(rest string) error {
 		r := skipLead(rest[len("ADD CONSTRAINT"):])
 		name, r := token(r)
 		exp.named = append(exp.named, name)
-		return exp.parseTableConstraint(table, skipLead(r))
+		constraint := skipLead(r)
+		if err := exp.parseTableConstraint(table, constraint); err != nil {
+			return err
+		}
+		if strings.HasPrefix(strings.ToUpper(constraint), "CHECK") {
+			exp.checks[table]--
+			if exp.checks[table] <= 0 {
+				delete(exp.checks, table)
+			}
+		}
+		return nil
 	case strings.HasPrefix(upper, "ADD "):
 		return exp.parseTableConstraint(table, skipLead(rest[len("ADD"):]))
 	case strings.HasPrefix(upper, "DROP CONSTRAINT"):
@@ -237,8 +247,18 @@ func (exp *schemaExpect) parseTableBody(table, inner string) error {
 		case "CONSTRAINT":
 			name, r := token(skipLead(r))
 			exp.named = append(exp.named, name)
-			if err := exp.parseTableConstraint(table, skipLead(r)); err != nil {
+			constraint := skipLead(r)
+			if err := exp.parseTableConstraint(table, constraint); err != nil {
 				return err
+			}
+			// A named CHECK is verified by its exact constraint name. Counting it
+			// again as an unnamed CHECK lets an unrelated existing constraint
+			// incorrectly mark a new migration as already applied.
+			if strings.HasPrefix(strings.ToUpper(constraint), "CHECK") {
+				exp.checks[table]--
+				if exp.checks[table] <= 0 {
+					delete(exp.checks, table)
+				}
 			}
 		case "PRIMARY", "UNIQUE", "CHECK", "FOREIGN":
 			if err := exp.parseTableConstraint(table, p); err != nil {

@@ -26,6 +26,9 @@ type ClaimDraft struct {
 	HorizonEnd         *string        `gorm:"column:horizon_end"`
 	InstrumentID       *string        `gorm:"column:instrument_id"`
 	Items              datatypes.JSON `gorm:"column:items"`
+	SourceMode         string         `gorm:"column:source_mode;default:claim_only"`
+	DocumentID         *string        `gorm:"column:document_id"`
+	FocusText          *string        `gorm:"column:focus_text"`
 	Revision           int            `gorm:"column:revision"`
 	AsOf               time.Time      `gorm:"column:as_of"`
 	Mode               string         `gorm:"column:mode"`
@@ -48,6 +51,8 @@ type ResearchRun struct {
 	DraftID        string         `gorm:"column:draft_id"`
 	ParentRunID    *string        `gorm:"column:parent_run_id"`
 	ClaimSnapshot  datatypes.JSON `gorm:"column:claim_snapshot"`
+	DocumentID     *string        `gorm:"column:document_id"`
+	InputMode      string         `gorm:"column:input_mode;default:claim_only"`
 	InstrumentID   string         `gorm:"column:instrument_id"`
 	Horizon        string         `gorm:"column:horizon"`
 	AsOf           time.Time      `gorm:"column:as_of"`
@@ -71,6 +76,53 @@ type ResearchRun struct {
 }
 
 func (ResearchRun) TableName() string { return "finance_research_runs" }
+
+type ResearchDocument struct {
+	ID               string     `gorm:"column:id;primaryKey"`
+	OwnerID          uint       `gorm:"column:owner_id"`
+	DraftID          *string    `gorm:"column:draft_id"`
+	RunID            *string    `gorm:"column:run_id"`
+	Filename         string     `gorm:"column:filename"`
+	MediaType        string     `gorm:"column:media_type"`
+	ByteSize         int64      `gorm:"column:byte_size"`
+	ContentHash      string     `gorm:"column:content_hash"`
+	StorageKey       string     `gorm:"column:storage_key"`
+	ExtractionStatus string     `gorm:"column:extraction_status"`
+	ExtractedText    *string    `gorm:"column:extracted_text"`
+	ExtractionError  *string    `gorm:"column:extraction_error"`
+	PageCount        *int       `gorm:"column:page_count"`
+	CreatedAt        time.Time  `gorm:"column:created_at"`
+	UpdatedAt        time.Time  `gorm:"column:updated_at"`
+	DeletedAt        *time.Time `gorm:"column:deleted_at"`
+}
+
+func (ResearchDocument) TableName() string { return "finance_research_documents" }
+
+type ResearchDocumentSpan struct {
+	ID             string    `gorm:"column:id;primaryKey"`
+	DocumentID     string    `gorm:"column:document_id"`
+	PageNumber     *int      `gorm:"column:page_number"`
+	ParagraphIndex *int      `gorm:"column:paragraph_index"`
+	StartOffset    int       `gorm:"column:start_offset"`
+	EndOffset      int       `gorm:"column:end_offset"`
+	Text           string    `gorm:"column:text"`
+	ContentHash    string    `gorm:"column:content_hash"`
+	CreatedAt      time.Time `gorm:"column:created_at"`
+}
+
+func (ResearchDocumentSpan) TableName() string { return "finance_research_document_spans" }
+
+type ClaimFactCheck struct {
+	ID          string         `gorm:"column:id;primaryKey"`
+	RunID       string         `gorm:"column:run_id"`
+	ClaimID     string         `gorm:"column:claim_id"`
+	Status      string         `gorm:"column:status"`
+	Reason      string         `gorm:"column:reason"`
+	EvidenceIDs datatypes.JSON `gorm:"column:evidence_ids"`
+	CreatedAt   time.Time      `gorm:"column:created_at"`
+}
+
+func (ClaimFactCheck) TableName() string { return "finance_claim_fact_checks" }
 
 type ResearchTask struct {
 	ID           string         `gorm:"column:id;primaryKey"`
