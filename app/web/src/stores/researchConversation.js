@@ -111,13 +111,18 @@ export const useResearchConversation = defineStore('researchConversation', {
       const textOK = n === 0 || (n >= 20 && n <= 2000)
       return textOK && (n > 0 || !!state.document?.document_id) && !state.parseBusy && !state.confirmBusy && !state.documentUploading
     },
-    canStart: (state, getters) => {
+    canStart: (state) => {
+      const stale = !!state.draft && (
+        state.draftText.trim() !== state.parsedText.trim()
+        || (state.document?.document_id || '') !== state.parsedDocumentId
+        || state.focusText.trim() !== state.parsedFocusText.trim()
+      )
       return !!state.draft
         && !!state.instrumentId
         && !!state.horizon.trim()
         && !state.confirmBusy
         && !state.parseBusy
-        && !getters.staleDraft
+        && !stale
     },
     isActiveRun: (state) => ACTIVE_STATUSES.includes(state.runView?.status),
     hasPublishedReport: (state) => !!state.runView?.report,
