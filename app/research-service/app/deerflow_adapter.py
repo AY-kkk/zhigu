@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import json
 import os
+import re
+from pathlib import Path
 from typing import Any
 
 ALLOWED_TOOLS = ("get_financials", "search_filings", "calculate_metric", "read_document_spans")
@@ -26,6 +29,23 @@ def forbidden_middleware(names: list[str]) -> list[str]:
         if needle in joined:
             bad.append(needle)
     return bad
+
+
+def _extract_json_object(text: str) -> dict[str, Any]:
+    stripped = re.sub(r"^```(?:json)?\s*|\s*```$", "", text.strip(), flags=re.IGNORECASE)
+    try:
+        value = json.loads(stripped)
+    except json.JSONDecodeError:
+        match = re.search(r"\{.*\}", text, flags=re.DOTALL)
+        if not match:
+            raise RuntimeError("MODEL_OUTPUT_INVALID")
+        try:
+            value = json.loads(match.group(0))
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("MODEL_OUTPUT_INVALID") from exc
+    if not isinstance(value, dict):
+        raise RuntimeError("MODEL_OUTPUT_INVALID")
+    return value
 
 
 class FinanceDeerFlowAdapter:
@@ -77,6 +97,82 @@ class FinanceDeerFlowAdapter:
             assert_exact_tool_allowlist(set(names))
             return set(names)
         return set(names)
+
+    def complete_research(self, client: Any, task: Any) -> Any:
+        """Run the real DeerFlow model loop and validate its structured result."""
+        from app.schemas import Argument, ResearchResult, ResultError, Usage
+
+        prompt_path = Path(__file__).resolve().parent / "prompts" / f"{task.role}.md"
+        role_prompt = prompt_path.read_text(encoding="utf-8")
+        contract = {
+            "run_id": task.run_id,
+            "task_id": task.task_id,
+            "role": task.role,
+            "claim": task.claim.model_dump(mode="json"),
+            "instrument_id": task.instrument_id,
+            "as_of": task.as_of,
+            "input_mode": task.input_mode,
+            "document_id": task.document_id,
+            "deadline_at": task.deadline_at,
+        }
+        prompt = (
+            role_prompt
+            + "\n\n只输出一个 JSON 对象，不要输出 Markdown。JSON 字段为 "
+            + "status(succeeded|insufficient), arguments, evidence_ids, unknowns, counterevidence, errors。"
+            + "arguments/counterevidence 的每项为 {claim_type,text,evidence_ids,verification_status}。"
+            + "所有事实和推演必须引用工具返回的 evidence_ids；用户研报使用 reported_only。\n"
+            + json.dumps(contract, ensure_ascii=False)
+        )
+        raw = client.chat(prompt, thread_id=task.task_id)
+        if not isinstance(raw, str):
+            raise RuntimeError("MODEL_OUTPUT_INVALID")
+        payload = _extract_json_object(raw)
+        status = payload.get("status")
+        if status not in {"succeeded", "insufficient"}:
+            raise RuntimeError("MODEL_OUTPUT_INVALID")
+
+        def parse_arguments(key: str) -> list[Argument]:
+            rows = payload.get(key) or []
+            if not isinstance(rows, list):
+                raise RuntimeError("MODEL_OUTPUT_INVALID")
+            out = []
+            for row in rows:
+                if not isinstance(row, dict):
+                    raise RuntimeError("MODEL_OUTPUT_INVALID")
+                out.append(Argument(
+                    claim_type=row.get("claim_type", "fact"),
+                    text=str(row.get("text") or ""),
+                    evidence_ids=[str(v) for v in (row.get("evidence_ids") or [])],
+                    verification_status=row.get("verification_status", "independent_verified"),
+                ))
+            return out
+
+        errors = []
+        for row in payload.get("errors") or []:
+            if isinstance(row, dict):
+                errors.append(ResultError(
+                    code=str(row.get("code") or "MODEL_ERROR"),
+                    message=str(row.get("message") or ""),
+                    retryable=bool(row.get("retryable", False)),
+                ))
+        return ResearchResult(
+            run_id=task.run_id,
+            task_id=task.task_id,
+            status=status,
+            arguments=parse_arguments("arguments"),
+            evidence_ids=[str(v) for v in (payload.get("evidence_ids") or [])],
+            unknowns=[str(v) for v in (payload.get("unknowns") or [])],
+            counterevidence=parse_arguments("counterevidence"),
+            usage=Usage(
+                model_calls=1,
+                tool_calls=max(0, int(payload.get("tool_calls") or 0)),
+                input_tokens=max(0, int(payload.get("input_tokens") or 0)),
+                output_tokens=max(0, int(payload.get("output_tokens") or 0)),
+                usage_unknown=True,
+                simulated=False,
+            ),
+            errors=errors,
+        )
 
     def complete_tool_roundtrip(self, client, tool_name: str = "get_financials", request: dict[str, Any] | None = None) -> dict[str, Any]:
         """Invoke one harness-bound finance tool and keep the request plus response.

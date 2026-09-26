@@ -88,3 +88,44 @@ def test_document_result_marks_report_statements_not_independent():
     )
     assert result.counterevidence[0].verification_status == "reported_only"
     assert result.arguments == []
+
+
+class FakeModelClient:
+    def __init__(self, text):
+        self.text = text
+        self.prompts = []
+
+    def chat(self, message, *, thread_id=None, **kwargs):
+        self.prompts.append((message, thread_id))
+        return self.text
+
+
+def test_complete_research_parses_real_model_contract():
+    from app.deerflow_adapter import FinanceDeerFlowAdapter
+    from app.schemas import ResearchTask
+
+    task = ResearchTask(
+        schema_version="1.0",
+        run_id="run_model",
+        task_id="task_model",
+        role="supporter",
+        claim={"text": "收入增长会改善盈利质量", "horizon": "2026-01-01/2026-12-31", "items": [{"claim_id": "c1", "text": "收入增长会改善盈利质量", "claim_type": "inference"}]},
+        instrument_id="DEMO:COMPANY",
+        as_of="2026-01-01T00:00:00Z",
+        mode="live",
+        source_policy_version="s1",
+        model_config_version="m1",
+        prompt_version="p1",
+        max_model_calls=1,
+        max_tool_calls=3,
+        deadline_at="2026-01-01T00:05:00Z",
+    )
+    client = FakeModelClient('```json\n{"status":"succeeded","arguments":[{"claim_type":"fact","text":"年报收入增长","evidence_ids":["ev_1"],"verification_status":"independent_verified"}],"evidence_ids":["ev_1"],"unknowns":[],"counterevidence":[]}\n```')
+    result = FinanceDeerFlowAdapter().complete_research(client, task)
+    assert result.run_id == "run_model"
+    assert result.task_id == "task_model"
+    assert result.status == "succeeded"
+    assert result.arguments[0].evidence_ids == ["ev_1"]
+    assert result.usage.simulated is False
+    assert result.usage.usage_unknown is True
+    assert client.prompts and client.prompts[0][1] == "task_model"

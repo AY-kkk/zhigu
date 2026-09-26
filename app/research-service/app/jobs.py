@@ -252,9 +252,8 @@ def _run(task: ResearchTask, task_token: str = "") -> None:
             except Exception as exc:  # noqa: BLE001
                 _save_result(conn, task.task_id, _failed_result(task, "HARNESS_UNAVAILABLE", str(exc)))
                 return
-            # A real model loop must produce its own structured result. Until that
-            # contract is configured, fail closed instead of returning fixture copy.
-            _save_result(conn, task.task_id, _failed_result(task, "MODEL_WORKFLOW_UNAVAILABLE", "真实模型研究循环未配置"))
+            result = adapter.complete_research(client, task)
+            _save_result(conn, task.task_id, result)
             return
         result = fixture_result(task)
         if not gateway:
