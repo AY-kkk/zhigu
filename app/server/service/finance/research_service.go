@@ -54,9 +54,20 @@ func (s *ResearchService) ParseClaim(ctx context.Context, in ParseInput) (ParseO
 		return ParseOutput{}, NewError(401, "forbidden", "UNAUTHENTICATED", "未登录")
 	}
 	text := strings.TrimSpace(in.Text)
-	n := utf8.RuneCountInString(text)
-	if n < 20 || n > 2000 {
-		return ParseOutput{}, NewError(400, "validation", "INVALID_TEXT", "观点须为 20 至 2000 字")
+	inputMode, err := inputModeFor(text, in.DocumentID)
+	if err != nil {
+		return ParseOutput{}, err
+	}
+	if text != "" {
+		n := utf8.RuneCountInString(text)
+		if n < 20 || n > 2000 {
+			return ParseOutput{}, NewError(400, "validation", "INVALID_TEXT", "观点须为 20 至 2000 字")
+		}
+	}
+	documentID := strings.TrimSpace(in.DocumentID)
+	focusText := NormalizeText(strings.TrimSpace(in.FocusText))
+	if utf8.RuneCountInString(focusText) > 1000 {
+		return ParseOutput{}, NewError(400, "validation", "INVALID_FOCUS_TEXT", "聚焦指令不能超过 1000 字")
 	}
 	now := s.Clock.Now()
 	var recent int64
@@ -68,42 +79,68 @@ func (s *ResearchService) ParseClaim(ctx context.Context, in ParseInput) (ParseO
 	if int(recent) >= ParsePerMinuteMax {
 		return ParseOutput{}, NewError(429, "budget", "PARSE_RATE_LIMIT", "解析每分钟最多 5 次")
 	}
+
+	var document *DocumentView
+	documentText := ""
+	var spans []DocumentSpan
+	if documentID != "" {
+		view, err := s.Docs.Get(ctx, documentID)
+		if err != nil {
+			return ParseOutput{}, err
+		}
+		if view.ExtractionStatus != "succeeded" {
+			return ParseOutput{}, NewError(409, "conflict", "DOCUMENT_NOT_READY", "研报文本尚不可用")
+		}
+		documentText, err = s.Docs.GetText(ctx, documentID)
+		if err != nil {
+			return ParseOutput{}, err
+		}
+		spans, err = s.Docs.ListSpans(ctx, documentID)
+		if err != nil {
+			return ParseOutput{}, err
+		}
+		document = &view
+	}
+
+	items := extractClaimItems(text, focusText, spans)
+	if len(items) == 0 {
+		return ParseOutput{}, NewError(422, "validation", "NO_CLAIM_ITEMS", "未识别到可核验主张")
+	}
+	numbers := extractNumberMentions(text, "")
+	for _, span := range spans {
+		numbers = append(numbers, extractNumberMentions(span.Text, span.SpanID)...)
+	}
+
 	mode := DataMode()
 	asOf := DefaultAsOf(now)
 	start, end := HorizonDates(asOf)
 	horizon := start + "/" + end
 	protocol := ProtocolChatCompletions
 	modelVer := "model_fixture_v1"
-	parseStatus := "failed"
+	parseStatus := "succeeded"
 	var instrument *string
 	var candidates []Instrument
-	if mode != ModeLive && strings.Contains(text, "演示公司") {
+	lookupText := text
+	if documentText != "" {
+		lookupText += "\n" + truncateRunes(documentText, 20000)
+	}
+	if mode != ModeLive && strings.Contains(lookupText, "演示公司") {
 		demo := InstrumentDemo
 		instrument = &demo
 		candidates = []Instrument{{ID: InstrumentDemo, Symbol: "DEMO:COMPANY", Name: "演示公司", Market: MarketA}}
-		parseStatus = "succeeded"
 	}
 	if mode == ModeLive {
 		_ = EnsureLiveCatalog(ctx)
-		matched := MatchInstrumentsFromText(text, 8)
+		matched := MatchInstrumentsFromText(lookupText, 8)
 		candidates = toPublicInstruments(matched)
 		if len(matched) == 1 {
 			id := matched[0].ID
 			instrument = &id
-			parseStatus = "succeeded"
-		} else if len(matched) > 0 {
-			parseStatus = "succeeded"
+		} else if len(matched) == 0 {
+			parseStatus = "needs_confirmation"
 		}
 	}
-	items := []ClaimItem{{
-		ClaimID: "claim_1", Text: truncateRunes(text, 400), ClaimType: "fact",
-	}}
-	if strings.Contains(text, "股价") {
-		items = append(items, ClaimItem{ClaimID: "claim_2", Text: "收入或基本面变化会推动未来股价。", ClaimType: "inference"})
-	}
-	if len(items) > 6 {
-		items = items[:6]
-	}
+
 	itemJSON, _ := json.Marshal(items)
 	cfg, _ := json.Marshal(map[string]string{
 		"model": modelVer, "source": SourcePolicyVersion, "prompt": "prompt_v1",
@@ -111,19 +148,36 @@ func (s *ResearchService) ParseClaim(ctx context.Context, in ParseInput) (ParseO
 	})
 	id := "draft_" + uuid.NewString()
 	origin := "parsed"
+	claimText := text
+	if claimText == "" {
+		parts := make([]string, 0, len(items))
+		for _, item := range items {
+			parts = append(parts, item.Text)
+		}
+		claimText = truncateRunes(strings.Join(parts, "\n"), 2000)
+	}
 	row := modelfinance.ClaimDraft{
-		ID: id, OwnerID: owner, Text: text, Horizon: &horizon, HorizonStart: &start, HorizonEnd: &end,
+		ID: id, OwnerID: owner, Text: claimText, Horizon: &horizon, HorizonStart: &start, HorizonEnd: &end,
 		InstrumentID: instrument, Items: datatypes.JSON(itemJSON), Revision: 1, AsOf: asOf, Mode: mode,
+		SourceMode: inputMode, DocumentID: stringPtr(documentID), FocusText: stringPtr(focusText),
 		ParseStatus: parseStatus, ModelConfigVersion: &modelVer, Protocol: &protocol, ScopeOrigin: &origin,
 		ConfigVersions: datatypes.JSON(cfg), CreatedAt: now, UpdatedAt: now,
 	}
 	if err := s.DB.WithContext(ctx).Create(&row).Error; err != nil {
 		return ParseOutput{}, err
 	}
+	if documentID != "" {
+		if err := s.DB.WithContext(ctx).Model(&modelfinance.ResearchDocument{}).
+			Where("id = ? AND owner_id = ?", documentID, owner).
+			Updates(map[string]any{"draft_id": id, "updated_at": now}).Error; err != nil {
+			return ParseOutput{}, err
+		}
+	}
 	return ParseOutput{
 		DraftID: id, Revision: 1, ParseStatus: parseStatus, Candidates: candidates, Items: items,
 		InstrumentID: instrument, HorizonStart: &start, HorizonEnd: &end, SuggestedHorizon: horizon,
 		ModelConfigVersion: modelVer, Protocol: protocol, Mode: mode,
+		InputMode: inputMode, DocumentID: documentID, FocusText: focusText, Document: document, Numbers: numbers,
 		NeedsConfirmation: true,
 	}, nil
 }
@@ -150,6 +204,11 @@ func (s *ResearchService) PatchClaim(ctx context.Context, draftID string, in Pat
 		}
 		if row.Revision != in.Revision {
 			return NewError(409, "conflict", "DRAFT_REVISION", "草稿版本不匹配")
+		}
+		if (in.Text != nil && strings.TrimSpace(*in.Text) != strings.TrimSpace(row.Text)) ||
+			(in.DocumentID != nil && strings.TrimSpace(*in.DocumentID) != strings.TrimSpace(pointerValue(row.DocumentID))) ||
+			(in.FocusText != nil && strings.TrimSpace(*in.FocusText) != strings.TrimSpace(pointerValue(row.FocusText))) {
+			return NewError(409, "conflict", "REPARSE_REQUIRED", "研究输入已修改，请重新解析")
 		}
 		if in.InstrumentID != nil {
 			norm := NormalizeInstrumentID(*in.InstrumentID)
@@ -233,8 +292,13 @@ func draftToParseOutput(row modelfinance.ClaimDraft) ParseOutput {
 	if row.ModelConfigVersion != nil {
 		modelVer = *row.ModelConfigVersion
 	}
+	numbers := extractNumberMentions(row.Text, "")
+	for _, item := range items {
+		numbers = append(numbers, extractNumberMentions(item.Text, item.SourceSpanID)...)
+	}
 	return ParseOutput{
 		DraftID: row.ID, Revision: row.Revision, ParseStatus: row.ParseStatus, Candidates: cand, Items: items,
+		InputMode: row.SourceMode, DocumentID: pointerValue(row.DocumentID), FocusText: pointerValue(row.FocusText), Numbers: numbers,
 		InstrumentID: row.InstrumentID, HorizonStart: row.HorizonStart, HorizonEnd: row.HorizonEnd,
 		SuggestedHorizon: horizon, ModelConfigVersion: modelVer, Protocol: proto, Mode: row.Mode,
 		NeedsConfirmation: row.ConfirmedRunID == nil,
@@ -379,6 +443,8 @@ func (s *ResearchService) CreateResearch(ctx context.Context, idempotencyKey str
 			DraftID:        draft.ID,
 			ParentRunID:    parent,
 			ClaimSnapshot:  datatypes.JSON(claimJSON),
+			DocumentID:     draft.DocumentID,
+			InputMode:      draft.SourceMode,
 			InstrumentID:   *draft.InstrumentID,
 			Horizon:        horizon,
 			AsOf:           asOf,
@@ -445,7 +511,12 @@ func (s *ResearchService) GetResearch(ctx context.Context, runID string) (Resear
 	view := ResearchView{
 		RunID: run.ID, Status: run.Status, Stage: run.Stage, Mode: run.Mode, AsOf: run.AsOf.UTC(),
 		InstrumentID: run.InstrumentID, Horizon: run.Horizon, Warnings: []string{}, UpdatedAt: run.UpdatedAt.UTC(),
-		ClaimResults: nil,
+		ClaimResults: nil, InputMode: run.InputMode, DocumentID: pointerValue(run.DocumentID),
+	}
+	if run.DocumentID != nil && *run.DocumentID != "" {
+		if doc, err := s.Docs.Get(ctx, *run.DocumentID); err == nil {
+			view.Document = &doc
+		}
 	}
 	var claim Claim
 	if json.Unmarshal(run.ClaimSnapshot, &claim) == nil {
@@ -835,4 +906,11 @@ func AsAppError(err error) *AppError {
 		return ae
 	}
 	return NewError(500, "unavailable", "INTERNAL", fmt.Sprintf("%v", err))
+}
+
+func pointerValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }

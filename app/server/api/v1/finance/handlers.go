@@ -79,13 +79,15 @@ func (a *API) Login(c *gin.Context) {
 
 func (a *API) Parse(c *gin.Context) {
 	var req struct {
-		Text string `json:"text"`
+		Text       string `json:"text"`
+		DocumentID string `json:"document_id"`
+		FocusText  string `json:"focus_text"`
 	}
 	if !httpx.BindJSON(c, &req) {
 		return
 	}
 	ctx := finance.WithUser(c.Request.Context(), httpx.CurrentUserID(c), roleOf(c))
-	out, err := a.Svc.ParseClaim(ctx, finance.ParseInput{Text: req.Text})
+	out, err := a.Svc.ParseClaim(ctx, finance.ParseInput{Text: req.Text, DocumentID: req.DocumentID, FocusText: req.FocusText})
 	if err != nil {
 		fail(c, err)
 		return
