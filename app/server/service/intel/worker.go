@@ -98,8 +98,17 @@ type extractionJobPayload struct {
 	ModelConfig      jobModelRef `json:"model_config"`
 }
 
+type ingestionJobPayload struct {
+	Codes []string `json:"codes"`
+	From  string   `json:"from"`
+	To    string   `json:"to"`
+}
+
 func (s *Service) ProcessJob(ctx context.Context, lease JobLease) error {
 	status, received, processed, quarantined, jobErr := "partial", 0, 0, 0, "fixture ingestion is synchronous through replay actions"
+	if lease.Kind == "ingest" {
+		return s.processIngestionJob(ctx, lease)
+	}
 	if lease.Provider != "fixture" && lease.Provider != "manual" {
 		status, jobErr = "failed", "provider disabled or unauthorized"
 		return s.CompleteJob(ctx, lease, status, received, processed, quarantined, jobErr)
@@ -178,6 +187,63 @@ VALUES (?,?,1,'extraction','pending',?::jsonb,'模型抽取需人工金标准核
 		return err
 	}
 	return s.CompleteJob(ctx, lease, "succeeded", 1, 1, 0, "")
+}
+
+func (s *Service) processIngestionJob(ctx context.Context, lease JobLease) error {
+	var raw string
+	if err := s.DB.WithContext(ctx).Raw(`SELECT payload::text FROM finance_intel_jobs WHERE id=? AND namespace_id=?`, lease.ID, lease.NamespaceID).Scan(&raw).Error; err != nil {
+		return err
+	}
+	var payload ingestionJobPayload
+	if err := json.Unmarshal([]byte(raw), &payload); err != nil {
+		return s.CompleteJob(ctx, lease, "failed", 0, 0, 1, "invalid ingestion payload")
+	}
+	switch lease.Provider {
+	case "fuyao":
+		client := NewFuyaoClient()
+		processed := 0
+		for _, code := range payload.Codes {
+			out, err := client.SearchTickers(ctx, code, 5)
+			if err != nil {
+				return s.CompleteJob(ctx, lease, "partial", len(payload.Codes), processed, 1, err.Error())
+			}
+			for _, ticker := range out.Items {
+				verifiedAt := s.now()
+				if ticker.SourceUpdatedAt != nil {
+					verifiedAt = *ticker.SourceUpdatedAt
+				}
+				if err := execSQL(s.DB.WithContext(ctx), `INSERT INTO finance_intel_instruments
+(id,namespace_id,code,name,exchange,source,verified_at,created_at)
+VALUES (?,?,?,?,?,'fuyao',?,?)
+ON CONFLICT(namespace_id,code) DO UPDATE SET name=EXCLUDED.name,exchange=EXCLUDED.exchange,source='fuyao',verified_at=EXCLUDED.verified_at`,
+					"inst_"+strings.ReplaceAll(uuid.NewString(), "-", ""), lease.NamespaceID, ticker.Code, ticker.Name, ticker.Exchange, verifiedAt, s.now()); err != nil {
+					return err
+				}
+				processed++
+			}
+		}
+		return s.CompleteJob(ctx, lease, "succeeded", len(payload.Codes), processed, 0, "")
+	case "ifind":
+		capability, err := NewIFindMCPClient().Discover(ctx)
+		if err != nil {
+			return s.CompleteJob(ctx, lease, "failed", len(payload.Codes), 0, 1, err.Error())
+		}
+		reviewID := "review_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+		if err := execSQL(s.DB.WithContext(ctx), `INSERT INTO finance_intel_review_items
+(id,namespace_id,revision,kind,status,payload,reason,created_at)
+VALUES (?,?,1,'extraction','pending',?::jsonb,'iFinD工具已发现，需管理员选择实际schema后调用',?)`,
+			reviewID, lease.NamespaceID, mustJSON(map[string]any{"capability": capability, "codes": payload.Codes}), s.now()); err != nil {
+			return err
+		}
+		return s.CompleteJob(ctx, lease, "partial", len(payload.Codes), 0, 0, "iFinD requires reviewed tool selection")
+	default:
+		reviewID := "review_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+		_ = execSQL(s.DB.WithContext(ctx), `INSERT INTO finance_intel_review_items
+(id,namespace_id,revision,kind,status,payload,reason,created_at)
+VALUES (?,?,1,'merge','pending',?::jsonb,'CNINFO需要经核验的orgId/column/plate映射',?)`,
+			reviewID, lease.NamespaceID, mustJSON(map[string]any{"codes": payload.Codes}), s.now())
+		return s.CompleteJob(ctx, lease, "partial", len(payload.Codes), 0, 0, "CNINFO subject mapping requires review")
+	}
 }
 
 // StartWorker is a bounded durable queue worker. Provider fetch/model calls are
