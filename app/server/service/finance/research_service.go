@@ -731,7 +731,7 @@ func (s *ResearchService) Publish(ctx context.Context, runID string, expectedVer
 		if run.Version != expectedVersion {
 			return NewError(409, "conflict", "VERSION_MISMATCH", "版本不匹配")
 		}
-		structural := report.SchemaVersion == "1.0" && report.RunID == runID && report.Version >= 1 && report.Summary != ""
+		structural := (report.SchemaVersion == "1.0" || report.SchemaVersion == "research-report.v2") && report.RunID == runID && report.Version >= 1 && report.Summary != ""
 		if !structural {
 			return NewError(400, "validation", "STRUCTURAL_INVALID", "报告未通过结构校验，拒绝发布")
 		}
@@ -773,9 +773,13 @@ func (s *ResearchService) Publish(ctx context.Context, runID string, expectedVer
 		var claim Claim
 		_ = json.Unmarshal(run.ClaimSnapshot, &claim)
 		results := JudgeClaims(claim.Items, report.Support, report.Challenge)
+		report.FactChecks = AdjudicateClaims(claim.Items, report.Support, report.Challenge)
 		if report.QualityStatus == "completed" {
-			v := JudgeReport(results)
+			v := verdictFromFactChecks(report.FactChecks)
 			report.Verdict = &v
+		}
+		if err := s.hydrateReportEvidence(tx, runID, &report); err != nil {
+			return err
 		}
 		now := s.Clock.Now()
 		body, _ := json.Marshal(report)
@@ -922,4 +926,51 @@ func pointerValue(value *string) string {
 		return ""
 	}
 	return *value
+}
+
+func (s *ResearchService) hydrateReportEvidence(tx *gorm.DB, runID string, report *VerifiedReport) error {
+	var rows []modelfinance.Evidence
+	if err := tx.Where("run_id = ?", runID).Find(&rows).Error; err != nil {
+		return err
+	}
+	byID := make(map[string]modelfinance.Evidence, len(rows))
+	for _, row := range rows {
+		byID[row.ID] = row
+	}
+	supportIDs := map[string]struct{}{}
+	challengeIDs := map[string]struct{}{}
+	for _, arg := range report.Support {
+		for _, id := range arg.EvidenceIDs {
+			supportIDs[id] = struct{}{}
+		}
+	}
+	for _, arg := range report.Challenge {
+		for _, id := range arg.EvidenceIDs {
+			challengeIDs[id] = struct{}{}
+		}
+	}
+	refs := make([]EvidenceRef, 0, len(report.EvidenceIDs))
+	for _, id := range report.EvidenceIDs {
+		row, ok := byID[id]
+		if !ok {
+			continue
+		}
+		relation := "context"
+		if _, ok := supportIDs[id]; ok {
+			relation = "support"
+		}
+		if _, ok := challengeIDs[id]; ok {
+			if relation == "support" {
+				relation = "both"
+			} else {
+				relation = "challenge"
+			}
+		}
+		refs = append(refs, EvidenceRef{
+			EvidenceID: row.ID, SourceGrade: row.SourceGrade, VerificationStatus: row.VerificationStatus,
+			Relation: relation, Locator: row.Locator, Title: row.Title,
+		})
+	}
+	report.EvidenceIndex = refs
+	return nil
 }

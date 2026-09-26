@@ -280,14 +280,13 @@ func (o *Orchestrator) synthesize(ctx context.Context, st wfState) (wfState, err
 		}
 	}
 
-	st.Report = VerifiedReport{
-		SchemaVersion: "1.0", RunID: st.RunID, Version: 1, Mode: run.Mode, AsOf: run.AsOf,
-		QualityStatus: quality, Verdict: verdict, Summary: summary,
-		Support: support, Challenge: challenge, Assumptions: []string{"收入增长转化为股价需要利润、现金流与估值证据。"},
-		ChangeConditions: []string{"补充利润、现金流和估值证据后重新研究。"},
-		Unknowns:         unknowns, EvidenceIDs: unique(eids),
-		ModelConfigVersion: "model_fixture_v1", SourcePolicyVersion: SourcePolicyVersion, PromptVersion: "prompt_v1",
-	}
+	st.Report = BuildReportV2(st.RunID, claim, support, challenge, unknowns, eids, run.Mode, run.AsOf.UTC().Format(time.RFC3339))
+	st.Report.QualityStatus = quality
+	st.Report.Verdict = verdict
+	st.Report.Summary = summary
+	st.Report.ModelConfigVersion = "model_fixture_v1"
+	st.Report.SourcePolicyVersion = SourcePolicyVersion
+	st.Report.PromptVersion = "prompt_v1"
 	return st, nil
 }
 
@@ -388,7 +387,7 @@ func (o *Orchestrator) revalidateReport(ctx context.Context, runID string, repor
 }
 
 func (o *Orchestrator) structuralOK(r VerifiedReport) bool {
-	if r.SchemaVersion != "1.0" || r.Summary == "" || r.RunID == "" || r.Version < 1 {
+	if (r.SchemaVersion != "1.0" && r.SchemaVersion != "research-report.v2") || r.Summary == "" || r.RunID == "" || r.Version < 1 {
 		return false
 	}
 	if r.QualityStatus == "incomplete" && r.Verdict != nil {

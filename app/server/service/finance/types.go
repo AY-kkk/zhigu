@@ -37,6 +37,8 @@ type ResearchTask struct {
 }
 
 type Argument struct {
+	ClaimID            string   `json:"claim_id,omitempty"`
+	Title              string   `json:"title,omitempty"`
 	ClaimType          string   `json:"claim_type"`
 	Text               string   `json:"text"`
 	EvidenceIDs        []string `json:"evidence_ids"`
@@ -85,6 +87,12 @@ type VerifiedReport struct {
 	Assumptions         []string   `json:"assumptions"`
 	ChangeConditions    []string   `json:"change_conditions"`
 	Unknowns            []string   `json:"unknowns"`
+	FactChecks          []FactCheck `json:"fact_checks"`
+	Challenges          []Challenge `json:"challenges"`
+	ReasoningGaps       []ReasoningGap `json:"reasoning_gaps"`
+	TailRisks           []TailRisk `json:"tail_risks"`
+	TestConditions      []TestCondition `json:"test_conditions"`
+	EvidenceIndex       []EvidenceRef `json:"evidence_index"`
 	EvidenceIDs         []string   `json:"evidence_ids"`
 	ModelConfigVersion  string     `json:"model_config_version"`
 	SourcePolicyVersion string     `json:"source_policy_version"`

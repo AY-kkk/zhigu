@@ -5,7 +5,10 @@
   "additionalProperties": false,
   "properties": {
     "schema_version": {
-      "const": "1.0"
+      "enum": [
+        "1.0",
+        "research-report.v2"
+      ]
     },
     "run_id": {
       "type": "string",
@@ -220,6 +223,219 @@
       "minLength": 1,
       "maxLength": 128,
       "pattern": "^[A-Za-z0-9_.:-]+$"
+    },
+    "fact_checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "claim_id",
+          "status",
+          "reason",
+          "evidence_ids"
+        ],
+        "properties": {
+          "claim_id": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "supported",
+              "prerequisite_missing",
+              "contradicted",
+              "uncertain"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "evidence_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "maxItems": 60
+    },
+    "challenges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "claim_id",
+          "title",
+          "argument",
+          "evidence_ids"
+        ],
+        "properties": {
+          "claim_id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "argument": {
+            "type": "string"
+          },
+          "evidence_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "maxItems": 60
+    },
+    "reasoning_gaps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "claim_id",
+          "from",
+          "to",
+          "missing"
+        ],
+        "properties": {
+          "claim_id": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "missing": {
+            "type": "string"
+          }
+        }
+      },
+      "maxItems": 60
+    },
+    "tail_risks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "claim_id",
+          "title",
+          "description",
+          "evidence_ids"
+        ],
+        "properties": {
+          "claim_id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "evidence_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "maxItems": 60
+    },
+    "test_conditions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "claim_id",
+          "metric",
+          "baseline",
+          "confirm_direction",
+          "falsify_direction",
+          "review_at",
+          "trigger"
+        ],
+        "properties": {
+          "claim_id": {
+            "type": "string"
+          },
+          "metric": {
+            "type": "string"
+          },
+          "baseline": {
+            "type": "string"
+          },
+          "confirm_direction": {
+            "type": "string"
+          },
+          "falsify_direction": {
+            "type": "string"
+          },
+          "review_at": {
+            "type": "string"
+          },
+          "trigger": {
+            "type": "string"
+          }
+        }
+      },
+      "maxItems": 60
+    },
+    "evidence_index": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "evidence_id",
+          "source_grade",
+          "verification_status",
+          "relation"
+        ],
+        "properties": {
+          "evidence_id": {
+            "type": "string"
+          },
+          "source_grade": {
+            "enum": [
+              "official_filing",
+              "structured_data",
+              "user_report",
+              "fixture"
+            ]
+          },
+          "verification_status": {
+            "enum": [
+              "independent_verified",
+              "reported_only"
+            ]
+          },
+          "relation": {
+            "enum": [
+              "support",
+              "challenge",
+              "both",
+              "context"
+            ]
+          },
+          "locator": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        }
+      },
+      "maxItems": 60
     }
   },
   "required": [
