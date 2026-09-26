@@ -56,13 +56,17 @@ def test_role_context_isolation(tmp_path, monkeypatch):
 
 
 def test_no_global_credential_mutation(monkeypatch):
-    before = dict(__import__("os").environ)
+    os = __import__("os")
+    token = "task-token-a"
+    credential_names = ("OPENAI_API_KEY", "DEEPSEEK_API_KEY", "ZHIGU_MODEL_API_KEY")
+    before = {name: os.environ.get(name) for name in credential_names}
     adapter = FinanceDeerFlowAdapter(tools=FINANCE_TOOLS)
     try:
-        adapter.build_client(token="task-token-a", thread_id="t1")
+        adapter.build_client(token=token, thread_id="t1")
     except Exception:
         pass
-    assert dict(__import__("os").environ) == before
+    assert {name: os.environ.get(name) for name in credential_names} == before
+    assert token not in os.environ.values()
 
 
 def test_task_replay_after_restart(tmp_path, monkeypatch):

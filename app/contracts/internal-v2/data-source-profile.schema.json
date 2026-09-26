@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhigu.local/contracts/internal-v2/data-source-profile.schema.json",
+  "title": "Zhigu data-source-profile v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "source_policy_version", "data_version", "connector_mode", "instruments",
+    "metrics", "periods", "financial_http_limit", "filing_http_limit", "tool_timeout_ms", "source_rules"
+  ],
+  "properties": {
+    "source_policy_version": { "type": "string" },
+    "data_version": { "type": "string" },
+    "connector_mode": { "type": "string", "enum": ["go_http", "akshare_service"] },
+    "instruments": { "type": "array", "items": { "type": "string" } },
+    "metrics": { "type": "array", "items": { "type": "string" } },
+    "periods": { "type": "array", "items": { "type": "string" } },
+    "financial_http_limit": { "type": "integer", "minimum": 1, "maximum": 6 },
+    "filing_http_limit": { "type": "integer", "minimum": 1, "maximum": 6 },
+    "tool_timeout_ms": { "type": "integer", "minimum": 1000 },
+    "source_rules": { "type": "object" }
+  }
+}

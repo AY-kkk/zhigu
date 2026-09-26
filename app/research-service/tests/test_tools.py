@@ -6,8 +6,13 @@ from app.tools.calculator import calculate_metric
 
 
 def test_zero_denominator_code():
-    out = calculate_metric(None, "growth_rate", [{"value": "1"}, {"value": "0"}])
+    out = calculate_metric(None, "growth_rate", {"current": {"value": "1"}, "previous": {"value": "0"}})
     assert out["error"] == "INSUFFICIENT_DENOMINATOR"
+
+
+def test_growth_rate_percent():
+    out = calculate_metric(None, "growth_rate", {"current": {"value": "120"}, "previous": {"value": "100"}})
+    assert out["data"]["value"] == "20.00"
 
 
 def test_injection_is_data_only():
@@ -27,5 +32,5 @@ def test_bind_tools_names():
 
 
 def test_local_ratio():
-    out = calculate_metric(None, "ratio", [{"value": str(Decimal("4"))}, {"value": str(Decimal("2"))}])
+    out = calculate_metric(None, "ratio", {"numerator": {"value": str(Decimal("4"))}, "denominator": {"value": str(Decimal("2"))}})
     assert out["data"]["result"] == "2"

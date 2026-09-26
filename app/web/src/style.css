@@ -1,8 +1,5 @@
-html, body, #app { margin: 0; height: 100%; min-height: 100%; background: #f6f7fb; color: #1f2329; }
+@import './styles/editorial-tokens.css';
+
+html, body, #app { margin: 0; height: 100%; min-height: 100%; background: var(--zg-paper); color: var(--zg-ink); }
 * { box-sizing: border-box; }
-a { color: #1d4ed8; }
-@media (max-width: 640px) {
-  .el-drawer {
-    width: 100% !important;
-  }
-}
+a { color: var(--zg-action); }

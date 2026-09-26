@@ -1,0 +1,79 @@
+name: zhigu-intel
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-zhigu}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-zhigu}
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-zhigu} -d ${POSTGRES_DB:-zhigu}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  research:
+    image: python:3.12
+    working_dir: /work/app/research-service
+    command: bash -lc "pip install -q uv && uv sync --frozen --no-dev && uv run --no-sync uvicorn app.main:app --host 0.0.0.0 --port 8091"
+    environment:
+      ZHIGU_INTERNAL_TOKEN: ${ZHIGU_INTERNAL_TOKEN:?set ZHIGU_INTERNAL_TOKEN}
+      ZHIGU_RESEARCH_SQLITE: /data/jobs.sqlite
+      ZHIGU_GO_INTERNAL_URL: http://server:8080
+      ZHIGU_RESEARCH_EXECUTOR: fixture
+      UV_PROJECT_ENVIRONMENT: /opt/zhigu-venv
+    volumes:
+      - ../..:/work
+      - researchdata:/data
+    expose: ["8091"]
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8091/healthz')\""]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+  server:
+    build:
+      context: ../server
+      dockerfile: Dockerfile
+    environment:
+      ZHIGU_POSTGRES_DSN: host=postgres user=${POSTGRES_USER:-zhigu} password=${POSTGRES_PASSWORD} dbname=${POSTGRES_DB:-zhigu} port=5432 sslmode=disable TimeZone=UTC
+      ZHIGU_HTTP_ADDR: ":8080"
+      ZHIGU_INTERNAL_TOKEN: ${ZHIGU_INTERNAL_TOKEN}
+      ZHIGU_RESEARCH_URL: http://research:8091
+      ZHIGU_RESEARCH_EXECUTOR: fixture
+      ZHIGU_JWT_SECRET: ${ZHIGU_JWT_SECRET:?set ZHIGU_JWT_SECRET}
+      ZHIGU_INTEL_ENABLED: "true"
+      ZHIGU_INTEL_MODE: ${ZHIGU_INTEL_MODE:-demo}
+      ZHIGU_INTEL_PROVIDERS: ${ZHIGU_INTEL_PROVIDERS:-fixture}
+      ZHIGU_INTEL_COOKIE_SECRET: ${ZHIGU_INTEL_COOKIE_SECRET:?set ZHIGU_INTEL_COOKIE_SECRET}
+      ZHIGU_INTEL_PUBLIC_ORIGIN: ${ZHIGU_INTEL_PUBLIC_ORIGIN:?set ZHIGU_INTEL_PUBLIC_ORIGIN}
+      ZHIGU_INTEL_DAILY_TOKEN_LIMIT: ${ZHIGU_INTEL_DAILY_TOKEN_LIMIT:-200000}
+      IFIND_MCP_URL: ${IFIND_MCP_URL:-}
+      IFIND_AUTHORIZATION: ${IFIND_AUTHORIZATION:-}
+      FUYAO_API_KEY: ${FUYAO_API_KEY:-}
+    expose: ["8080"]
+    depends_on:
+      postgres: {condition: service_healthy}
+      research: {condition: service_healthy}
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ../web
+      dockerfile: Dockerfile
+      args:
+        VITE_INTEL_ENABLED: "true"
+    environment:
+      ZHIGU_API_URL: http://server:8080
+    ports: ["80:80"]
+    depends_on:
+      server: {condition: service_healthy}
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  researchdata:

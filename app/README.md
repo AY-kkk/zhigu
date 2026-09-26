@@ -1,5 +1,54 @@
 # 知股一期（阶段 A：离线工程闭环）
 
+## 投资事件情报与证据时间线（I-1.0）
+
+面向个人投资者与投研人员的同级模块“事件情报”，入口为独立窗口 `/app/intel`，演示入口为 `/app/intel/demo`。本期支持 A 股收购、业绩预告、监管立案三类事件，目标是回答：谁最先说、事实怎么变、哪些说法冲突、目前是什么状态、与自选标的有什么关系。
+
+### 本期边界
+
+- P0：关注标的、事件归并、来源修订、证据分级、三轴状态、冲突/更正、历史版本、出处定位、站内通知、管理员纠错接口、隔离回放。
+- 不做：买卖建议、目标价、收益预测、交易、产业链推断、全网实时监控、聊天/外部推送。
+- AI 只做实体/命题/引用/候选关系抽取；归并、分级、状态、支持度和结论模板由确定性规则计算。fixture 是人工金标准，不冒充真实数据或真实模型结果。
+- 演示回放只写入 `demo` namespace；live 与 demo 的 Cookie、请求头、关注和通知完全隔离。
+
+### 启用与启动
+
+默认关闭。生产/演示启用必须同时设置后端与前端开关，并配置独立 Cookie 密钥：
+
+```sh
+export ZHIGU_INTEL_ENABLED=true
+export VITE_INTEL_ENABLED=true
+export ZHIGU_INTEL_MODE=demo
+export ZHIGU_INTEL_PROVIDERS=fixture
+export ZHIGU_INTEL_COOKIE_SECRET='至少32字节随机值'
+export ZHIGU_INTEL_PUBLIC_ORIGIN='http://localhost:5173'
+export ZHIGU_INTEL_DAILY_TOKEN_LIMIT=200000
+```
+
+iFinD adapter 动态执行 MCP initialize/tools-list/tools-call 并冻结真实工具名与 schema hash；巨潮 adapter 支持全量分页和空列表；扶摇 adapter 仅同步 A 股标的目录。模型层复用活动配置并冻结 config digest，支持 chat_completions/responses、严格输出 Schema、quote offset、16K/4K token 边界和每日200K预算。
+
+真实模式必须显式配置并验证 `IFIND_MCP_URL,IFIND_AUTHORIZATION,FUYAO_API_KEY` 及 `ZHIGU_INTEL_PROVIDERS`；模型还需 `ZHIGU_INTEL_MODEL_CONFIG_ID,ZHIGU_INTEL_MODEL_CONFIG_DIGEST,ZHIGU_INTEL_MODEL_PROTOCOL,ZHIGU_INTEL_MODEL` 冻结配置。缺凭据时 live provider/模型保持 disabled，不得用 fixture 填充真实空间。公开环境必须改掉仓库示例密钥，并通过 `ZHIGU_INTEL_PUBLIC_ORIGIN` 做同源/Origin 校验。
+
+启动顺序：迁移（包含 `006_intel.sql`）→ Go API/Worker → Vue。演示页先调用 `GET /session` 取得 bootstrap Cookie，再调用 `POST /demo-sessions` 创建隔离空间；刷新通过 session 恢复 step，不自动 reset。
+
+### 验收与证据
+
+```sh
+bash app/scripts/verify-intel.sh offline
+bash app/scripts/verify-intel.sh integration
+bash app/scripts/verify-intel.sh live-data   # 缺授权返回 2，不生成“通过”记录
+bash app/scripts/verify-intel.sh live-model  # 缺授权返回 2，不生成“通过”记录
+bash app/scripts/verify-intel.sh regression
+```
+
+offline 至少执行规则/API/迁移/前端 build/Intel Chromium fixture 流程；integration 在上述基础上加真实 Vue→Go→PostgreSQL chain 与 race；`browser-matrix` 执行 Firefox/WebKit。`artifacts/intel/<UTC-run-id>/manifest.json` 记录 commit、工作区差异、PRD/SPEC hash、规则/Schema/prompt 版本和 I01–I38 的证据状态。live 数据、live 模型、5 名用户理解和 10 RPS 负载必须单列真实证据，不能用 fixture 或截图替代。
+
+### 已知限制（必须与上线材料一起披露）
+
+- 当前可重复验证的是确定性 events-v1 回放和本地 PostgreSQL/API/UI 链路；未声明真实供应商授权、真实模型抽取或公开 URL 已上线。
+- 管理员抓取/人工导入接口采用 fail-closed：未配置 provider 时返回 `PROVIDER_DISABLED` 或 `DATA_UNAVAILABLE`，不生成伪造样例。
+- 外链失效只降级展示允许的历史片段，不把不可访问原文伪装成完整核验；来源权利、request_id 和用户验证记录须在真实上线前补齐。
+
 当前达到 **阶段 A**。未配置真实模型或金融数据凭据，不得声称阶段 B/C 或可公开运营。
 
 ## 架构
@@ -28,6 +77,8 @@ export ZHIGU_INTERNAL_TOKEN=zhigu-internal-dev
 export ZHIGU_RESEARCH_URL=http://127.0.0.1:8091
 export ZHIGU_GO_INTERNAL_URL=http://127.0.0.1:8080
 export ZHIGU_RESEARCH_EXECUTOR=fixture
+# 行情接真实数据源；缺省 fixture 只供离线测试，展示真实 K 线必须设 live（S-02）
+export ZHIGU_MARKET_MODE=live
 
 # 1. PostgreSQL 16，执行 app/server/migrations/finance/001_init.sql
 # 2. Python 研究服务
@@ -68,8 +119,8 @@ psql "$ZHIGU_POSTGRES_DSN" < backup.sql
 
 ```sh
 cd app/server && GOTOOLCHAIN=local go test ./... && GOTOOLCHAIN=local go test -race ./service/finance/...
-cd app/research-service && .venv/bin/python -m pytest tests -q  # 完整 Harness 依赖准备见 docs/development.md
-cd app/web && npm ci && npm run build && npm run test:e2e
+cd app/research-service && .venv/bin/python -m pytest tests -q  # 完整 Harness 依赖准备见 spec/development.md
+cd app/web && npm ci && VITE_INTEL_ENABLED=true npm run build && npm run test:e2e
 ```
 
 ## 已知限制

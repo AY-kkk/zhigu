@@ -1,5 +1,49 @@
 # IMPLEMENTATION_STATUS
 
+日期：2026-09-21。阶段：**B 编码已交 `ready_for_review` / 部分 `blocked`，不是 accepted，不是公开运营。**
+
+开发者不得把关口标为 `accepted`。付费模型 live 在 D-05 费用上限与 Key 写入前保持 blocked。
+
+独立宿主仍是唯一入口：PostgreSQL 16 + `app/server` + `app/research-service` + `app/web`。GoSaaS 不是启动路径。
+
+数据主路径：Go 直连东方财富 HSF10/HKF10 + 巨潮目录与公告 HTTP（`ZHIGU_DATA_MODE=live`）。研究 Python 只打 Go 内部 API。Tushare 不是开工条件。覆盖目录为全 A 股（含北交所）+ 港股；质量样本仍为茅台 / 宁德 / 美的。
+
+## 阶段 B 关口（开发者自评）
+
+| 关口 | 状态 | 说明 |
+|---|---|---|
+| G0 | ready_for_review | A 回归已重跑；基线 SHA `6e1c310e7bbef987d88aa7bc7d2ddcad06f82a5e` |
+| G1 数据 | ready_for_review | live 覆盖全 A+港股目录与年度三表；质量样本三股 + `00700.HK` 探针通过；source-contract 在 `artifacts/stage-b/` |
+| G1 模型/费用 | blocked | D-02 Key 未进环境；D-05 费用上限未写 |
+| G2 | ready_for_review（live 未验证） | 双 adapter 受控测试通过；真实 invoke/admin_test 无 Key |
+| G3 | ready_for_review | record_id、percent、provider_records、三股 live 读取 |
+| G4 | ready_for_review | 未知项正则、§2.6 裁判、合成三条提示词；90% 人工标注未做 |
+| G5 | blocked（live） / ready_for_review（功能链路） | verify 脚本与 PATCH 确认已接；20 次 live 与人工签收未做 |
+
+## 命令证据（2026-09-21）
+
+```
+cd app/server && GOTOOLCHAIN=local go test ./... -count=1 -timeout 180s
+# ok zhigu/server/service/finance 37.130s
+
+cd app/server && GOTOOLCHAIN=local go test -race ./service/finance -count=1 -timeout 180s
+# ok 84.226s
+
+ZHIGU_STAGE_B_LIVE_DATA=1 go test ./service/finance -run 'TestLiveDataSampleGated|TestLiveThreeStatementsAndHK' -count=1 -timeout 120s -v
+# 600519.SH / 300750.SZ / 000333.SZ 两年三表 PASS；600519.SH 与 00700.HK 三表6科目+公告 PASS
+
+cd app/research-service && PYTHONPATH=. .venv/bin/python -m pytest tests -q -p no:cacheprovider
+# 34 passed
+
+cd app/web && npm run build
+# vite build exit 0
+
+cd app/web && npx playwright test e2e/editorial.spec.js e2e/stage-b.spec.js e2e/stage-b-live.spec.js
+# editorial+stage-b 17 passed, 3 skipped（缺 ZHIGU_E2E_API / D-02 的真登录与 live 全链路）
+```
+
+## 阶段 A 记录（2026-09-18，仍有效）
+
 日期：2026-09-18。阶段：**A（离线工程闭环，第三轮复审问题已修，待再审）**。不是阶段 B/C，不是公开运营。本轮单测与界面核对不能代替阶段 A 验收。
 
 GoSaaS：本地已授权的私有快照仅作后续迁移底座，不随公开仓库分发。**阶段 A 产品确认使用独立 zhigu 宿主**；`app/gosaas` 不是本机启动路径。

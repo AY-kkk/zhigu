@@ -1,9 +1,9 @@
 # 直接交给编程 Agent 的启动指令
 
-你接手的是“知股：投资观点证据与反证助手”一期。请先阅读工作区根目录的：
-1. 金融C端Agent_MVP_PRD.md（v2）
-2. 金融C端Agent_面客产品架构_v2.md
-3. 开发交付_SPEC.md
+你接手的是“知股：投资观点证据与反证助手”一期。请先阅读工作区的：
+1. prd/金融C端Agent_MVP_PRD.md（v2）
+2. spec/金融C端Agent_面客产品架构_v2.md
+3. spec/开发交付_SPEC.md
 4. handoff/contracts/ 与 handoff/acceptance-cases.json
 
 工作区：当前仓库根目录。不要把开发机的绝对路径写入公开文档、日志或提交信息。

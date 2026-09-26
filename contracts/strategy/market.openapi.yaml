@@ -1,0 +1,444 @@
+openapi: 3.0.3
+info:
+  title: 知股 · 策略市场 API（B-1.7 §12.5/§12.6）
+  version: "1.0"
+  description: |
+    策略市场消费者查询与管理端内容维护接口。所有响应遵循统一信封 {data,error,trace_id}；
+    请求体未知字段一律 400 INVALID_JSON；写操作要求 Idempotency-Key，同体重放返回 200 与原响应，
+    异体返回 409 IDEMPOTENCY_CONFLICT。DTO 为白名单字段，绝不输出用户密钥、私人 run_id 或创建人内部身份。
+servers:
+  - url: /
+tags:
+  - name: strategy-market
+    description: 消费者只读与复制
+  - name: strategy-market-admin
+    description: 管理员内容维护（AuthRequired + AdminRequired）
+paths:
+  /api/finance/strategy-market/items:
+    get:
+      tags: [strategy-market]
+      summary: 市场列表（只含已发布当前版本）
+      parameters:
+        - { name: q, in: query, schema: { type: string, maxLength: 100 } }
+        - { name: category, in: query, schema: { type: string } }
+        - { name: market, in: query, schema: { enum: [A, HK] } }
+        - { name: period, in: query, schema: { type: string } }
+        - { name: validation, in: query, schema: { enum: [pending, passed, failed] } }
+        - { name: evidence, in: query, schema: { enum: [not_tested, has_evidence] } }
+        - { name: cursor, in: query, schema: { type: string }, description: 与筛选绑定的不透明游标 }
+        - { name: limit, in: query, schema: { type: integer, default: 20, maximum: 50 } }
+      responses:
+        "200":
+          description: "data = {items:[MarketCard], next_cursor}"
+          content:
+            application/json:
+              schema: { type: object }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+  /api/finance/strategy-market/items/{id}:
+    get:
+      tags: [strategy-market]
+      summary: 市场详情（完整只读规则、来源、假设、证据摘要）
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: data = MarketDetail
+          content:
+            application/json:
+              schema: { type: object }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "410": { $ref: "#/components/responses/Gone" }
+  /api/finance/strategy-market/items/{id}/evidence/{evidenceId}:
+    get:
+      tags: [strategy-market]
+      summary: 证据读取（仅 approved 且属于当前版本；撤销后不可读）
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: evidenceId, in: path, required: true, schema: { type: string } }
+        - { name: section, in: query, schema: { enum: [overview, equity, trades], default: overview } }
+        - { name: cursor, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, maximum: 100, default: 100 } }
+      responses:
+        "200":
+          description: overview 返回配置/manifest/指标/限制；equity、trades 分页
+          content:
+            application/json:
+              schema: { type: object }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "410": { $ref: "#/components/responses/Gone" }
+  /api/finance/strategy-market/items/{id}/copies:
+    post:
+      tags: [strategy-market]
+      summary: 复制到我的策略（原子、幂等；缺标的允许待补全草稿，绝不自动选验证标的）
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [market_version_id]
+              properties:
+                market_version_id: { type: string }
+                overrides: { $ref: "#/components/schemas/CopyOverrides" }
+      responses:
+        "201":
+          description: 新建副本草稿，data = CopyResult
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CopyResult" }
+        "200":
+          description: 同体重放，返回原副本（源下架后依旧可重放）
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CopyResult" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "410": { $ref: "#/components/responses/Gone" }
+        "422": { $ref: "#/components/responses/Unprocessable" }
+  /api/admin/strategy-market/items:
+    post:
+      tags: [strategy-market-admin]
+      summary: 创建市场条目与首个不可变版本
+      parameters:
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [slug, version]
+              properties:
+                slug: { type: string, minLength: 1, maxLength: 80 }
+                version: { $ref: "#/components/schemas/VersionContent" }
+      responses:
+        "201":
+          description: "data = {item_id, version_id, revision}"
+          content:
+            application/json:
+              schema: { type: object }
+        "200": { description: 同体重放 }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/Unprocessable" }
+  /api/admin/strategy-market/items/{id}/versions:
+    post:
+      tags: [strategy-market-admin]
+      summary: 追加新版本（旧版本永不修改；不自动切换已发布指针）
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [revision, version]
+              properties:
+                revision: { type: integer, minimum: 1 }
+                version: { $ref: "#/components/schemas/VersionContent" }
+      responses:
+        "201": { description: "data = {item_id, version_id, revision}" }
+        "200": { description: 同体重放 }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/Unprocessable" }
+  /api/admin/strategy-market/items/{id}/versions/{versionId}/validate:
+    post:
+      tags: [strategy-market-admin]
+      summary: 绑定真实目录标的并编译规则，生成服务端校验报告/hash（不运行回测）
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: versionId, in: path, required: true, schema: { type: string } }
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [revision, validation_instrument_id]
+              properties:
+                revision: { type: integer, minimum: 1 }
+                validation_instrument_id: { type: string }
+      responses:
+        "201":
+          description: "data = {item_id, version_id, revision, validation_status, validation_report}；内容级失败记为 failed 报告"
+        "200": { description: 同体重放 }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/Unprocessable" }
+  /api/admin/strategy-market/items/{id}/publish:
+    post:
+      tags: [strategy-market-admin]
+      summary: 原子切换已发布指针（要求来源/权限完整、内容 hash 匹配、校验通过、引擎支持）
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [revision, market_version_id, reason]
+              properties:
+                revision: { type: integer, minimum: 1 }
+                market_version_id: { type: string }
+                reason: { type: string }
+      responses:
+        "201": { description: "data = {item_id, market_version_id, revision, status}" }
+        "200": { description: 同体重放 }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { description: MARKET_NOT_COPYABLE（未校验/引擎不支持/来源权限不完整） }
+  /api/admin/strategy-market/items/{id}/withdraw:
+    post:
+      tags: [strategy-market-admin]
+      summary: 下架（停止新复制，保留副本与历史）
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [revision, reason]
+              properties:
+                revision: { type: integer, minimum: 1 }
+                reason: { type: string }
+      responses:
+        "201": { description: "data = {item_id, revision, status}" }
+        "200": { description: 同体重放 }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "410": { $ref: "#/components/responses/Gone" }
+  /api/admin/strategy-market/items/{id}/versions/{versionId}/evidence:
+    post:
+      tags: [strategy-market-admin]
+      summary: 从管理员本人 succeeded 回测导入证据快照（pending；source_run_id 不返回 C 端）
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: versionId, in: path, required: true, schema: { type: string } }
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [revision, source_run_id, rights_note]
+              properties:
+                revision: { type: integer, minimum: 1 }
+                source_run_id: { type: string }
+                rights_note: { type: string }
+      responses:
+        "201": { description: "data = {evidence_id, item_id, version_id, revision, status}" }
+        "200": { description: 同体重放 }
+        "404": { description: NOT_FOUND（无权/非 succeeded 记录统一 404） }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { description: STRATEGY_INVALID（DSL/标的不一致等） }
+  /api/admin/strategy-market/items/{id}/evidence/{evidenceId}/review:
+    post:
+      tags: [strategy-market-admin]
+      summary: 证据审核（approve/reject/revoke；只更新状态与审计，不改内容）
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: evidenceId, in: path, required: true, schema: { type: string } }
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [revision, decision, reason]
+              properties:
+                revision: { type: integer, minimum: 1 }
+                decision: { enum: [approve, reject, revoke] }
+                reason: { type: string }
+      responses:
+        "201": { description: "data = {evidence_id, status, revision}" }
+        "200": { description: 同体重放 }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { description: STRATEGY_INVALID（批准须完整 manifest、结果 hash、披露权限记录） }
+components:
+  schemas:
+    Error:
+      type: object
+      properties:
+        data: { nullable: true }
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string }
+            message: { type: string }
+        trace_id: { type: string }
+    MarketCard:
+      type: object
+      additionalProperties: false
+      required: [id, market_version_id, version_no, name, summary, category, tags, markets, signal_period, validation_status, backtest_status, published_at, updated_at, copyable]
+      properties:
+        id: { type: string }
+        market_version_id: { type: string }
+        version_no: { type: integer }
+        name: { type: string }
+        summary: { type: string }
+        category: { type: string }
+        tags: { type: array, items: { type: string } }
+        markets: { type: array, items: { enum: [A, HK] } }
+        signal_period: { type: string }
+        validation_status: { enum: [pending, passed, failed] }
+        backtest_status: { enum: [not_tested, has_evidence] }
+        published_at: { type: string, format: date-time, nullable: true }
+        updated_at: { type: string, format: date-time }
+        copyable: { type: boolean }
+        copy_disabled_reason: { type: string }
+    MarketDetail:
+      type: object
+      additionalProperties: false
+      required: [id, market_version_id, version_no, name, summary, category, tags, markets, signal_period, validation_status, backtest_status, published_at, updated_at, copyable, description, hypothesis, failure_cases, sources, rights_note, editor_schema_version, editor_state, backtest_defaults, evidence_summaries]
+      properties:
+        id: { type: string }
+        market_version_id: { type: string }
+        version_no: { type: integer }
+        name: { type: string }
+        summary: { type: string }
+        category: { type: string }
+        tags: { type: array, items: { type: string } }
+        markets: { type: array, items: { enum: [A, HK] } }
+        signal_period: { type: string }
+        validation_status: { enum: [pending, passed, failed] }
+        backtest_status: { enum: [not_tested, has_evidence] }
+        published_at: { type: string, format: date-time, nullable: true }
+        updated_at: { type: string, format: date-time }
+        copyable: { type: boolean }
+        copy_disabled_reason: { type: string }
+        description: { type: string }
+        hypothesis: { type: string }
+        failure_cases: { type: string }
+        sources: { type: array, items: { $ref: "#/components/schemas/SourceEntry" } }
+        rights_note: { type: string }
+        editor_schema_version: { const: strategy.editor.v1 }
+        editor_state: { type: object }
+        backtest_defaults: { type: object }
+        evidence_summaries:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [evidence_id, validation_instrument_id, result_hash, created_at]
+            properties:
+              evidence_id: { type: string }
+              validation_instrument_id: { type: string }
+              result_hash: { type: string }
+              created_at: { type: string, format: date-time }
+    SourceEntry:
+      type: object
+      additionalProperties: false
+      required: [title, collected_at, adaptation]
+      properties:
+        title: { type: string, minLength: 1 }
+        url: { type: string, pattern: "^https?://" }
+        record_ref: { type: string }
+        collected_at: { type: string, format: date }
+        adaptation: { type: string, minLength: 1 }
+    CopyOverrides:
+      type: object
+      additionalProperties: false
+      properties:
+        instrument_id: { type: string }
+        initial_cash: { type: string }
+        currency: { type: string }
+        start: { type: string, format: date }
+        end: { type: string, format: date }
+    CopyResult:
+      type: object
+      additionalProperties: false
+      required: [draft_id, revision, status, origin, next_path]
+      properties:
+        draft_id: { type: string }
+        revision: { type: integer }
+        status: { enum: [ready, needs_clarification] }
+        origin:
+          type: object
+          properties:
+            market_item_id: { type: string }
+            market_version_id: { type: string }
+            version_no: { type: integer }
+            market_status: { type: string }
+        next_path: { type: string }
+    VersionContent:
+      type: object
+      additionalProperties: false
+      required: [name, summary, category, tags, markets, signal_period, description, hypothesis, failure_cases, sources, rights_note, editor_schema_version, rule_template, backtest_defaults]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 80 }
+        summary: { type: string, minLength: 1, maxLength: 160 }
+        category: { type: string, minLength: 1 }
+        tags: { type: array, items: { type: string } }
+        markets: { type: array, minItems: 1, items: { enum: [A, HK] } }
+        signal_period: { type: string }
+        description: { type: string }
+        hypothesis: { type: string }
+        failure_cases: { type: string }
+        sources: { type: array, minItems: 1, items: { $ref: "#/components/schemas/SourceEntry" } }
+        rights_note: { type: string }
+        editor_schema_version: { const: strategy.editor.v1 }
+        rule_template: { type: object }
+        backtest_defaults: { type: object }
+  responses:
+    BadRequest:
+      description: 400 INVALID_PARAM / INVALID_JSON（未知字段、非法枚举/游标/limit）
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Unauthenticated:
+      description: 401 UNAUTHENTICATED
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Forbidden:
+      description: 403 FORBIDDEN（普通用户写管理端）
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: 404 NOT_FOUND（未发布条目、他人对象统一 404）
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Gone:
+      description: 410 MARKET_ITEM_WITHDRAWN / COPY_TARGET_GONE
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Conflict:
+      description: 409 REVISION_CONFLICT / MARKET_VERSION_CHANGED / IDEMPOTENCY_CONFLICT
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Unprocessable:
+      description: 422 STRATEGY_INVALID / STRATEGY_UNSUPPORTED / MARKET_NOT_COPYABLE
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }

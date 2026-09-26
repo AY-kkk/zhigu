@@ -1,0 +1,754 @@
+import { defineStore } from 'pinia'
+import * as api from '../api/strategies.js'
+import { timeKey } from '../components/strategies/chartTime.js'
+
+function newKey() {
+  return crypto.randomUUID()
+}
+
+function errText(e) {
+  return e?.message || '请求失败'
+}
+
+const defaultChartIndicators = [
+  { id: 'ma5', type: 'MA', params: { n: 5 } },
+  { id: 'ma10', type: 'MA', params: { n: 10 } },
+  { id: 'ma20', type: 'MA', params: { n: 20 } },
+  { id: 'vol', type: 'VOL', params: { ma5: 5, ma10: 10 } },
+  { id: 'macd', type: 'MACD', params: { fast: 12, slow: 26, signal: 9 } },
+  { id: 'kdj', type: 'KDJ', params: { n: 9, m1: 3, m2: 3 } }
+]
+
+function withThreePanes(list) {
+  const rows = Array.isArray(list) ? list.filter((r) => r && r.type) : []
+  const types = new Set(rows.map((r) => r.type))
+  const out = [...rows]
+  if (![...types].some((t) => t === 'MA' || t === 'EMA' || t === 'BOLL')) {
+    out.unshift({ id: 'ma20', type: 'MA', params: { n: 20 } })
+  }
+  if (!types.has('VOL')) {
+    out.push({ id: 'vol', type: 'VOL', params: { ma5: 5, ma10: 10 } })
+  }
+  if (![...types].some((t) => ['MACD', 'KDJ', 'RSI', 'WR', 'BIAS', 'CCI', 'ATR', 'OBV'].includes(t))) {
+    out.push({ id: 'macd', type: 'MACD', params: { fast: 12, slow: 26, signal: 9 } })
+    out.push({ id: 'kdj', type: 'KDJ', params: { n: 9, m1: 3, m2: 3 } })
+  }
+  return out
+}
+
+function payloadOf(res) {
+  if (!res || typeof res !== 'object') return {}
+  let d = res.data
+  if (d && typeof d === 'object' && d.data && typeof d.data === 'object' && (d.error === null || d.error === undefined)) {
+    d = d.data
+  }
+  if (d && typeof d === 'object' && ('generation_id' in d || 'dsl' in d || 'run_id' in d || 'draft_id' in d || 'strategy_id' in d || typeof d.status === 'string')) {
+    return d
+  }
+  if (res.generation_id || res.dsl || res.run_id || res.draft_id) return res
+  if (d?.data && typeof d.data === 'object') return d.data
+  return d || {}
+}
+
+function walkSetK(node, value) {
+  if (!node || typeof node !== 'object') return
+  if (Array.isArray(node)) {
+    node.forEach((row) => walkSetK(row, value))
+    return
+  }
+  if (node.left === 'kdj.k' && node.right && typeof node.right === 'object') {
+    node.right.constant = String(value)
+  }
+  if (node.all) walkSetK(node.all, value)
+  if (node.any) walkSetK(node.any, value)
+}
+
+function readK(node) {
+  if (!node || typeof node !== 'object') return ''
+  if (Array.isArray(node)) {
+    for (const row of node) {
+      const v = readK(row)
+      if (v) return v
+    }
+    return ''
+  }
+  if (node.left === 'kdj.k' && node.right?.constant != null) return String(node.right.constant)
+  return readK(node.all) || readK(node.any)
+}
+
+export const useStrategyWorkspace = defineStore('strategyWorkspace', {
+  state: () => ({
+    query: '',
+    hits: [],
+    searchBusy: false,
+    searchError: '',
+    searchMarket: '',
+    searchCursor: null,
+    instrument: null,
+    coverage: null,
+    bars: [],
+    ohlcvMeta: null,
+    ohlcvBusy: false,
+    ohlcvError: '',
+    ohlcvLoadingMore: false,
+    barsReloadDay: '',
+    seq: 0,
+    period: '1d',
+    adjust: 'raw',
+    hover: null,
+    quote: null,
+    quoteTimer: 0,
+    chartIndicators: defaultChartIndicators.map((row) => ({ ...row, params: { ...row.params } })),
+    series: [],
+    registry: [],
+    prompt: '',
+    genStatus: '',
+    genError: '',
+    generationId: '',
+    draft: null,
+    draftRev: 0,
+    savedDraftRev: 0,
+    ruleConflict: '',
+    explanation: '',
+    dslText: '',
+    showAdvanced: false,
+    sidebarOpen: true,
+    mobileTab: 'quote',
+    strategyId: '',
+    versionId: '',
+    strategies: [],
+    runs: [],
+    backtest: null,
+    results: null,
+    trades: null,
+    resultTab: 'overview',
+    btBusy: false,
+    btError: '',
+    saveBusy: false,
+    saveError: '',
+    saveNotice: '',
+    initialCash: '100000',
+    slippage: '10',
+    start: '',
+    end: '',
+    catalogMeta: null,
+    workspaceRevision: 0,
+    watchlist: [],
+    persistTimer: 0
+  }),
+  getters: {
+    hoverValues(state) {
+      if (!state.hover || !state.bars.length) return {}
+      const i = state.bars.findIndex((b) => timeKey(b.time) === timeKey(state.hover.time))
+      if (i < 0) return {}
+      const out = {}
+      state.series.forEach((row) => {
+        Object.entries(row.fields || {}).forEach(([name, pts]) => {
+          if (pts && pts[i] != null) out[`${row.type}.${name}`] = pts[i]
+        })
+      })
+      return out
+    },
+    kdjK(state) {
+      return readK(state.draft?.dsl?.entry)
+    },
+    hasUnsavedEdits(state) {
+      return Boolean(state.draft) && state.draftRev > state.savedDraftRev
+    }
+  },
+  actions: {
+    async boot() {
+      await Promise.all([this.loadRegistry(), this.loadWorkspace(), this.refreshStrategies()])
+    },
+    async search(append = false) {
+      this.searchBusy = true
+      this.searchError = ''
+      try {
+        const res = await api.searchInstruments({
+          q: this.query,
+          market: this.searchMarket || undefined,
+          cursor: append ? this.searchCursor : undefined,
+          limit: 40
+        })
+        const items = res.data.items || []
+        this.hits = append ? [...this.hits, ...items] : items
+        this.searchCursor = res.data.next_cursor || null
+        this.catalogMeta = {
+          catalog_version: res.data.catalog_version,
+          catalog_as_of: res.data.catalog_as_of,
+          freshness_status: res.data.freshness_status
+        }
+      } catch (e) {
+        this.searchError = errText(e)
+        if (!append) this.hits = []
+      } finally {
+        this.searchBusy = false
+      }
+    },
+    setSearchMarket(market) {
+      this.searchMarket = market
+      this.searchCursor = null
+      this.search()
+    },
+    async loadRegistry() {
+      try {
+        const res = await api.listIndicators()
+        this.registry = res.data.items || []
+      } catch {
+        this.registry = []
+      }
+    },
+    async loadWorkspace() {
+      try {
+        const res = await api.getWorkspace()
+        this.workspaceRevision = res.data.revision || 0
+        this.watchlist = Array.isArray(res.data.watchlist) ? res.data.watchlist : []
+        if (Array.isArray(res.data.chart_indicators) && res.data.chart_indicators.length) {
+          this.chartIndicators = withThreePanes(res.data.chart_indicators)
+        }
+        if (res.data.last_instrument_id) {
+          await this.selectInstrument(res.data.last_instrument_id)
+        }
+      } catch {
+        /* first visit has empty workspace */
+      }
+    },
+    schedulePersist() {
+      clearTimeout(this.persistTimer)
+      this.persistTimer = setTimeout(() => this.persistWorkspace(), 400)
+    },
+    async persistWorkspace() {
+      try {
+        const last = this.instrument?.instrument_id || null
+        const res = await api.putWorkspace({
+          revision: this.workspaceRevision,
+          watchlist: this.watchlist,
+          layout: { period: this.period, adjust: this.adjust },
+          chart_indicators: this.chartIndicators,
+          last_instrument_id: last
+        })
+        this.workspaceRevision = res.data.revision || this.workspaceRevision
+      } catch (e) {
+        if (e.code === 'REVISION_CONFLICT') {
+          this.loadWorkspace()
+        }
+      }
+    },
+    async selectInstrument(id) {
+      this.seq += 1
+      const seq = this.seq
+      this.ohlcvBusy = true
+      this.ohlcvError = ''
+      this.bars = []
+      this.instrument = null
+      this.quote = null
+      this.stopQuote()
+      try {
+        const [detail, ohlcv] = await Promise.all([
+          api.getInstrument(id),
+          api.getOHLCV({ instrument_id: id, period: this.period, adjust: this.adjust, limit: 400 })
+        ])
+        if (seq !== this.seq) return
+        this.instrument = detail.data.instrument
+        this.coverage = detail.data.coverage
+        this.bars = ohlcv.data.bars || []
+        this.ohlcvMeta = ohlcv.data
+        if (this.bars.length) {
+          const last = this.bars[this.bars.length - 1]
+          this.hover = last
+          this.end = timeKey(this.end) || timeKey(last.time)
+          if (!timeKey(this.start)) this.start = timeKey(this.bars[Math.max(0, this.bars.length - 250)].time)
+          else this.start = timeKey(this.start)
+        }
+        if (this.instrument?.instrument_id && !this.watchlist.includes(this.instrument.instrument_id)) {
+          this.watchlist = [this.instrument.instrument_id, ...this.watchlist].slice(0, 12)
+        }
+        this.schedulePersist()
+        await this.refreshIndicators(seq)
+        await this.refreshQuote(seq)
+        this.startQuote(seq)
+      } catch (e) {
+        if (seq !== this.seq) return
+        this.ohlcvError = errText(e)
+      } finally {
+        if (seq === this.seq) this.ohlcvBusy = false
+      }
+    },
+    stopQuote() {
+      if (this.quoteTimer) {
+        clearInterval(this.quoteTimer)
+        this.quoteTimer = 0
+      }
+    },
+    startQuote(seq) {
+      this.stopQuote()
+      this.quoteTimer = setInterval(() => {
+        this.refreshQuote(seq)
+      }, 15000)
+    },
+    async refreshQuote(seq) {
+      const id = this.instrument?.instrument_id
+      if (!id) return
+      try {
+        const res = await api.getQuote({ instrument_id: id })
+        if (seq && seq !== this.seq) return
+        this.quote = res.data || null
+        this.mergeQuoteIntoBars(this.quote)
+      } catch {
+        if (seq && seq !== this.seq) return
+      }
+    },
+    // 延迟行情合入最后一根 bar，K 线随最新价变化；已定格 bar 不覆盖。
+    // 新交易日改由后端重拉判定（休市日不追加假 bar），每日期间只触发一次。
+    mergeQuoteIntoBars(q) {
+      const day = timeKey(q?.market_time || q?.observed_at)
+      if (!day || !q?.last || !this.bars.length) return
+      const today = timeKey((Date.now() + 8 * 3600 * 1000) / 1000)
+      if (day > today) return
+      const last = this.bars[this.bars.length - 1]
+      const lastDay = timeKey(last.time)
+      if (day < lastDay) return
+      if (day > lastDay) {
+        if (this.barsReloadDay === day) return
+        this.barsReloadDay = day
+        this.reloadBars()
+        return
+      }
+      if (last.is_final) return
+      this.bars = [...this.bars.slice(0, -1), {
+        ...last,
+        open: q.open || last.open,
+        high: q.high || last.high,
+        low: q.low || last.low,
+        close: q.last,
+        volume: q.volume || last.volume
+      }]
+      if (timeKey(this.hover?.time) === lastDay) this.hover = this.bars[this.bars.length - 1]
+    },
+    // 重拉展示窗口 bars（含后端盘中 overlay），拉取失败保留现有数据。
+    async reloadBars() {
+      const id = this.instrument?.instrument_id
+      if (!id) return
+      try {
+        const ohlcv = await api.getOHLCV({ instrument_id: id, period: this.period, adjust: this.adjust, limit: 400 })
+        this.bars = ohlcv.data.bars || []
+        this.ohlcvMeta = ohlcv.data
+        await this.refreshIndicators(this.seq)
+      } catch {
+        /* 下轮报价轮询再试 */
+      }
+    },
+    async loadMore() {
+      const cursor = this.ohlcvMeta?.next_cursor
+      if (!cursor || !this.instrument?.instrument_id || this.ohlcvLoadingMore) return
+      const seq = this.seq
+      this.ohlcvLoadingMore = true
+      try {
+        const ohlcv = await api.getOHLCV({
+          instrument_id: this.instrument.instrument_id,
+          period: this.period,
+          adjust: this.adjust,
+          cursor,
+          limit: 400
+        })
+        if (seq !== this.seq) return
+        const older = ohlcv.data.bars || []
+        const seen = new Set(older.map((b) => b.time))
+        this.bars = [...older, ...this.bars.filter((b) => !seen.has(b.time))]
+        this.ohlcvMeta = { ...ohlcv.data, bars: this.bars }
+        await this.refreshIndicators(seq)
+      } catch (e) {
+        if (seq !== this.seq) return
+        this.ohlcvError = errText(e)
+      } finally {
+        if (seq === this.seq) this.ohlcvLoadingMore = false
+      }
+    },
+    async setPeriod(period) {
+      this.period = period
+      this.schedulePersist()
+      if (this.instrument?.instrument_id) await this.selectInstrument(this.instrument.instrument_id)
+    },
+    async setAdjust(adjust) {
+      this.adjust = adjust
+      this.schedulePersist()
+      if (this.instrument?.instrument_id) await this.selectInstrument(this.instrument.instrument_id)
+    },
+    async refreshIndicators(seq) {
+      if (!this.instrument?.instrument_id || !this.chartIndicators.length) {
+        this.series = []
+        return
+      }
+      try {
+        const res = await api.indicatorSeries({
+          instrument_id: this.instrument.instrument_id,
+          period: this.period,
+          adjust: this.adjust,
+          indicators: this.chartIndicators
+        })
+        if (seq && seq !== this.seq) return
+        this.series = res.data.series || []
+      } catch {
+        if (seq && seq !== this.seq) return
+        this.series = []
+      }
+    },
+    addIndicator(type) {
+      const d = this.registry.find((r) => r.type === type)
+      this.chartIndicators = [
+        ...this.chartIndicators,
+        { id: `${type.toLowerCase()}${Date.now()}`, type, params: { ...(d?.default_params || {}) } }
+      ]
+      this.schedulePersist()
+      this.refreshIndicators(this.seq)
+    },
+    removeIndicator(id) {
+      this.chartIndicators = this.chartIndicators.filter((r) => r.id !== id)
+      this.schedulePersist()
+      this.refreshIndicators(this.seq)
+    },
+    updateIndicatorParam(id, key, value) {
+      const n = Number(value)
+      this.chartIndicators = this.chartIndicators.map((row) => {
+        if (row.id !== id) return row
+        return { ...row, params: { ...row.params, [key]: Number.isFinite(n) ? n : row.params[key] } }
+      })
+      this.schedulePersist()
+      this.refreshIndicators(this.seq)
+    },
+    applyStrategyIndicators() {
+      const inds = this.draft?.dsl?.indicators
+      if (!Array.isArray(inds)) return
+      this.chartIndicators = withThreePanes(inds.map((row) => ({ ...row })))
+      this.schedulePersist()
+      this.refreshIndicators(this.seq)
+    },
+    async generate() {
+      this.genStatus = 'queued'
+      this.genError = ''
+      try {
+        const res = await api.generateDraft(
+          { text: this.prompt, instrument_id: this.instrument?.instrument_id || '', draft_id: this.draft?.draft_id, base_revision: this.draft?.revision },
+          newKey()
+        )
+        const started = payloadOf(res)
+        const id = started.generation_id
+        this.generationId = id
+        if (!id) {
+          this.genStatus = 'failed'
+          this.genError = '生成任务没有返回 ID'
+          return { status: 'failed', hasDsl: false, err: this.genError }
+        }
+        for (let i = 0; i < 40; i += 1) {
+          const g = payloadOf(await api.getGeneration(id))
+          let dsl = g.dsl && typeof g.dsl === 'object' ? g.dsl : null
+          if (!dsl && typeof g.dsl === 'string') {
+            try { dsl = JSON.parse(g.dsl) } catch { dsl = null }
+          }
+          this.genStatus = g.status || this.genStatus
+          this.draft = {
+            draft_id: g.draft_id || started.draft_id,
+            revision: g.draft_revision ?? g.revision,
+            dsl,
+            assumptions: Array.isArray(g.assumptions) ? g.assumptions : [],
+            clarification: Array.isArray(g.clarification) ? g.clarification : [],
+            compiled: g.compiled
+          }
+          this.draftRev += 1
+          if (dsl) this.dslText = JSON.stringify(dsl, null, 2)
+          if (g.error_message) this.genError = g.error_message
+          if (g.status === 'ready' && !dsl) {
+            await new Promise((r) => setTimeout(r, 250))
+            continue
+          }
+          if (['ready', 'failed', 'unsupported', 'needs_clarification', 'canceled'].includes(g.status)) break
+          await new Promise((r) => setTimeout(r, 250))
+        }
+        if (!['ready', 'failed', 'unsupported', 'needs_clarification', 'canceled'].includes(this.genStatus)) {
+          this.genStatus = 'failed'
+          this.genError = this.genError || '生成超时'
+        }
+        if (this.draft?.dsl?.instrument_id && this.instrument?.instrument_id !== this.draft.dsl.instrument_id) {
+          await this.selectInstrument(this.draft.dsl.instrument_id)
+        }
+      } catch (e) {
+        this.genStatus = 'failed'
+        this.genError = errText(e)
+      }
+      return { status: this.genStatus, hasDsl: Boolean(this.draft?.dsl), err: this.genError, id: this.generationId }
+    },
+    async cancelGenerate() {
+      if (!this.generationId) return
+      try {
+        await api.cancelGeneration(this.generationId)
+        this.genStatus = 'canceled'
+      } catch (e) {
+        this.genError = errText(e)
+      }
+    },
+    setKdjK(value) {
+      if (!this.draft?.dsl) return
+      const dsl = JSON.parse(JSON.stringify(this.draft.dsl))
+      walkSetK(dsl.entry, value)
+      this.draft = { ...this.draft, dsl }
+      this.dslText = JSON.stringify(dsl, null, 2)
+      this.draftRev += 1
+    },
+    async applyDraft() {
+      if (!this.draft?.draft_id) {
+        this.genError = '请先生成规则'
+        return
+      }
+      try {
+        const dsl = this.showAdvanced && this.dslText ? JSON.parse(this.dslText) : this.draft.dsl
+        const res = await api.patchDraft(this.draft.draft_id, { revision: this.draft.revision, dsl })
+        this.draft = { ...this.draft, ...res.data }
+        if (res.data.dsl) this.dslText = JSON.stringify(res.data.dsl, null, 2)
+        this.draftRev += 1
+        this.savedDraftRev = this.draftRev
+        this.saveNotice = `规则已更新，修订 ${res.data.revision}`
+      } catch (e) {
+        this.genError = errText(e)
+      }
+    },
+    // 规则窗口应用：PATCH 编辑态（服务端 CAS），冲突时提示差异不静默覆盖。
+    async patchEditorState(editorState) {
+      if (!this.draft?.draft_id) return
+      this.ruleConflict = ''
+      try {
+        const res = await api.patchDraft(this.draft.draft_id, {
+          revision: this.draft.revision,
+          editor_schema_version: 'strategy.editor.v1',
+          editor_state: editorState
+        })
+        this.draft = { ...res.data }
+        this.dslText = res.data.dsl ? JSON.stringify(res.data.dsl, null, 2) : ''
+        this.draftRev += 1
+        this.savedDraftRev = this.draftRev
+        this.saveNotice = `规则已更新，修订 ${res.data.revision}`
+      } catch (e) {
+        if (e?.code === 'REVISION_CONFLICT') {
+          this.ruleConflict = '窗口打开期间草稿已被更新（可能是 AI 修改），已载入最新内容，请核对后重试应用。'
+          await this.loadDraft(this.draft.draft_id)
+          return
+        }
+        this.genError = errText(e)
+      }
+    },
+    // explain 模式：只生成解释文本，不改草稿规则与 revision。
+    async explainDraft() {
+      if (!this.draft?.draft_id) {
+        this.genError = '请先生成或复制规则，再使用 AI 解释'
+        return
+      }
+      this.genStatus = 'queued'
+      this.genError = ''
+      try {
+        const res = await api.generateDraft(
+          {
+            text: this.prompt || '解释当前规则',
+            instrument_id: this.instrument?.instrument_id || '',
+            draft_id: this.draft.draft_id,
+            base_revision: this.draft.revision,
+            mode: 'explain'
+          },
+          newKey()
+        )
+        const started = payloadOf(res)
+        for (let i = 0; i < 40; i += 1) {
+          const g = payloadOf(await api.getGeneration(started.generation_id))
+          this.genStatus = g.status || this.genStatus
+          if (g.explanation) this.explanation = g.explanation
+          if (['ready', 'failed', 'unsupported', 'needs_clarification', 'canceled'].includes(g.status)) break
+          await new Promise((r) => setTimeout(r, 250))
+        }
+      } catch (e) {
+        this.genStatus = 'failed'
+        this.genError = errText(e)
+      }
+    },
+    // 深链加载本人草稿（外人 ID 由后端统一 404）；新草稿清除旧策略 versionId 与旧回测结果。
+    async loadDraft(draftId) {
+      if (!draftId) return
+      try {
+        const res = await api.getDraft(draftId)
+        const data = res.data
+        this.draft = data
+        this.dslText = data?.dsl ? JSON.stringify(data.dsl, null, 2) : ''
+        this.draftRev += 1
+        this.savedDraftRev = this.draftRev
+        this.strategyId = ''
+        this.versionId = ''
+        this.backtest = null
+        this.results = null
+        this.trades = null
+        this.genStatus = ''
+        this.genError = ''
+        if (data?.dsl?.instrument_id) await this.selectInstrument(data.dsl.instrument_id)
+      } catch (e) {
+        this.saveError = errText(e)
+      }
+    },
+    // 放弃未保存修改：从后端重载草稿；没有草稿时清空本地编辑。
+    async discardEdits() {
+      if (this.draft?.draft_id) {
+        await this.loadDraft(this.draft.draft_id)
+        return
+      }
+      this.draft = null
+      this.dslText = ''
+      this.savedDraftRev = this.draftRev
+    },
+    async saveCurrent() {
+      if (!this.draft?.draft_id) {
+        this.saveError = '请先生成可执行规则'
+        return null
+      }
+      this.saveBusy = true
+      this.saveError = ''
+      try {
+        const payload = { draft_id: this.draft.draft_id, revision: this.draft.revision, base_version_id: this.versionId }
+        const saved = this.strategyId
+          ? await api.saveStrategyVersion(this.strategyId, payload, newKey())
+          : await api.saveStrategy(payload, newKey())
+        this.strategyId = saved.data.strategy_id
+        this.versionId = saved.data.version_id
+        this.savedDraftRev = this.draftRev
+        this.saveNotice = `已保存版本 ${saved.data.revision}`
+        await this.refreshStrategies()
+        return saved.data
+      } catch (e) {
+        this.saveError = errText(e)
+        return null
+      } finally {
+        this.saveBusy = false
+      }
+    },
+    async refreshStrategies() {
+      try {
+        const res = await api.listStrategies({ limit: 20 })
+        this.strategies = res.data.items || []
+      } catch {
+        this.strategies = []
+      }
+    },
+    async openStrategy(id) {
+      if (!id) return
+      try {
+        const res = await api.getStrategy(id)
+        const current = (res.data.versions || [])[0]
+        this.strategyId = id
+        this.versionId = current?.id || res.data.strategy?.current_version_id || ''
+        if (current?.dsl) {
+          const imported = await api.importDraft({
+            dsl: current.dsl,
+            instrument_id: current.dsl.instrument_id,
+            text: current.name || ''
+          })
+          this.draft = imported.data
+          this.dslText = JSON.stringify(imported.data.dsl, null, 2)
+        }
+        this.runs = res.data.recent_runs || []
+        if (this.draft?.dsl?.instrument_id) await this.selectInstrument(this.draft.dsl.instrument_id)
+      } catch (e) {
+        this.saveError = errText(e)
+      }
+    },
+    async runBacktest() {
+      if (!this.draft?.dsl) {
+        this.btError = '请先生成可执行规则'
+        return
+      }
+      if (!this.instrument?.instrument_id) {
+        this.btError = '请先选择一只股票'
+        return
+      }
+      if (!this.start || !this.end) {
+        this.btError = '请填写回测起止日期'
+        return
+      }
+      if (this.start > this.end) {
+        this.btError = '起始日期不能晚于结束日期'
+        return
+      }
+      if (!this.initialCash || Number(this.initialCash) <= 0) {
+        this.btError = '请填写大于 0 的初始资金'
+        return
+      }
+      this.btBusy = true
+      this.btError = ''
+      this.results = null
+      this.trades = null
+      try {
+        const saved = await this.saveCurrent()
+        if (!saved) {
+          this.btError = this.saveError || '保存失败，无法回测'
+          return
+        }
+        const payload = {
+          strategy_version_id: saved.version_id,
+          instrument_id: this.instrument.instrument_id,
+          start: this.start,
+          end: this.end,
+          initial_cash: this.initialCash,
+          currency: this.instrument.currency,
+          fee_schedule_id: 'product_default_assumption',
+          commission_config: '0.00025',
+          slippage_bps: this.slippage,
+          participation_cap: '0.01',
+          benchmark: 'buy_hold',
+          execution_profile_id: 'next_session_open'
+        }
+        const created = await api.createBacktest(payload, newKey())
+        const id = created.data.run_id
+        let run
+        for (let i = 0; i < 80; i += 1) {
+          await new Promise((r) => setTimeout(r, 250))
+          run = (await api.getBacktest(id)).data
+          this.backtest = run
+          if (['succeeded', 'failed', 'canceled', 'insufficient_data'].includes(run.status)) break
+        }
+        if (run?.status === 'succeeded') {
+          this.results = (await api.getBacktestResults(id)).data
+          this.trades = (await api.getBacktestTrades(id)).data
+          if (this.results?.manifest?.initial_cash_raised) {
+            this.initialCash = String(this.results.manifest.initial_cash_raised)
+          }
+          this.resultTab = 'overview'
+          this.mobileTab = this.mobileTab === 'quote' ? 'quote' : 'result'
+        } else {
+          this.btError = run?.error_message || '回测未成功'
+        }
+      } catch (e) {
+        this.btError = errText(e)
+      } finally {
+        this.btBusy = false
+      }
+    },
+    async cancelBacktest() {
+      const id = this.backtest?.run_id
+      if (!id) return
+      try {
+        await api.cancelBacktest(id)
+      } catch (e) {
+        this.btError = errText(e)
+      }
+    },
+    async exportCSV() {
+      const id = this.backtest?.run_id
+      if (!id) return
+      try {
+        const res = await api.exportBacktest(id)
+        const blob = res.data instanceof Blob ? res.data : new Blob([res.data], { type: 'text/csv' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `${id}.csv`
+        a.click()
+        URL.revokeObjectURL(url)
+      } catch (e) {
+        this.btError = errText(e)
+      }
+    }
+  }
+})

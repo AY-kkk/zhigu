@@ -94,6 +94,9 @@ func (s *ResearchService) CreateGrant(ctx context.Context, runID, taskID string,
 	err := s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var existing modelfinance.ToolGrant
 		if err := tx.Where("request_id = ?", in.RequestID).Take(&existing).Error; err == nil {
+			if existing.ArgsHash != in.ArgsHash || existing.RunID != runID || existing.TaskID != taskID || existing.ToolName != in.ToolName {
+				return NewError(409, "conflict", "GRANT_PAYLOAD_CONFLICT", "相同请求对应不同授权")
+			}
 			grant = existing
 			return nil
 		}
@@ -125,35 +128,136 @@ func (s *ResearchService) CreateGrant(ctx context.Context, runID, taskID string,
 	return grant, err
 }
 
-func (s *ResearchService) DataQuery(ctx context.Context, grantID, operation string, params map[string]any) (map[string]any, error) {
+func (s *ResearchService) DataQuery(ctx context.Context, grantID, operation string, params map[string]any) (DataQueryResult, error) {
 	if tok := TaskTokenFrom(ctx); tok != "" {
 		var g modelfinance.ToolGrant
 		if err := s.DB.Where("id = ?", grantID).Take(&g).Error; err != nil {
-			return nil, NewError(404, "not_found", "GRANT_NOT_FOUND", "授权不存在")
+			return DataQueryResult{}, NewError(404, "not_found", "GRANT_NOT_FOUND", "授权不存在")
 		}
 		if err := s.AuthorizeTaskToken(ctx, tok, g.RunID, g.TaskID, "research"); err != nil {
-			return nil, err
+			return DataQueryResult{}, err
 		}
 	}
-	var payload map[string]any
+	var out DataQueryResult
 	err := s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if _, err := s.consumeGrant(tx, grantID, operation, params); err != nil {
-			return err
-		}
-		payload = FixtureFinancials()
-		if operation == "search_filings" {
-			payload = FixtureFilings()
-		}
-		raw, _ := json.Marshal(payload)
-		hash, err := CanonicalRecordHashMap(payload)
+		grant, err := s.consumeGrant(tx, grantID, operation, params)
 		if err != nil {
 			return err
 		}
+		var run modelfinance.ResearchRun
+		if err := tx.Where("id = ?", grant.RunID).Take(&run).Error; err != nil {
+			return err
+		}
+		snap := RunSnapshot{ID: run.ID, InstrumentID: run.InstrumentID, AsOf: run.AsOf, Mode: run.Mode}
+		var recs []ProviderRecord
+		switch operation {
+		case "get_financials":
+			metrics := stringList(params["metrics"])
+			periods := stringList(params["periods"])
+			if run.Mode == ModeLive {
+				live := s.Live
+				if live == nil {
+					live = NewLiveSource()
+				}
+				recs, _, err = live.Financials(ctx, snap, metrics, periods)
+			} else {
+				recs, err = fixtureFinancialRecords(run)
+			}
+		case "search_filings":
+			query, _ := params["query"].(string)
+			limit := 5
+			switch v := params["limit"].(type) {
+			case float64:
+				limit = int(v)
+			case int:
+				limit = v
+			}
+			if run.Mode == ModeLive {
+				live := s.Live
+				if live == nil {
+					live = NewLiveSource()
+				}
+				recs, _, err = live.Filings(ctx, snap, query, limit)
+			} else {
+				recs, err = fixtureFilingRecords(run)
+			}
+		default:
+			return NewError(400, "validation", "INVALID_OPERATION", "operation 仅支持 get_financials 或 search_filings")
+		}
+		if err != nil {
+			return err
+		}
+		issued := make([]IssuedRecord, 0, len(recs))
 		now := time.Now().UTC()
-		rec := modelfinance.DataRecord{ID: "rec_" + uuid.NewString(), GrantID: grantID, RecordHash: hash, Payload: datatypes.JSON(raw), CreatedAt: now}
-		return tx.Create(&rec).Error
+		for _, rec := range recs {
+			rec.Text = NormalizeText(rec.Text)
+			h, err := rec.Hash()
+			if err != nil {
+				return err
+			}
+			raw, _ := json.Marshal(rec.CanonicalMap())
+			row := modelfinance.ProviderRecordRow{ID: "prec_" + uuid.NewString(), GrantID: grantID, RecordHash: h, Payload: datatypes.JSON(raw), CreatedAt: now}
+			if err := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "grant_id"}, {Name: "record_hash"}}, DoNothing: true}).Create(&row).Error; err != nil {
+				return err
+			}
+			var stored modelfinance.ProviderRecordRow
+			if err := tx.Where("grant_id = ? AND record_hash = ?", grantID, h).Take(&stored).Error; err != nil {
+				return err
+			}
+			issued = append(issued, IssuedRecord{RecordID: stored.ID, RecordHash: h, Record: rec})
+		}
+		_ = tx.Model(&grant).Update("status", "succeeded")
+		out = DataQueryResult{Records: issued, QualityStatus: "verified", Warnings: []string{}}
+		if run.Mode == ModeFixture {
+			out.Warnings = []string{"fixture"}
+			if operation == "search_filings" {
+				out.QualityStatus = "insufficient"
+			}
+		}
+		return nil
 	})
-	return payload, err
+	return out, err
+}
+
+func stringList(v any) []string {
+	switch t := v.(type) {
+	case []string:
+		return t
+	case []any:
+		out := make([]string, 0, len(t))
+		for _, x := range t {
+			if s, ok := x.(string); ok {
+				out = append(out, s)
+			}
+		}
+		return out
+	default:
+		return nil
+	}
+}
+
+func fixtureFinancialRecords(run modelfinance.ResearchRun) ([]ProviderRecord, error) {
+	return []ProviderRecord{evidenceMapToRecord(run.InstrumentID, FixtureFinancials(), ModeFixture)}, nil
+}
+
+func fixtureFilingRecords(run modelfinance.ResearchRun) ([]ProviderRecord, error) {
+	return []ProviderRecord{evidenceMapToRecord(run.InstrumentID, FixtureFilings(), ModeFixture)}, nil
+}
+
+func evidenceMapToRecord(instrumentID string, payload map[string]any, mode string) ProviderRecord {
+	raw, _ := json.Marshal(payload)
+	var ev EvidenceIn
+	_ = json.Unmarshal(raw, &ev)
+	unit := "CNY_million"
+	if len(ev.Metrics) > 0 {
+		unit = ev.Metrics[0].Unit
+	}
+	return ProviderRecord{
+		InstrumentID: instrumentID, SourceID: ev.SourceID, SourceURL: ev.SourceURL, SourceKind: ev.SourceKind,
+		Title: ev.Title, Locator: ev.Locator, Text: NormalizeText(ev.Text), Metrics: ev.Metrics,
+		PublishedAt: ev.PublishedAt, AvailableAt: ev.AvailableAt, RetrievedAt: ev.RetrievedAt,
+		DataVersion: ev.DataVersion, Mode: mode, Basis: defaultBasis("", unit),
+	}
 }
 
 func (s *ResearchService) consumeGrant(tx *gorm.DB, grantID, toolName string, params any) (modelfinance.ToolGrant, error) {

@@ -56,13 +56,9 @@ func parseDemo(t *testing.T, svc *ResearchService, owner uint) ParseOutput {
 
 func createReqFrom(t *testing.T, draft ParseOutput) CreateResearchInput {
 	t.Helper()
-	asOf := time.Date(2026, 9, 17, 0, 0, 0, 0, time.UTC)
 	return CreateResearchInput{
-		DraftID:      draft.DraftID,
-		Revision:     draft.Revision,
-		InstrumentID: InstrumentDemo,
-		Horizon:      draft.SuggestedHorizon,
-		AsOf:         asOf,
+		DraftID:  draft.DraftID,
+		Revision: draft.Revision,
 	}
 }
 
@@ -98,7 +94,7 @@ func TestCreateRunIdempotency(t *testing.T) {
 		}
 	}
 	other := body
-	other.Horizon = "不同期限"
+	other.Revision = draft.Revision + 1
 	_, err = svc.CreateResearch(ctxUser(1001), "idem-1", other)
 	if !isClass(err, "conflict") {
 		t.Fatalf("want 409 conflict, got %v", err)
@@ -202,15 +198,57 @@ func TestAccountConcurrencyLimit(t *testing.T) {
 func TestUnsupportedInstrument(t *testing.T) {
 	svc := setup(t)
 	draft := parseDemo(t, svc, 1001)
-	body := createReqFrom(t, draft)
-	body.InstrumentID = "AAPL"
-	_, err := svc.CreateResearch(ctxUser(1001), "bad-inst", body)
+	bad := "AAPL"
+	_, err := svc.PatchClaim(ctxUser(1001), draft.DraftID, PatchDraftInput{Revision: draft.Revision, InstrumentID: &bad})
 	if !isClass(err, "validation") {
 		t.Fatalf("want unsupported instrument, got %v", err)
 	}
-	ae, _ := err.(*AppError)
-	if ae == nil || ae.Code != "UNSUPPORTED_INSTRUMENT" {
+	if ErrorCode(err) != "UNSUPPORTED_INSTRUMENT" {
 		t.Fatalf("code: %v", err)
+	}
+}
+
+func TestParsePatchCreateLiveHK(t *testing.T) {
+	t.Setenv("ZHIGU_DATA_MODE", ModeLive)
+	t.Cleanup(ResetLiveCatalogForTest)
+	ReplaceLiveCatalogForTest([]ListedInstrument{
+		{ID: "00700.HK", Symbol: "00700", Name: "腾讯控股", Market: MarketHK, OrgID: "gshk0000700", Column: "hke", Plate: "hke"},
+		{ID: "000001.SZ", Symbol: "000001", Name: "平安银行", Market: MarketA, OrgID: "gssz0000001", Column: "szse", Plate: "sz"},
+	})
+	svc := setup(t)
+	out, err := svc.ParseClaim(ctxUser(1001), ParseInput{
+		Text: "腾讯控股利润改善，未来一年经营前景值得看好。请核对该事实是否有年报支持。",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.InstrumentID == nil || *out.InstrumentID != "00700.HK" {
+		t.Fatalf("want 00700.HK got %+v candidates=%+v", out.InstrumentID, out.Candidates)
+	}
+	created, err := svc.CreateResearch(ctxUser(1001), "hk-live-1", createReqFrom(t, out))
+	if err != nil {
+		t.Fatalf("create tencent: %v", err)
+	}
+	if created.RunID == "" {
+		t.Fatal("missing run id")
+	}
+
+	generic, err := svc.ParseClaim(ctxUser(1002), ParseInput{
+		Text: "某公司利润改善，未来一年经营前景值得看好，请核对已披露年报再判断。",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw := "700.HK"
+	patched, err := svc.PatchClaim(ctxUser(1002), generic.DraftID, PatchDraftInput{Revision: generic.Revision, InstrumentID: &raw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if patched.InstrumentID == nil || *patched.InstrumentID != "00700.HK" {
+		t.Fatalf("normalize patch got %+v", patched.InstrumentID)
+	}
+	if _, err := svc.CreateResearch(ctxUser(1002), "hk-live-2", createReqFrom(t, patched)); err != nil {
+		t.Fatalf("create patched hk: %v", err)
 	}
 }
 
@@ -234,7 +272,7 @@ func sampleReport(runID string) VerifiedReport {
 		Challenge:           []Argument{},
 		Assumptions:         []string{"a"},
 		ChangeConditions:    []string{"c"},
-		Unknowns:            []string{"u"},
+		Unknowns:            []string{"无法取数：缺少足以判断该主张的已披露资料。"},
 		EvidenceIDs:         []string{},
 		ModelConfigVersion:  "model_fixture_v1",
 		SourcePolicyVersion: "source_fixture_v1",

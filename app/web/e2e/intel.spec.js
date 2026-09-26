@@ -1,0 +1,173 @@
+import { test, expect } from '@playwright/test'
+
+const wrap = (data, meta = {}) => ({ data, error: null, trace_id: 'e2e-intel', meta: { request_id: 'e2e-intel', as_of: '2026-09-26T00:00:00Z', coverage: { status: 'complete', scope: 'events-v1', last_success_at: '2026-09-26T00:00:00Z', pending_count: 0, gaps: [] }, warnings: ['演示数据'], ...meta } })
+
+function mockIntel(page) {
+  const state = { watched: [], step: 0, notifications: [] }
+  page.route('**/api/finance/intel/v1/**', async (route) => {
+    const request = route.request()
+    const url = new URL(request.url())
+    const path = url.pathname.replace('/api/finance/intel/v1', '')
+    const method = request.method()
+    const fulfill = (data, status = 200, headers = {}) => route.fulfill({ status, contentType: 'application/json', headers, body: JSON.stringify(wrap(data)) })
+    const fail = (status, code, message, headers = {}) => route.fulfill({ status, contentType: 'application/json', headers, body: JSON.stringify({ data: null, error: { code, message }, trace_id: 'e2e-intel', meta: null }) })
+    if (path === '/session' && method === 'GET') {
+      if (request.headers().authorization) {
+        return fulfill({ mode: 'live', principal_id: 'user-e2e', role: 'user', namespace_label: '真实数据', expires_at: '2026-09-27T00:00:00Z', replay_version: 0, generation: 1 })
+      }
+      if (!request.headers().cookie?.includes('zhigu_intel_demo=')) {
+        return fail(401, 'DEMO_SESSION_EXPIRED', '演示会话不存在', { 'set-cookie': 'zhigu_intel_bootstrap=boot-e2e; Path=/api/finance/intel/v1; HttpOnly; SameSite=Lax' })
+      }
+      return fulfill({ mode: 'demo', principal_id: 'demo-e2e', role: 'user', namespace_label: '演示数据', expires_at: '2026-09-27T00:00:00Z', replay_version: state.step, generation: 1, branch: 'main', step_index: state.step })
+    }
+    if (path === '/demo-sessions' && method === 'POST') {
+      return route.fulfill({ status: 201, contentType: 'application/json', headers: { 'set-cookie': 'zhigu_intel_demo=session-e2e; Path=/api/finance/intel/v1; HttpOnly; SameSite=Lax' }, body: JSON.stringify(wrap({ session_id: 'session-e2e', expires_at: '2026-09-27T00:00:00Z', namespace_label: '演示数据', generation: 1, replay_version: 0 })) })
+    }
+    if (path === '/instruments') return fulfill({ items: [{ code: 'DEMO.A', name: '演示公司A', exchange: 'DEMO' }, { code: 'DEMO.B', name: '演示公司B', exchange: 'DEMO' }] })
+    if (path === '/watchlist' && method === 'GET') return fulfill({ items: state.watched.map((code) => ({ code, name: code === 'DEMO.A' ? '演示公司A' : '演示公司B', subscribed_at: '2026-09-26T00:00:00Z' })) })
+    if (path.startsWith('/watchlist/') && method === 'PUT') {
+      const code = decodeURIComponent(path.split('/').pop())
+      if (!state.watched.includes(code)) state.watched.push(code)
+      return fulfill({ code, subscribed_at: '2026-09-26T00:00:00Z' })
+    }
+    if (path.startsWith('/watchlist/') && method === 'DELETE') {
+      const code = decodeURIComponent(path.split('/').pop())
+      state.watched = state.watched.filter((x) => x !== code)
+      return route.fulfill({ status: 204, body: '' })
+    }
+    if (path === '/replay/actions' && method === 'POST') {
+      state.step += 1
+      if (state.step === 1) state.notifications.push({ id: 'ntf-1', event_id: 'evt_demo_acq', title: '事件情报更新', reason: '固定回放步骤 S1', created_at: '2026-09-26T00:00:00Z', status: 'unread' })
+      return fulfill({ replay_version: state.step, generation: 1, step_index: state.step, simulated_at: '2026-09-26T00:00:00Z', event_version: state.step, notification_count: state.notifications.length, change_ids: state.step === 1 ? ['chg_S1'] : [], done: false })
+    }
+    if (path === '/events' && method === 'GET') {
+      return fulfill({ items: state.step ? [{ event_id: 'evt_demo_acq', type: 'acquisition', title: 'DEMO.A 收购 DEMO.B', subjects: [{ code: 'DEMO.A', role: 'subject', evidence_ids: [] }, { code: 'DEMO.B', role: 'counterparty', evidence_ids: [] }], verification: state.step === 1 ? 'unverified' : 'confirmed', phase: state.step === 1 ? 'unknown' : 'proposed', freshness: 'fresh', support_level: state.step === 1 ? 'low' : 'high', event_version: state.step, updated_at: '2026-09-26T00:00:00Z', open_conflict_count: 0 }] : [], next_cursor: '' })
+    }
+    if (path === '/events/evt_demo_acq' && method === 'GET') return fulfill({ event_id: 'evt_demo_acq', title: 'DEMO.A 收购 DEMO.B', core_claim: 'DEMO.A 存在收购 DEMO.B 的该项交易安排', verification: 'confirmed', phase: 'proposed', freshness: 'fresh', support_level: 'high', selected_version: state.step, latest_version: state.step, current_values: [{ field: 'transaction_amount', value: '800000000', currency: 'CNY' }], subjects: [{ code: 'DEMO.A', role: 'subject', evidence_ids: [] }] })
+    if (path === '/events/evt_demo_acq/timeline') return fulfill({ items: [{ node_id: 'node-1', kind: 'source', title: 'DEMO.A 公告', excerpt: '公司正在推进收购B。', disclosed_at: '2026-09-10T01:00:00Z', recorded_at: '2026-09-10T01:00:00Z' }] })
+    if (path === '/events/evt_demo_acq/evidence') return fulfill({ items: [{ evidence_id: 'ev_n1_core', claim_key: '__core__', quote: { text: '公司正在推进收购B' }, grade: 'fact', stance: 'support', weight: '1', status: 'active', source_revision_id: 'rev_n1' }] })
+    if (path === '/events/evt_demo_acq/conflicts') return fulfill({ items: [] })
+    if (path === '/events/evt_demo_acq/changes') return fulfill({ items: [{ change_id: 'chg_S1', event_version: state.step || 1, kind: 'new_event', summary: '事件情报更新：S1', recorded_at: '2026-09-26T00:00:00Z' }] })
+    if (path === '/notifications') return fulfill({ items: state.notifications, next_cursor: '', unread_count: state.notifications.filter((x) => x.status === 'unread').length })
+    if (path.startsWith('/notifications/') && method === 'PATCH') {
+      const id = path.split('/').pop()
+      const item = state.notifications.find((x) => x.id === id)
+      if (item) item.status = JSON.parse(request.postData() || '{}').status
+      return fulfill(item || {})
+    }
+    if (path === '/data-status') return fulfill({ providers: [{ provider: 'fixture', status: 'enabled', rights: 'demo-summary-only' }], coverage: { status: 'complete', scope: 'events-v1', last_success_at: '2026-09-26T00:00:00Z', pending_count: 0, gaps: [] } })
+    return fail(404, 'NOT_FOUND', '未找到')
+  })
+  return state
+}
+
+test('intel opens as an independent module window and preserves the old page', async ({ page }) => {
+  await page.context().addInitScript(() => {
+    localStorage.setItem('zhigu_token', 'e2e-token')
+    localStorage.setItem('zhigu_user', 'e2e-user')
+    localStorage.setItem('zhigu_role', 'user')
+  })
+  mockIntel(page)
+  await page.goto('/app/research/new')
+  const beforePages = page.context().pages().length
+  const popupPromise = page.waitForEvent('popup', { timeout: 5000 }).then((popup) => popup).catch(() => null)
+  const intelButton = page.getByRole('button', { name: '事件情报' })
+  await intelButton.click()
+  await intelButton.click()
+  let popup = await popupPromise
+  if (!popup) {
+    await expect.poll(() => page.context().pages().length, { timeout: 10000 }).toBeGreaterThan(beforePages)
+    popup = page.context().pages()[page.context().pages().length - 1]
+  }
+  await popup.waitForLoadState()
+  const popupPath = new URL(popup.url()).pathname
+  expect(popupPath === '/app/intel' || popupPath === '/login').toBeTruthy()
+  if (popupPath === '/app/intel') {
+    await expect(popup.getByRole('heading', { name: '事件情报与证据时间线' })).toBeVisible()
+  } else {
+    await expect(popup.getByRole('heading', { name: '知股受邀登录' })).toBeVisible()
+  }
+  await expect(page.getByRole('link', { name: '重试打开事件情报' })).toBeVisible()
+  expect(page.url()).toContain('/app/research/new')
+  await page.waitForTimeout(600)
+  expect(page.context().pages().length).toBe(2)
+})
+
+test('intel demo chain shows watchlist, event detail, evidence and replay watermark', async ({ page }) => {
+  mockIntel(page)
+  await page.goto('/app/intel/demo')
+  await expect(page.getByRole('button', { name: '开始演示' })).toBeVisible()
+  await page.getByRole('button', { name: '开始演示' }).click()
+  await expect(page.getByRole('heading', { name: '谁最先说，事实怎么变，哪些说法冲突，现在是什么状态？' })).toBeVisible()
+  await expect(page.getByText('演示数据').first()).toBeVisible()
+  await expect(page.getByText('仅整理信息，不构成投资建议')).toBeVisible()
+  await page.getByRole('button', { name: '关注设置' }).click()
+  await page.getByRole('button', { name: '添加' }).first().click()
+  await page.getByRole('button', { name: '事件流', exact: true }).click()
+  await page.getByRole('button', { name: '下一步' }).click()
+  await expect(page.getByText('DEMO.A 收购 DEMO.B')).toBeVisible()
+  await page.getByText('DEMO.A 收购 DEMO.B').click()
+  await expect(page.getByText('DEMO.A 存在收购 DEMO.B 的该项交易安排')).toBeVisible()
+  await expect(page.getByText('公司正在推进收购B').first()).toBeVisible()
+  await expect(page.getByText('当前结论')).toBeVisible()
+  await expect(page.getByText('演示数据').first()).toBeVisible()
+  await page.locator('.intel-detail-main').screenshot({ path: '../../artifacts/intel/visual/demo-detail-element.png' })
+  await page.screenshot({ path: '../../artifacts/intel/visual/demo-detail-viewport.png' })
+})
+
+test('intel has empty/loading/failure/retry and mobile-safe controls', async ({ page }) => {
+  mockIntel(page)
+  await page.setViewportSize({ width: 375, height: 812 })
+  await page.goto('/app/intel/demo')
+  await expect(page.getByRole('heading', { name: '事件情报与证据时间线' })).toBeVisible()
+  await page.getByRole('button', { name: '开始演示' }).click()
+  await expect(page.getByText('当前关注范围内暂无事件')).toBeVisible()
+  await page.getByRole('button', { name: '通知中心' }).click()
+  await expect(page.getByText('暂无变化通知')).toBeVisible()
+  await page.getByRole('button', { name: '事件流', exact: true }).click()
+  await expect(page.getByRole('button', { name: '下一步' })).toBeVisible()
+  await expect(page.getByText('仅整理信息，不构成投资建议')).toBeVisible()
+  await page.screenshot({ path: '../../artifacts/intel/visual/demo-mobile.png', fullPage: true })
+})
+
+
+test('intel live routes preserve safe login redirects and reject malicious redirects', async ({ page }) => {
+  await page.route('**/api/finance/auth/login', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ data: { token: 'e2e-token', role: 'user', username: 'e2e-user' }, error: null })
+  }))
+  await page.goto('/app/intel/events/evt_safe')
+  await expect(page).toHaveURL(/\/login\?redirect=\/app\/intel\/events\/evt_safe/)
+  await page.goto('/login?redirect=https%3A%2F%2Fevil.example%2Fsteal')
+  await page.getByPlaceholder('用户名').fill('e2e-user')
+  await page.getByPlaceholder('密码').fill('secret')
+  await page.getByRole('button', { name: '登录' }).click()
+  await expect(page).toHaveURL(/\/app\/research\/new$/)
+  await page.goto('/login?redirect=%2Fapp%2Fintel%2Fdemo')
+  await page.getByPlaceholder('用户名').fill('e2e-user')
+  await page.getByPlaceholder('密码').fill('secret')
+  await page.getByRole('button', { name: '登录' }).click()
+  await expect(page).toHaveURL(/\/app\/intel\/demo$/)
+})
+
+test('intel live account storage change cancels stale identity and reauthenticates', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('zhigu_token', 'first-token')
+    localStorage.setItem('zhigu_user', 'first-user')
+    localStorage.setItem('zhigu_role', 'user')
+  })
+  mockIntel(page)
+  await page.goto('/app/intel')
+  await expect(page.getByRole('heading', { name: '事件情报与证据时间线' })).toBeVisible()
+  const reauth = page.waitForRequest((request) => request.url().includes('/api/finance/intel/v1/session') && request.headers().authorization === 'Bearer other-token')
+  const second = await page.context().newPage()
+  await second.goto('/app/research/new')
+  await second.evaluate(() => {
+    localStorage.setItem('zhigu_token', 'other-token')
+    localStorage.setItem('zhigu_user', 'other-user')
+    localStorage.setItem('zhigu_role', 'user')
+  })
+  await reauth
+  await second.close()
+})

@@ -1,0 +1,116 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "strategy.v2",
+  "title": "strategy.v2 可执行策略 DSL",
+  "description": "编辑态编译产物或手写规则。与 strategy.v1 的差异仅在操作数支持 {ref,lag}（裸字符串 = lag=0）；v1 节点 lag 语义不变。未知字段拒绝。展开后约束：≤100 条件节点、深度 ≤8、lag ≤250、≤20 个指标实例（JSON Schema 无法跨树计数，由编译器强制）。连续性检查不在本文档内，由服务端写入 compiled.continuity_checks 并参与其 hash。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "name", "instrument_id", "signal_period", "price_basis", "indicators", "entry", "exit", "position", "risk", "execution"],
+  "properties": {
+    "schema_version": { "const": "strategy.v2" },
+    "name": { "type": "string", "minLength": 1 },
+    "instrument_id": { "type": "string", "minLength": 1 },
+    "signal_period": { "enum": ["1d"] },
+    "price_basis": { "enum": ["raw", "causal_qfq"] },
+    "indicators": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "type", "params"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "type": { "type": "string", "minLength": 1 },
+          "params": { "type": "object", "additionalProperties": { "type": "integer" } }
+        }
+      }
+    },
+    "entry": { "$ref": "#/$defs/node" },
+    "exit": { "$ref": "#/$defs/node" },
+    "position": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "value"],
+      "properties": {
+        "type": { "const": "equity_fraction" },
+        "value": { "type": "string" }
+      }
+    },
+    "risk": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["check"],
+      "properties": {
+        "check": { "const": "close" },
+        "stop_loss_pct": { "type": ["string", "null"] },
+        "take_profit_pct": { "type": ["string", "null"] },
+        "max_holding_bars": { "type": ["integer", "null"], "minimum": 1 }
+      }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["timing", "priority"],
+      "properties": {
+        "timing": { "const": "next_session_open" },
+        "priority": { "const": "exit_first" }
+      }
+    }
+  },
+  "$defs": {
+    "operand": {
+      "oneOf": [
+        { "type": "string" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["constant"],
+          "properties": { "constant": { "type": "string" } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["ref"],
+          "properties": {
+            "ref": { "type": "string", "minLength": 1 },
+            "lag": { "type": "integer", "minimum": 0, "maximum": 250 }
+          }
+        }
+      ]
+    },
+    "node": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["all"],
+          "properties": { "all": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/node" } } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["any"],
+          "properties": { "any": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/node" } } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["not"],
+          "properties": { "not": { "$ref": "#/$defs/node" } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["op", "left", "right"],
+          "properties": {
+            "op": { "enum": ["gt", "gte", "lt", "lte", "eq", "crosses_above", "crosses_below"] },
+            "left": { "$ref": "#/$defs/operand" },
+            "right": { "$ref": "#/$defs/operand" },
+            "lag": { "type": "integer", "minimum": 0, "maximum": 250 }
+          }
+        }
+      ]
+    }
+  }
+}

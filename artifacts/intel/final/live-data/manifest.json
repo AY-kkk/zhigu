@@ -1,0 +1,43 @@
+{
+  "run_id": "20260926T110829451906Z-live-data",
+  "mode": "live-data",
+  "status": "blocked",
+  "commit": "11b6bc897062b6ffaea1d8ea09e1870facb21de2",
+  "branch": "feat/zhigu-editorial-frontend",
+  "dirty_files_hash": "ec619f7497038319a1d96c38c71fb8b13562df3adb9a10c29cead2d6d6f9b4ef",
+  "dirty_file_count": 137,
+  "prd_sha256": "0a107abe4454e14858999cc794764f41429636f21476fe0e99f869013d69d7a2",
+  "spec_sha256": "7ce153050f546884c2d879ef1545ce449cd9f4fe50d735e35596deec1bb8690d",
+  "rule_version": "rules-v1",
+  "schema_version": "intel.extraction.v1",
+  "prompt_version": "fixture-manual-extraction-v1",
+  "config_version": "intel-config-v1",
+  "environment": {
+    "os": "Darwin",
+    "timezone": "Asia/Shanghai",
+    "go_toolchain": "1.24.2",
+    "web_builder": "vite 6"
+  },
+  "coverage": {
+    "fixture_events": "S1-S8/D manual gold labels",
+    "live_data": "blocked: no authorized provider credentials in this run",
+    "live_model": "blocked: no frozen model credential/config in this run",
+    "user_validation": "blocked: no five-user task study in this run",
+    "performance_load": "blocked: no 10 RPS / 10k event load run in this run"
+  },
+  "acceptance": {
+    "I01-I08": "pass: route/window/demo isolation, safe redirects and storage reauth checks run locally",
+    "I09-I20": "pass: deterministic fixture/rules tests run locally",
+    "I21-I26": "partial: recovery/idempotency tests cover demo replay; production worker/load not proven",
+    "I27-I32": "partial: Chromium/Firefox/WebKit Playwright and 375px smoke pass; Edge/Safari native plus manual keyboard review pending",
+    "I33-I36": "blocked: live sources, load, and five-user validation require external evidence",
+    "I37": "pass: existing research/strategy regression subset ran in this workspace",
+    "I38": "partial: manifest, test logs and 60s fixture video generated; URL deployment evidence pending"
+  },
+  "known_limits": [
+    "Fixture/replay is deterministic but is not authorized live data.",
+    "No public URL or production deploy is claimed by this manifest.",
+    "Source/provider rights and live request IDs must be added before production sign-off."
+  ],
+  "generated_at": "2026-09-26T11:08:29.516703+00:00"
+}

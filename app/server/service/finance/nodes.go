@@ -77,11 +77,24 @@ func (o *Orchestrator) research(ctx context.Context, st wfState) (wfState, error
 				token = ""
 			}
 			budget := o.Svc.loadBudgetSnapshot(o.Svc.DB, st.RunID)
+			proto := ProtocolChatCompletions
+			var cfg map[string]string
+			_ = json.Unmarshal(run.ConfigVersions, &cfg)
+			if cfg["protocol"] != "" {
+				if n, err := NormalizeProtocol(cfg["protocol"]); err == nil {
+					proto = n
+				}
+			}
+			modelVer := "model_fixture_v1"
+			if cfg["model"] != "" {
+				modelVer = cfg["model"]
+			}
 			rt := ResearchTask{
 				SchemaVersion: "1.0", RunID: run.ID, TaskID: task.ID, Role: task.Role, Claim: claim,
 				InstrumentID: run.InstrumentID, AsOf: run.AsOf, Mode: run.Mode,
-				SourcePolicyVersion: "source_fixture_v1", ModelConfigVersion: "model_fixture_v1", PromptVersion: "prompt_v1",
+				SourcePolicyVersion: SourcePolicyVersion, ModelConfigVersion: modelVer, PromptVersion: "prompt_v1",
 				MaxModelCalls: budget.MaxModelCallsPerRole, MaxToolCalls: budget.MaxToolCallsPerRole, DeadlineAt: deadline, TaskToken: token,
+				Protocol: proto,
 			}
 			if _, err := o.Svc.Client.Submit(ctx, rt); err != nil {
 				outCh <- roleOut{role: task.Role, err: err}
@@ -251,16 +264,29 @@ func (o *Orchestrator) synthesize(ctx context.Context, st wfState) (wfState, err
 		summary = "研究失败：主张未能通过引用校验"
 	}
 
+	unknowns = NormalizeUnknowns(unknowns)
+	if len(unknowns) == 0 {
+		unknowns = []string{"无法取数：未获得足以判断该主张的已披露资料。"}
+	}
+
+	var claim Claim
+	_ = json.Unmarshal(run.ClaimSnapshot, &claim)
+	results := JudgeClaims(claim.Items, support, challenge)
+	if quality == "completed" {
+		v := JudgeReport(results)
+		verdict = &v
+		if v == "insufficient" {
+			summary = "双方已结束。按已确认主张，现有资料不足以单独给出支持或反驳。"
+		}
+	}
+
 	st.Report = VerifiedReport{
 		SchemaVersion: "1.0", RunID: st.RunID, Version: 1, Mode: run.Mode, AsOf: run.AsOf,
 		QualityStatus: quality, Verdict: verdict, Summary: summary,
 		Support: support, Challenge: challenge, Assumptions: []string{"收入增长转化为股价需要利润、现金流与估值证据。"},
 		ChangeConditions: []string{"补充利润、现金流和估值证据后重新研究。"},
-		Unknowns: unknowns, EvidenceIDs: unique(eids),
-		ModelConfigVersion: "model_fixture_v1", SourcePolicyVersion: "source_fixture_v1", PromptVersion: "prompt_v1",
-	}
-	if len(st.Report.Unknowns) == 0 {
-		st.Report.Unknowns = []string{"未获得足以判断未来股价方向的证据。"}
+		Unknowns:         unknowns, EvidenceIDs: unique(eids),
+		ModelConfigVersion: "model_fixture_v1", SourcePolicyVersion: SourcePolicyVersion, PromptVersion: "prompt_v1",
 	}
 	return st, nil
 }
@@ -300,7 +326,7 @@ func (o *Orchestrator) verify(ctx context.Context, st wfState) (wfState, error) 
 	if !ok && !st.Repaired && o.RepairN < 1 {
 		st.Repaired = true
 		o.RepairN++
-		st.Report.Unknowns = append(st.Report.Unknowns, "已进行一次修复后再校验")
+		st.Report.Unknowns = NormalizeUnknowns(st.Report.Unknowns)
 		ok = o.structuralOK(st.Report)
 	}
 	if !ok {
@@ -369,6 +395,9 @@ func (o *Orchestrator) structuralOK(r VerifiedReport) bool {
 		return false
 	}
 	if r.QualityStatus == "completed" && r.Verdict == nil {
+		return false
+	}
+	if ValidateUnknowns(r.Unknowns) != nil {
 		return false
 	}
 	return true
@@ -443,7 +472,7 @@ func unique(in []string) []string {
 func FixtureRoleResult(runID, taskID, role string) ResearchResult {
 	res := ResearchResult{
 		SchemaVersion: "1.0", RunID: runID, TaskID: taskID, Status: "insufficient",
-		Arguments: []Argument{}, EvidenceIDs: []string{}, Unknowns: []string{"缺少利润、现金流、估值与市场预期资料。"},
+		Arguments: []Argument{}, EvidenceIDs: []string{}, Unknowns: []string{"无法取数：缺少利润、现金流、估值与市场预期资料。"},
 		Counterevidence: []Argument{}, Usage: Usage{ModelCalls: 0, ToolCalls: 0, InputTokens: 0, OutputTokens: 0, Simulated: true},
 	}
 	if role == RoleSupporter {

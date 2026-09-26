@@ -1,0 +1,5 @@
+Lightweight Charts v5.0.8
+Copyright (c) TradingView, Inc.
+Licensed under Apache License 2.0.
+https://github.com/tradingview/lightweight-charts
+The library is used for rendering only. Indicator math and backtests are implemented by Zhigu.

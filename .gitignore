@@ -29,6 +29,7 @@ app/gosaas/**/.env.*
 # Private upstream source and local audit artifacts are not published.
 /app/gosaas/
 /reviews/
+/artifacts/
 .env.*
 !.env.example
 !**/.env.example
@@ -48,3 +49,6 @@ coverage/
 .idea/
 .vscode/
 .cursor/
+
+# Local design boards; product uses derived files under app/web/src/assets/brand/
+/前端素材/

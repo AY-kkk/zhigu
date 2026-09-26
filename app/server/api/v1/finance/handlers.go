@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-	"time"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
@@ -27,6 +27,8 @@ func Register(engine *gin.Engine, svc *finance.ResearchService, proxy *finance.M
 	consumer := engine.Group("/api/finance")
 	consumer.Use(httpx.AuthRequired())
 	consumer.POST("/claims/parse", a.Parse)
+	consumer.GET("/claims/:id", a.GetClaim)
+	consumer.PATCH("/claims/:id", a.PatchClaim)
 	consumer.POST("/research", a.Create)
 	consumer.GET("/research/:id", a.Get)
 	consumer.GET("/research", a.List)
@@ -37,8 +39,9 @@ func Register(engine *gin.Engine, svc *finance.ResearchService, proxy *finance.M
 	consumer.GET("/instruments", a.Instruments)
 
 	internal := engine.Group("/internal")
-	internal.Use(InternalAuth())
-	internal.POST("/llm/v1/chat/completions", a.ProxyLLM)
+	internal.Use(InternalAuth(), RequireContract())
+	internal.POST("/llm/v1/chat/completions", a.ProxyLLMChat)
+	internal.POST("/llm/v1/responses", a.ProxyLLMResponses)
 	internal.POST("/finance/tool-grants", a.CreateGrant)
 	internal.POST("/finance/tool-grants/:id/complete", a.CompleteGrant)
 	internal.POST("/finance/evidence", a.RegisterEvidence)
@@ -74,14 +77,37 @@ func (a *API) Login(c *gin.Context) {
 
 func (a *API) Parse(c *gin.Context) {
 	var req struct {
-		Text string     `json:"text"`
-		AsOf *time.Time `json:"as_of"`
+		Text string `json:"text"`
 	}
 	if !httpx.BindJSON(c, &req) {
 		return
 	}
 	ctx := finance.WithUser(c.Request.Context(), httpx.CurrentUserID(c), roleOf(c))
-	out, err := a.Svc.ParseClaim(ctx, finance.ParseInput{Text: req.Text, AsOf: req.AsOf})
+	out, err := a.Svc.ParseClaim(ctx, finance.ParseInput{Text: req.Text})
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	httpx.OK(c, http.StatusOK, out)
+}
+
+func (a *API) GetClaim(c *gin.Context) {
+	ctx := finance.WithUser(c.Request.Context(), httpx.CurrentUserID(c), roleOf(c))
+	out, err := a.Svc.GetClaim(ctx, c.Param("id"))
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	httpx.OK(c, http.StatusOK, out)
+}
+
+func (a *API) PatchClaim(c *gin.Context) {
+	var req finance.PatchDraftInput
+	if !httpx.BindJSON(c, &req) {
+		return
+	}
+	ctx := finance.WithUser(c.Request.Context(), httpx.CurrentUserID(c), roleOf(c))
+	out, err := a.Svc.PatchClaim(ctx, c.Param("id"), req)
 	if err != nil {
 		fail(c, err)
 		return
@@ -92,21 +118,16 @@ func (a *API) Parse(c *gin.Context) {
 func (a *API) Create(c *gin.Context) {
 	key := c.GetHeader("Idempotency-Key")
 	var req struct {
-		DraftID      string    `json:"draft_id"`
-		Revision     int       `json:"revision"`
-		InstrumentID string    `json:"instrument_id"`
-		Horizon      string    `json:"horizon"`
-		AsOf         time.Time `json:"as_of"`
-		ParentRunID  string    `json:"parent_run_id"`
-		ClaimText    string    `json:"claim_text"`
+		DraftID     string `json:"draft_id"`
+		Revision    int    `json:"revision"`
+		ParentRunID string `json:"parent_run_id"`
 	}
 	if !httpx.BindJSON(c, &req) {
 		return
 	}
 	ctx := finance.WithUser(c.Request.Context(), httpx.CurrentUserID(c), roleOf(c))
 	out, err := a.Svc.CreateResearch(ctx, key, finance.CreateResearchInput{
-		DraftID: req.DraftID, Revision: req.Revision, InstrumentID: req.InstrumentID,
-		Horizon: req.Horizon, AsOf: req.AsOf, ParentRunID: req.ParentRunID, ClaimText: req.ClaimText,
+		DraftID: req.DraftID, Revision: req.Revision, ParentRunID: req.ParentRunID,
 	})
 	if err != nil {
 		fail(c, err)
@@ -183,12 +204,35 @@ func (a *API) Question(c *gin.Context) {
 }
 
 func (a *API) Instruments(c *gin.Context) {
-	httpx.OK(c, http.StatusOK, gin.H{"items": []finance.Instrument{{
-		ID: finance.InstrumentDemo, Symbol: "DEMO:COMPANY", Name: "演示公司",
-	}}})
+	q := strings.TrimSpace(c.Query("q"))
+	market := strings.TrimSpace(c.Query("market"))
+	limit := finance.CatalogLimit
+	if raw := strings.TrimSpace(c.Query("limit")); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil {
+			limit = n
+		}
+	}
+	items := finance.SearchCatalog(finance.DataMode(), q, market, limit)
+	out := make([]finance.Instrument, 0, len(items))
+	for _, row := range items {
+		out = append(out, finance.Instrument{ID: row.ID, Symbol: row.Symbol, Name: row.Name, Market: row.Market})
+	}
+	httpx.OK(c, http.StatusOK, gin.H{
+		"items":         out,
+		"catalog_limit": finance.CatalogLimit,
+		"mode":          finance.DataMode(),
+	})
 }
 
-func (a *API) ProxyLLM(c *gin.Context) {
+func (a *API) ProxyLLMChat(c *gin.Context) {
+	a.proxyLLM(c, finance.ProtocolChatCompletions)
+}
+
+func (a *API) ProxyLLMResponses(c *gin.Context) {
+	a.proxyLLM(c, finance.ProtocolResponses)
+}
+
+func (a *API) proxyLLM(c *gin.Context, protocol string) {
 	if a.Proxy == nil {
 		httpx.Fail(c, http.StatusServiceUnavailable, "NOT_READY", "模型代理未配置")
 		return
@@ -208,7 +252,7 @@ func (a *API) ProxyLLM(c *gin.Context) {
 		httpx.Fail(c, http.StatusUnauthorized, "MISSING_TASK_TOKEN", "缺少任务凭据")
 		return
 	}
-	raw, err := a.Proxy.Complete(c.Request.Context(), requestID, finance.NormalizeJSONHash(body), finance.HeaderTokenHash(token), body)
+	raw, err := a.Proxy.Complete(c.Request.Context(), requestID, finance.NormalizeJSONHash(body), finance.HeaderTokenHash(token), body, protocol)
 	if err != nil {
 		fail(c, err)
 		return
@@ -236,7 +280,7 @@ func (a *API) CreateGrant(c *gin.Context) {
 		fail(c, err)
 		return
 	}
-	httpx.OK(c, http.StatusOK, gin.H{"grant_id": grant.ID, "expires_at": grant.ExpiresAt})
+	httpx.OK(c, http.StatusOK, gin.H{"grant_id": grant.ID, "expires_at": grant.ExpiresAt, "status": grant.Status})
 }
 
 func (a *API) CompleteGrant(c *gin.Context) {
@@ -271,30 +315,33 @@ func (a *API) CompleteGrant(c *gin.Context) {
 
 func (a *API) RegisterEvidence(c *gin.Context) {
 	var req struct {
-		GrantID string               `json:"grant_id"`
-		Records []finance.EvidenceIn `json:"records"`
+		GrantID   string   `json:"grant_id"`
+		RecordIDs []string `json:"record_ids"`
+		Records   []any    `json:"records"`
 	}
 	if !httpx.BindJSON(c, &req) {
 		return
 	}
+	if len(req.Records) > 0 {
+		httpx.Fail(c, http.StatusBadRequest, "EVIDENCE_REJECTED", "证据只接受 record_ids")
+		return
+	}
 	token := c.GetHeader("X-Zhigu-Task-Token")
-	ctx := c.Request.Context()
-	if token != "" {
-		var grant modelfinance.ToolGrant
-		if err := a.Svc.DB.Where("id = ?", req.GrantID).Take(&grant).Error; err != nil {
-			httpx.Fail(c, http.StatusNotFound, "GRANT_NOT_FOUND", "授权不存在")
-			return
-		}
-		ctx = finance.WithTaskToken(ctx, token)
-		if err := a.Svc.AuthorizeTaskToken(ctx, token, grant.RunID, grant.TaskID, "research"); err != nil {
-			fail(c, err)
-			return
-		}
-	} else {
+	if token == "" {
 		httpx.Fail(c, http.StatusUnauthorized, "MISSING_TASK_TOKEN", "缺少任务凭据")
 		return
 	}
-	ids, err := finance.NewEvidenceService(a.Svc.DB).Register(ctx, req.GrantID, req.Records)
+	var grant modelfinance.ToolGrant
+	if err := a.Svc.DB.Where("id = ?", req.GrantID).Take(&grant).Error; err != nil {
+		httpx.Fail(c, http.StatusNotFound, "GRANT_NOT_FOUND", "授权不存在")
+		return
+	}
+	ctx := finance.WithTaskToken(c.Request.Context(), token)
+	if err := a.Svc.AuthorizeTaskToken(ctx, token, grant.RunID, grant.TaskID, "research"); err != nil {
+		fail(c, err)
+		return
+	}
+	ids, err := finance.NewEvidenceService(a.Svc.DB).Register(ctx, req.GrantID, req.RecordIDs)
 	if err != nil {
 		fail(c, err)
 		return
@@ -303,7 +350,25 @@ func (a *API) RegisterEvidence(c *gin.Context) {
 }
 
 func (a *API) DataSourceProfile(c *gin.Context) {
-	httpx.OK(c, http.StatusOK, gin.H{"mode": "fixture", "instruments": []string{finance.InstrumentDemo}, "connector": "fixture"})
+	mode := finance.DataMode()
+	cat := finance.CatalogForMode(mode)
+	ids := make([]string, 0, len(cat))
+	for _, row := range cat {
+		ids = append(ids, row.ID)
+	}
+	httpx.OK(c, http.StatusOK, gin.H{
+		"source_policy_version": finance.SourcePolicyVersion,
+		"data_version":          finance.DataVersion,
+		"connector_mode":        finance.ConnectorModeGoHTTP,
+		"instruments":           ids,
+		"metrics":               finance.FrozenMetrics,
+		"periods":               []string{"YYYY-12-31"},
+		"financial_http_limit":  finance.FinancialHTTPLimit,
+		"filing_http_limit":     finance.FilingHTTPLimit,
+		"tool_timeout_ms":       finance.ToolTimeout.Milliseconds(),
+		"source_rules":          finance.SourceRules(),
+		"mode":                  mode,
+	})
 }
 
 func (a *API) DataQuery(c *gin.Context) {
@@ -331,9 +396,9 @@ func (a *API) DataQuery(c *gin.Context) {
 
 func (a *API) Calculate(c *gin.Context) {
 	var req struct {
-		GrantID   string              `json:"grant_id"`
-		Operation string              `json:"operation"`
-		Inputs    []finance.CalcInput `json:"inputs"`
+		GrantID   string                       `json:"grant_id"`
+		Operation string                       `json:"operation"`
+		Inputs    map[string]finance.CalcInput `json:"inputs"`
 	}
 	if !httpx.BindJSON(c, &req) {
 		return
@@ -358,6 +423,18 @@ func InternalAuth() gin.HandlerFunc {
 		want := "Bearer " + internalServiceToken()
 		if token != want {
 			httpx.Fail(c, http.StatusUnauthorized, "UNAUTHENTICATED", "内部服务凭据无效")
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}
+
+func RequireContract() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		got := strings.TrimSpace(c.GetHeader(finance.ContractVersionHeader))
+		if got != finance.ContractVersion {
+			httpx.Fail(c, http.StatusConflict, "CONTRACT_VERSION_MISMATCH", "控制协议版本不匹配")
 			c.Abort()
 			return
 		}

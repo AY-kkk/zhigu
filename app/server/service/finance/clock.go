@@ -14,8 +14,8 @@ type SystemClock struct{}
 func (SystemClock) Now() time.Time { return time.Now().UTC() }
 
 type FrozenClock struct {
-	mu   sync.Mutex
-	now  time.Time
+	mu  sync.Mutex
+	now time.Time
 }
 
 func NewFrozenClock(t time.Time) *FrozenClock {

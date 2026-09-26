@@ -2,7 +2,6 @@ package finance
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sync"
 	"testing"
@@ -140,15 +139,9 @@ func TestReviewMetricForgeryRejected(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	b, _ := json.Marshal(p)
-	var rec EvidenceIn
-	_ = json.Unmarshal(b, &rec)
-	rec.Metrics[0].Value = "999999"
-	rec.Metrics[0].Unit = "USD"
-	rec.SourceURL = "https://example.invalid/forged"
-	ids, e := NewEvidenceService(s.DB).Register(context.Background(), g.ID, []EvidenceIn{rec})
+	ids, e := NewEvidenceService(s.DB).Register(context.Background(), g.ID, []string{"prec_forged"})
 	if e == nil {
-		t.Fatalf("forged metric accepted while text hash unchanged: evidence_ids=%v", ids)
+		t.Fatalf("forged record_id accepted: evidence_ids=%v records=%d", ids, len(p.Records))
 	}
 }
 
@@ -341,9 +334,9 @@ func TestRolesRunConcurrently(t *testing.T) {
 
 type parallelClient struct {
 	*FakeResearchClient
-	mu        sync.Mutex
-	inflight  int
-	maxSeen   int
+	mu       sync.Mutex
+	inflight int
+	maxSeen  int
 }
 
 func (p *parallelClient) Submit(ctx context.Context, task ResearchTask) (TaskReceipt, error) {
@@ -403,10 +396,7 @@ func TestRetentionClearsPrivateCopies(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	raw, _ := json.Marshal(payload)
-	var rec EvidenceIn
-	_ = json.Unmarshal(raw, &rec)
-	ids, err := NewEvidenceService(s.DB).Register(context.Background(), g.ID, []EvidenceIn{rec})
+	ids, err := NewEvidenceService(s.DB).Register(context.Background(), g.ID, issuedIDs(payload))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,0 +1,126 @@
+{
+  "source_policy_version": "source_eastmoney_cninfo_v2",
+  "data_version": "eastmoney_hsf10_hkf10_cninfo_v1",
+  "connector_mode": "go_http",
+  "user_agent": "Zhigu/0.1 (private research prototype; contact: local-dev@zhigu.invalid)",
+  "legal_note": "Public website HTTP, not a licensed redistributable open-data API. Prototype-only; rate-limited; not claimed as commercially redistributable.",
+  "catalog": {
+    "a_share": {
+      "method": "GET",
+      "url": "http://www.cninfo.com.cn/new/data/szse_stock.json",
+      "fields": "stockList[].code,orgId,zwjc,pinyin,category",
+      "exclude": "B股",
+      "id_rule": "6xxxxx.SH / 0xxxxx.SZ / 3xxxxx.SZ / 4|8|92xxxx.BJ"
+    },
+    "hk": {
+      "method": "GET",
+      "url": "http://www.cninfo.com.cn/new/data/hke_stock.json",
+      "fields": "stockList[].code,orgId,zwjc,pinyin",
+      "id_rule": "00700.HK five-digit pad"
+    }
+  },
+  "quality_sample": [
+    {"instrument_id": "600519.SH", "symbol": "600519", "org_id": "gssh0600519", "column": "sse", "plate": "sh"},
+    {"instrument_id": "300750.SZ", "symbol": "300750", "org_id": "GD165627", "column": "szse", "plate": "sz"},
+    {"instrument_id": "000333.SZ", "symbol": "000333", "org_id": "9900005965", "column": "szse", "plate": "sz"}
+  ],
+  "hk_probe": {
+    "instrument_id": "00700.HK",
+    "symbol": "00700",
+    "org_id": "gshk0000700",
+    "column": "hke",
+    "plate": "hke"
+  },
+  "metrics": [
+    "revenue",
+    "operating_profit",
+    "net_income",
+    "net_income_parent",
+    "total_assets",
+    "total_liabilities",
+    "equity_parent",
+    "operating_cash_flow_net",
+    "investing_cash_flow_net",
+    "financing_cash_flow_net",
+    "cash_and_equivalents"
+  ],
+  "operations": {
+    "get_financials": {
+      "a_share_http": [
+        {
+          "method": "GET",
+          "url": "https://datacenter.eastmoney.com/securities/api/data/v1/get",
+          "query": {
+            "reportName": "RPT_F10_FINANCE_GINCOME | RPT_F10_FINANCE_GBALANCE | RPT_F10_FINANCE_GCASHFLOW",
+            "columns": "ALL",
+            "filter": "(SECURITY_CODE=\"{symbol}\")",
+            "pageNumber": "1",
+            "pageSize": "20",
+            "sortTypes": "-1",
+            "sortColumns": "REPORT_DATE",
+            "source": "HSF10",
+            "client": "PC"
+          },
+          "fields": {
+            "revenue": "TOTAL_OPERATE_INCOME",
+            "operating_profit": "OPERATE_PROFIT",
+            "net_income": "NETPROFIT",
+            "net_income_parent": "PARENT_NETPROFIT",
+            "total_assets": "TOTAL_ASSETS",
+            "total_liabilities": "TOTAL_LIABILITIES",
+            "equity_parent": "TOTAL_PARENT_EQUITY",
+            "operating_cash_flow_net": "NETCASH_OPERATE",
+            "investing_cash_flow_net": "NETCASH_INVEST",
+            "financing_cash_flow_net": "NETCASH_FINANCE",
+            "cash_and_equivalents": "END_CASH",
+            "period_end": "REPORT_DATE where REPORT_TYPE=年报",
+            "notice_date": "NOTICE_DATE"
+          },
+          "unit": "CNY yuan, scale_factor=1"
+        }
+      ],
+      "hk_http": [
+        {
+          "method": "GET",
+          "url": "https://datacenter.eastmoney.com/securities/api/data/v1/get",
+          "summary": "RPT_CUSTOM_HKSK_APPFN_CASHFLOW_SUMMARY filter SECUCODE={code}.HK REPORT_TYPE=年报",
+          "income": "RPT_HKF10_FN_INCOME_PC STD_ITEM_NAME/AMOUNT",
+          "balance": "RPT_HKF10_FN_BALANCE_PC",
+          "cash": "RPT_HKF10_FN_CASHFLOW_PC",
+          "currency": "REPORT_LIST[].CURRENCY mapped to CNY/HKD/USD",
+          "notice": "cninfo hisAnnouncement query 年报, announcementTime"
+        }
+      ],
+      "http_limit": 6,
+      "backup_not_runtime_failover": "https://money.finance.sina.com.cn (frozen, unused unless this version is bumped)"
+    },
+    "search_filings": {
+      "http": [
+        {
+          "method": "POST",
+          "url": "http://www.cninfo.com.cn/new/hisAnnouncement/query",
+          "content_type": "application/x-www-form-urlencoded",
+          "body": {
+            "stock": "{symbol},{orgId}",
+            "column": "sse|szse|third|hke",
+            "plate": "sh|sz|bj|hke",
+            "tabName": "fulltext",
+            "searchkey": "{query}",
+            "pageNum": "1",
+            "pageSize": "1-5"
+          },
+          "file_base": "http://static.cninfo.com.cn/",
+          "body_rule": "title + announcementTime + adjunctUrl PDF text layer; locator = source_url + excerpt",
+          "http_limit": 6,
+          "pdf": "github.com/ledongthuc/pdf digital text layer only, no OCR"
+        }
+      ]
+    }
+  },
+  "probe_2026-09-21": {
+    "600519.SH": {"financials": 2, "http_fin": 3, "filings": 1, "http_fil": 2, "note": "two annual periods, three statements"},
+    "300750.SZ": {"financials": 2, "http_fin": 3, "filings": 1, "http_fil": 2},
+    "000333.SZ": {"financials": 2, "http_fin": 3, "filings": 1, "http_fil": 2},
+    "00700.HK": {"financials": 1, "http_fin": 5, "filings": 1, "http_fil": 2, "unit": "CNY", "metrics": 6}
+  }
+}

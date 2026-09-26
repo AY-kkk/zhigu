@@ -30,9 +30,10 @@ func DefaultAsOf(now time.Time) time.Time {
 
 func SuggestedHorizon(asOf time.Time) string {
 	end := asOf.AddDate(1, 0, 0)
-	return asOf.Format("2006-01-02") + " 至 " + end.Format("2006-01-02")
+	return asOf.Format("2006-01-02") + "/" + end.Format("2006-01-02")
 }
 
-func CoveredInstrument(id string) bool {
-	return id == InstrumentDemo
+func HorizonDates(asOf time.Time) (string, string) {
+	end := asOf.AddDate(1, 0, 0)
+	return asOf.Format("2006-01-02"), end.Format("2006-01-02")
 }

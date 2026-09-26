@@ -2,7 +2,6 @@ package finance
 
 import (
 	"context"
-	"encoding/json"
 	"testing"
 	"time"
 
@@ -85,19 +84,14 @@ func TestGrantDataQueryEvidenceRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	raw, _ := json.Marshal(payload)
-	var rec EvidenceIn
-	if err := json.Unmarshal(raw, &rec); err != nil {
-		t.Fatal(err)
-	}
-	ids, err := NewEvidenceService(svc.DB).Register(context.Background(), grant.ID, []EvidenceIn{rec})
+	ids, err := NewEvidenceService(svc.DB).Register(context.Background(), grant.ID, issuedIDs(payload))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(ids) != 1 {
 		t.Fatalf("ids %v", ids)
 	}
-	if err := svc.CompleteGrant(context.Background(), grant.ID, "succeeded", rec.ContentHash); err != nil {
+	if err := svc.CompleteGrant(context.Background(), grant.ID, "succeeded", payload.Records[0].RecordHash); err != nil {
 		t.Fatal(err)
 	}
 }

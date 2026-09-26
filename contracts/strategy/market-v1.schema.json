@@ -1,0 +1,26 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "strategy.market.v1",
+  "title": "strategy.market.v1 市场规则模板信封",
+  "description": "市场版本 rule_template 的信封结构。editor_state 是可回显、可编辑、无损保存的规则编辑状态；instrument_binding 只声明可选标的市场，绝不填写假 instrument_id（由复制用户选择，验证样本标的不得自动代入）。未知字段拒绝（与 ParseMarketTemplate 一致）。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "editor_state", "instrument_binding"],
+  "properties": {
+    "schema_version": { "const": "strategy.market.v1" },
+    "editor_state": { "$ref": "editor-v1.schema.json" },
+    "instrument_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "markets"],
+      "properties": {
+        "mode": { "const": "select_one" },
+        "markets": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "enum": ["A", "HK"] }
+        }
+      }
+    }
+  }
+}

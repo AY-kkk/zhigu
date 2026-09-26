@@ -77,3 +77,26 @@ class FinanceDeerFlowAdapter:
             assert_exact_tool_allowlist(set(names))
             return set(names)
         return set(names)
+
+    def complete_tool_roundtrip(self, client) -> dict[str, Any]:
+        """Invoke one harness-bound finance tool and keep the request plus response.
+
+        A successful import without this trace is not a research result.
+        """
+        if type(client).__name__ != "DeerFlowClient":
+            raise RuntimeError("tool roundtrip requires DeerFlowClient")
+        names = self.actual_tool_names(client)
+        assert_exact_tool_allowlist(names)
+        tools = list(client._get_tools())
+        tool = next(t for t in tools if getattr(t, "name", "") == "get_financials")
+        request = {"metrics": ["revenue"], "periods": ["2024-12-31"]}
+        response = tool.invoke(request)
+        if not isinstance(response, dict):
+            raise RuntimeError("tool roundtrip returned no object")
+        evidence_ids = [i for i in (response.get("evidence_ids") or []) if i]
+        text = ""
+        data = response.get("data")
+        if isinstance(data, dict):
+            text = str(data.get("text") or "")
+        self._last_trace = {"tool": "get_financials", "request": request, "response": response}
+        return {"evidence_ids": evidence_ids, "text": text, "response": response}

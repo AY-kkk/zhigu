@@ -41,6 +41,12 @@ services:
       ZHIGU_INTERNAL_TOKEN: zhigu-internal-dev
       ZHIGU_RESEARCH_URL: http://research:8091
       ZHIGU_RESEARCH_EXECUTOR: fixture
+      ZHIGU_INTEL_ENABLED: "true"
+      ZHIGU_INTEL_MODE: demo
+      ZHIGU_INTEL_PROVIDERS: fixture
+      ZHIGU_INTEL_COOKIE_SECRET: ${ZHIGU_INTEL_COOKIE_SECRET:?set ZHIGU_INTEL_COOKIE_SECRET}
+      ZHIGU_INTEL_PUBLIC_ORIGIN: http://localhost:5173
+      ZHIGU_INTEL_DAILY_TOKEN_LIMIT: "200000"
     volumes: ["../..:/work"]
     ports: ["127.0.0.1:8080:8080"]
     depends_on:
@@ -58,6 +64,7 @@ services:
     environment:
       CHOKIDAR_USEPOLLING: "1"
       ZHIGU_API_PROXY: http://server:8080
+      VITE_INTEL_ENABLED: "true"
 volumes:
   pgdata:
   researchdata:

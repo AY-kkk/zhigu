@@ -86,12 +86,12 @@ func TestConflictingAssumptionsKept(t *testing.T) {
 		RunID: run.RunID,
 		Supporter: &ResearchResult{
 			SchemaVersion: "1.0", RunID: run.RunID, TaskID: roleTaskID(t, svc, run.RunID, RoleSupporter),
-			Status: "insufficient",
+			Status:    "insufficient",
 			Arguments: []Argument{{ClaimType: "assumption", Text: "source-a says up"}},
 		},
 		Challenger: &ResearchResult{
 			SchemaVersion: "1.0", RunID: run.RunID, TaskID: roleTaskID(t, svc, run.RunID, RoleChallenger),
-			Status: "insufficient",
+			Status:    "insufficient",
 			Arguments: []Argument{{ClaimType: "assumption", Text: "source-b says down"}},
 		},
 	}

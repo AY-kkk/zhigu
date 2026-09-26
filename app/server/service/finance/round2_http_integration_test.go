@@ -122,7 +122,7 @@ func TestR2CrossProcessFixture(t *testing.T) {
 	create := func(id uint) (string, string) {
 		token := request("POST", "/api/finance/auth/login", "", "", map[string]any{"username": fmt.Sprintf("probe-%d", id), "password": "probe-password"})["token"].(string)
 		draft := request("POST", "/api/finance/claims/parse", token, "", map[string]any{"text": "演示公司的收入增长能否支持未来一年股价上涨？这是一条超过二十个字的测试观点。"})
-		out := request("POST", "/api/finance/research", token, fmt.Sprintf("r2-http-%d", id), map[string]any{"draft_id": draft["draft_id"], "revision": draft["revision"], "instrument_id": "DEMO:COMPANY", "horizon": draft["suggested_horizon"], "as_of": "2026-09-18T00:00:00Z", "claim_text": "演示公司的收入增长能否支持未来一年股价上涨？这是一条超过二十个字的测试观点。"})
+		out := request("POST", "/api/finance/research", token, fmt.Sprintf("r2-http-%d", id), map[string]any{"draft_id": draft["draft_id"], "revision": draft["revision"]})
 		return token, out["run_id"].(string)
 	}
 	token, id := create(1001)
