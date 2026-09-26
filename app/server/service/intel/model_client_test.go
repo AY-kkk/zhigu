@@ -101,7 +101,7 @@ func TestParseAndValidateModelResponses(t *testing.T) {
 func TestModelExtractorRejectsOverlongInputAndReturnsTypedResult(t *testing.T) {
 	frozen := FrozenModelConfig{
 		ConfigID: "cfg_1", ConfigDigest: "digest", Protocol: "openai_chat_completions",
-		Model: "model-x", BaseURL: "https://api.example.com/v1", PromptVersion: intelPromptVersion,
+		Model: "model-x", BaseURL: "https://example.com/v1", PromptVersion: intelPromptVersion,
 	}
 	extractor := NewModelExtractorV2(frozen)
 	text := strings.Repeat("长", intelInputTokenLimit*4+1)
@@ -131,7 +131,7 @@ func TestFreezeActiveModelUsesConfigServiceAndKeepsDigest(t *testing.T) {
 	db := testdb.Start(t)
 	configs := finance.NewConfigService(db)
 	public := map[string]any{
-		"base_url": "https://api.example.com/v1", "protocol": "openai_responses", "model": "model-x",
+		"base_url": "https://example.com/v1", "protocol": "openai_responses", "model": "model-x",
 	}
 	saved, err := configs.SaveModel(context.Background(), public, "secret-key")
 	if err != nil {

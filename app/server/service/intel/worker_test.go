@@ -87,7 +87,7 @@ func TestWorkerExecutesFrozenModelExtraction(t *testing.T) {
 	svc := NewService(db, []byte("intel-test-cookie-secret"), testFixtureDir(t)).WithConfigService(configs)
 	ctx := context.Background()
 	saved, err := configs.SaveModel(ctx, map[string]any{
-		"base_url": "https://api.example.com/v1", "protocol": "openai_chat_completions", "model": "model-x",
+		"base_url": "https://example.com/v1", "protocol": "openai_chat_completions", "model": "model-x",
 	}, "secret-key")
 	if err != nil {
 		t.Fatal(err)
