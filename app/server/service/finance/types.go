@@ -30,14 +30,17 @@ type ResearchTask struct {
 	MaxModelCalls       int       `json:"max_model_calls"`
 	MaxToolCalls        int       `json:"max_tool_calls"`
 	DeadlineAt          time.Time `json:"deadline_at"`
+	DocumentID          string    `json:"document_id,omitempty"`
+	InputMode           string    `json:"input_mode,omitempty"`
 	TaskToken           string    `json:"-"`
 	Protocol            string    `json:"-"`
 }
 
 type Argument struct {
-	ClaimType   string   `json:"claim_type"`
-	Text        string   `json:"text"`
-	EvidenceIDs []string `json:"evidence_ids"`
+	ClaimType          string   `json:"claim_type"`
+	Text               string   `json:"text"`
+	EvidenceIDs        []string `json:"evidence_ids"`
+	VerificationStatus string   `json:"verification_status,omitempty"`
 }
 
 type Usage struct {

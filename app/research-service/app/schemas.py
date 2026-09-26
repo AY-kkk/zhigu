@@ -10,6 +10,7 @@ class ClaimItem(BaseModel):
     claim_id: str
     text: str
     claim_type: Literal["fact", "inference", "assumption"]
+    source_span_id: str = ""
 
 
 class Claim(BaseModel):
@@ -35,6 +36,8 @@ class ResearchTask(BaseModel):
     max_model_calls: int = Field(ge=1, le=4)
     max_tool_calls: int = Field(ge=1, le=6)
     deadline_at: str
+    document_id: str = ""
+    input_mode: Literal["claim_only", "report_only", "claim_and_report"] = "claim_only"
 
 
 class Argument(BaseModel):
@@ -42,6 +45,7 @@ class Argument(BaseModel):
     claim_type: Literal["fact", "inference", "assumption"]
     text: str
     evidence_ids: list[str]
+    verification_status: Literal["independent_verified", "reported_only"] = "independent_verified"
 
 
 class Usage(BaseModel):
@@ -75,4 +79,4 @@ class ResearchResult(BaseModel):
     errors: list[ResultError]
 
 
-ALLOWED_TOOLS = frozenset({"get_financials", "search_filings", "calculate_metric"})
+ALLOWED_TOOLS = frozenset({"get_financials", "search_filings", "calculate_metric", "read_document_spans"})

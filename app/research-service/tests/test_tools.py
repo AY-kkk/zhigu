@@ -28,7 +28,7 @@ def test_exact_three_tools():
 
 def test_bind_tools_names():
     tools = bind_tools("run_x", "task_x")
-    assert [t.name for t in tools] == ["get_financials", "search_filings", "calculate_metric"]
+    assert [t.name for t in tools] == ["get_financials", "search_filings", "calculate_metric", "read_document_spans"]
 
 
 def test_local_ratio():

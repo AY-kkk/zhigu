@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
-ALLOWED_TOOLS = ("get_financials", "search_filings", "calculate_metric")
+ALLOWED_TOOLS = ("get_financials", "search_filings", "calculate_metric", "read_document_spans")
 FORBIDDEN_TOOL_SUBSTRINGS = ("bash", "shell", "read_file", "write_file", "python", "mcp", "browser")
 
 
@@ -78,7 +78,7 @@ class FinanceDeerFlowAdapter:
             return set(names)
         return set(names)
 
-    def complete_tool_roundtrip(self, client) -> dict[str, Any]:
+    def complete_tool_roundtrip(self, client, tool_name: str = "get_financials", request: dict[str, Any] | None = None) -> dict[str, Any]:
         """Invoke one harness-bound finance tool and keep the request plus response.
 
         A successful import without this trace is not a research result.
@@ -88,8 +88,12 @@ class FinanceDeerFlowAdapter:
         names = self.actual_tool_names(client)
         assert_exact_tool_allowlist(names)
         tools = list(client._get_tools())
-        tool = next(t for t in tools if getattr(t, "name", "") == "get_financials")
-        request = {"metrics": ["revenue"], "periods": ["2024-12-31"]}
+        tool = next(t for t in tools if getattr(t, "name", "") == tool_name)
+        if request is None:
+            if tool_name == "read_document_spans":
+                request = {"document_id": "doc_unavailable", "query": "", "limit": 5, "span_ids": []}
+            else:
+                request = {"metrics": ["revenue"], "periods": ["2024-12-31"]}
         response = tool.invoke(request)
         if not isinstance(response, dict):
             raise RuntimeError("tool roundtrip returned no object")
@@ -98,5 +102,5 @@ class FinanceDeerFlowAdapter:
         data = response.get("data")
         if isinstance(data, dict):
             text = str(data.get("text") or "")
-        self._last_trace = {"tool": "get_financials", "request": request, "response": response}
+        self._last_trace = {"tool": tool_name, "request": request, "response": response}
         return {"evidence_ids": evidence_ids, "text": text, "response": response}

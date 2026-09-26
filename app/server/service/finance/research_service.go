@@ -489,7 +489,14 @@ func (s *ResearchService) CreateResearch(ctx context.Context, idempotencyKey str
 				return err
 			}
 		}
-		if err := tx.Model(&draft).Updates(map[string]any{"confirmed_run_id": runID, "updated_at": now}).Error; err != nil {
+		if draft.DocumentID != nil && *draft.DocumentID != "" {
+				if err := tx.Model(&modelfinance.ResearchDocument{}).
+					Where("id = ? AND owner_id = ?", *draft.DocumentID, owner).
+					Updates(map[string]any{"run_id": runID, "updated_at": now}).Error; err != nil {
+					return err
+				}
+			}
+			if err := tx.Model(&draft).Updates(map[string]any{"confirmed_run_id": runID, "updated_at": now}).Error; err != nil {
 			return err
 		}
 		out = CreateResearchOutput{RunID: runID, Status: StatusQueued, PollURL: "/api/finance/research/" + runID, AsOf: asOf.Format(time.RFC3339), ModelConfigVersion: cfg["model"]}
@@ -689,6 +696,8 @@ func (s *ResearchService) GetEvidence(ctx context.Context, evidenceID string) (m
 		"title":          ev.Title,
 		"source_url":     ev.SourceURL,
 		"source_kind":    ev.SourceKind,
+		"source_grade":   ev.SourceGrade,
+		"verification_status": ev.VerificationStatus,
 		"published_at":   ev.PublishedAt.UTC().Format(time.RFC3339),
 		"available_at":   ev.AvailableAt.UTC().Format(time.RFC3339),
 		"retrieved_at":   ev.RetrievedAt.UTC().Format(time.RFC3339),

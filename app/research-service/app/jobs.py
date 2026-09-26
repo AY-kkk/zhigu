@@ -244,29 +244,17 @@ def _run(task: ResearchTask, task_token: str = "") -> None:
                     return tools
 
                 client._get_tools = _get_tools  # type: ignore[method-assign]
-                trace = adapter.complete_tool_roundtrip(client)
+                preferred = "read_document_spans" if task.document_id else "get_financials"
+                request = None
+                if task.document_id:
+                    request = {"document_id": task.document_id, "query": "", "limit": 5, "span_ids": []}
+                adapter.complete_tool_roundtrip(client, preferred, request)
             except Exception as exc:  # noqa: BLE001
                 _save_result(conn, task.task_id, _failed_result(task, "HARNESS_UNAVAILABLE", str(exc)))
                 return
-            result = fixture_result(task)
-            result.usage = Usage(
-                model_calls=0,
-                tool_calls=1,
-                input_tokens=0,
-                output_tokens=0,
-                usage_unknown=False,
-                simulated=False,
-            )
-            ids = [i for i in (trace.get("evidence_ids") or []) if i]
-            if ids:
-                from app.schemas import Argument
-
-                result.evidence_ids = ids
-                result.arguments = [
-                    Argument(claim_type="fact", text=str(trace.get("text") or "tool result"), evidence_ids=ids)
-                ]
-            result.status = "insufficient"
-            _save_result(conn, task.task_id, result)
+            # A real model loop must produce its own structured result. Until that
+            # contract is configured, fail closed instead of returning fixture copy.
+            _save_result(conn, task.task_id, _failed_result(task, "MODEL_WORKFLOW_UNAVAILABLE", "真实模型研究循环未配置"))
             return
         result = fixture_result(task)
         if not gateway:
@@ -277,6 +265,11 @@ def _run(task: ResearchTask, task_token: str = "") -> None:
             return
         try:
             tools = bind_tools(task.run_id, task.task_id, task_token)
+            if task.document_id:
+                out = tools[3].invoke({"document_id": task.document_id, "query": "", "limit": 5, "span_ids": []})
+                result = document_result(task, out)
+                _save_result(conn, task.task_id, result)
+                return
             if task.role == "supporter":
                 out = tools[0].invoke({"metrics": ["revenue"], "periods": ["2025", "2024"]})
             else:
@@ -302,6 +295,43 @@ def _run(task: ResearchTask, task_token: str = "") -> None:
             _save_result(conn, task.task_id, _failed_result(task, "TOOL_PATH_FAILED", str(exc)))
             return
         _save_result(conn, task.task_id, result)
+
+
+def document_result(task: ResearchTask, out: dict[str, Any]) -> ResearchResult:
+    from app.schemas import Argument
+
+    ids = [i for i in (out.get("evidence_ids") or []) if i]
+    spans = out.get("spans") or []
+    unknowns = list(out.get("unknowns") or [])
+    args = []
+    for span in spans:
+        args.append(
+            Argument(
+                claim_type="fact",
+                text=str(span.get("text") or span.get("title") or "研报原文"),
+                evidence_ids=ids[:1],
+                verification_status="reported_only",
+            )
+        )
+    status = "succeeded" if ids else "insufficient"
+    return ResearchResult(
+        run_id=task.run_id,
+        task_id=task.task_id,
+        status=status,
+        arguments=args if task.role == "supporter" else [],
+        evidence_ids=ids,
+        unknowns=unknowns,
+        counterevidence=args if task.role == "challenger" else [],
+        usage=Usage(
+            model_calls=0,
+            tool_calls=1,
+            input_tokens=0,
+            output_tokens=0,
+            usage_unknown=False,
+            simulated=True,
+        ),
+        errors=[],
+    )
 
 
 def fixture_result(task: ResearchTask) -> ResearchResult:

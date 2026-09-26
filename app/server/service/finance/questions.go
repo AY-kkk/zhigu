@@ -2,6 +2,7 @@ package finance
 
 import (
 	"context"
+	"fmt"
 	"encoding/json"
 	"strings"
 	"time"
@@ -163,6 +164,8 @@ func (s *ResearchService) DataQuery(ctx context.Context, grantID, operation stri
 			} else {
 				recs, err = fixtureFinancialRecords(run)
 			}
+		case "read_document_spans":
+			recs, err = documentSpanRecords(tx, run, params)
 		case "search_filings":
 			query, _ := params["query"].(string)
 			limit := 5
@@ -182,7 +185,7 @@ func (s *ResearchService) DataQuery(ctx context.Context, grantID, operation stri
 				recs, err = fixtureFilingRecords(run)
 			}
 		default:
-			return NewError(400, "validation", "INVALID_OPERATION", "operation 仅支持 get_financials 或 search_filings")
+			return NewError(400, "validation", "INVALID_OPERATION", "operation 仅支持 get_financials、search_filings 或 read_document_spans")
 		}
 		if err != nil {
 			return err
@@ -208,8 +211,12 @@ func (s *ResearchService) DataQuery(ctx context.Context, grantID, operation stri
 		}
 		_ = tx.Model(&grant).Update("status", "succeeded")
 		out = DataQueryResult{Records: issued, QualityStatus: "verified", Warnings: []string{}}
+		if operation == "read_document_spans" {
+			out.QualityStatus = "reported_only"
+			out.Warnings = append(out.Warnings, "user_report")
+		}
 		if run.Mode == ModeFixture {
-			out.Warnings = []string{"fixture"}
+			out.Warnings = append(out.Warnings, "fixture")
 			if operation == "search_filings" {
 				out.QualityStatus = "insufficient"
 			}
@@ -234,6 +241,79 @@ func stringList(v any) []string {
 	default:
 		return nil
 	}
+}
+
+func documentSpanRecords(tx *gorm.DB, run modelfinance.ResearchRun, params map[string]any) ([]ProviderRecord, error) {
+	documentID, _ := params["document_id"].(string)
+	if documentID == "" || run.DocumentID == nil || *run.DocumentID != documentID {
+		return nil, NewError(404, "not_found", "DOCUMENT_RUN_MISMATCH", "研报不属于当前研究")
+	}
+	var doc modelfinance.ResearchDocument
+	if err := tx.Where("id = ? AND owner_id = ? AND run_id = ? AND deleted_at IS NULL",
+		documentID, run.OwnerID, run.ID).Take(&doc).Error; err != nil {
+		return nil, NewError(404, "not_found", "DOCUMENT_ATTACHMENT_MISSING", "研报未绑定当前研究")
+	}
+	if doc.ExtractionStatus != "succeeded" {
+		return nil, NewError(409, "conflict", "DOCUMENT_NOT_READY", "研报文本尚不可用")
+	}
+	spanIDs := map[string]struct{}{}
+	for _, id := range stringList(params["span_ids"]) {
+		spanIDs[id] = struct{}{}
+	}
+	query := strings.ToLower(strings.TrimSpace(fmt.Sprint(params["query"])))
+	if query == "<nil>" {
+		query = ""
+	}
+	limit := 5
+	switch v := params["limit"].(type) {
+	case float64:
+		limit = int(v)
+	case int:
+		limit = v
+	}
+	if limit < 1 {
+		limit = 1
+	}
+	if limit > 20 {
+		limit = 20
+	}
+	var spans []modelfinance.ResearchDocumentSpan
+	if err := tx.Where("document_id = ?", documentID).
+		Order("page_number NULLS FIRST, paragraph_index NULLS FIRST, start_offset").Find(&spans).Error; err != nil {
+		return nil, err
+	}
+	out := make([]ProviderRecord, 0, limit)
+	for _, span := range spans {
+		if len(spanIDs) > 0 {
+			if _, ok := spanIDs[span.ID]; !ok {
+				continue
+			}
+		}
+		if query != "" && !strings.Contains(strings.ToLower(span.Text), query) {
+			continue
+		}
+		locator := "span " + span.ID
+		if span.PageNumber != nil {
+			locator = fmt.Sprintf("page %d, %s", *span.PageNumber, locator)
+		}
+		if span.ParagraphIndex != nil {
+			locator += fmt.Sprintf(", paragraph %d", *span.ParagraphIndex)
+		}
+		out = append(out, ProviderRecord{
+			InstrumentID: run.InstrumentID, SourceID: doc.ID, SourceURL: "",
+			SourceKind: "user_report", SourceGrade: "user_report", VerificationStatus: "reported_only",
+			Title: doc.Filename, Locator: locator, Text: span.Text, Metrics: []Metric{},
+			PublishedAt: doc.CreatedAt, AvailableAt: doc.CreatedAt, RetrievedAt: doc.CreatedAt,
+			DataVersion: doc.ContentHash, Mode: run.Mode, Basis: defaultBasis("", "text"),
+		})
+		if len(out) >= limit {
+			break
+		}
+	}
+	if len(out) == 0 {
+		return nil, NewError(404, "not_found", "DOCUMENT_SPAN_NOT_FOUND", "未找到匹配的研报段落")
+	}
+	return out, nil
 }
 
 func fixtureFinancialRecords(run modelfinance.ResearchRun) ([]ProviderRecord, error) {

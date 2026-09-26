@@ -38,6 +38,8 @@ type EvidenceIn struct {
 	Title       string    `json:"title"`
 	SourceURL   string    `json:"source_url"`
 	SourceKind  string    `json:"source_kind"`
+	SourceGrade string    `json:"source_grade"`
+	VerificationStatus string `json:"verification_status"`
 	Locator     string    `json:"locator"`
 	Text        string    `json:"text"`
 	Metrics     []Metric  `json:"metrics"`
@@ -64,6 +66,7 @@ func CanonicalRecordHash(rec EvidenceIn) (string, error) {
 	}
 	body := map[string]any{
 		"source_id": rec.SourceID, "source_url": rec.SourceURL, "source_kind": rec.SourceKind,
+		"source_grade": rec.SourceGrade, "verification_status": rec.VerificationStatus,
 		"locator": rec.Locator, "text": rec.Text, "metrics": metrics,
 		"published_at": rec.PublishedAt.UTC().Format(time.RFC3339),
 		"available_at": rec.AvailableAt.UTC().Format(time.RFC3339),
@@ -127,6 +130,7 @@ func (s *EvidenceService) Register(ctx context.Context, grantID string, recordID
 			ev := modelfinance.Evidence{
 				ID: "ev_" + uuid.NewString(), RunID: run.ID, InstrumentID: run.InstrumentID,
 				SourceID: trusted.SourceID, SourceURL: trusted.SourceURL, SourceKind: trusted.SourceKind,
+				SourceGrade: sourceGradeFor(trusted), VerificationStatus: verificationStatusFor(trusted),
 				Title: trusted.Title, Locator: trusted.Locator, Text: trusted.Text, Metrics: datatypes.JSON(metrics),
 				PublishedAt: trusted.PublishedAt, AvailableAt: trusted.AvailableAt, RetrievedAt: trusted.RetrievedAt,
 				ContentHash: textHash, DataVersion: trusted.DataVersion, Mode: run.Mode,
@@ -153,6 +157,32 @@ func (s *EvidenceService) Register(ctx context.Context, grantID string, recordID
 		return nil
 	})
 	return ids, err
+}
+
+func sourceGradeFor(rec EvidenceIn) string {
+	if rec.SourceGrade != "" {
+		return rec.SourceGrade
+	}
+	if rec.SourceKind == "user_report" {
+		return "user_report"
+	}
+	if rec.SourceKind == "fixture" {
+		return "fixture"
+	}
+	if rec.SourceKind == "filing" {
+		return "official_filing"
+	}
+	return "structured_data"
+}
+
+func verificationStatusFor(rec EvidenceIn) string {
+	if rec.VerificationStatus != "" {
+		return rec.VerificationStatus
+	}
+	if rec.SourceKind == "user_report" || rec.SourceKind == "fixture" {
+		return "reported_only"
+	}
+	return "independent_verified"
 }
 
 func (s *EvidenceService) validateRecord(run modelfinance.ResearchRun, rec EvidenceIn) error {

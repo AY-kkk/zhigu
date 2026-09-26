@@ -147,6 +147,8 @@ type Evidence struct {
 	SourceID     string         `gorm:"column:source_id"`
 	SourceURL    string         `gorm:"column:source_url"`
 	SourceKind   string         `gorm:"column:source_kind"`
+	SourceGrade  string         `gorm:"column:source_grade;default:structured_data"`
+	VerificationStatus string   `gorm:"column:verification_status;default:independent_verified"`
 	Title        string         `gorm:"column:title"`
 	Locator      string         `gorm:"column:locator"`
 	Text         string         `gorm:"column:text"`
