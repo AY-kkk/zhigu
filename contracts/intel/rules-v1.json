@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "intel.rules.v1",
+  "rule_version": "rules-v1",
+  "description": "投资事件情报确定性计算规则。LLM 只能抽取，不得写入最终状态。",
+  "grades": {
+    "fact": "1.0",
+    "opinion": "0.6",
+    "inference": "0.3",
+    "rumor": "0.1"
+  },
+  "source_weights": {
+    "statutory": "1.0",
+    "named_media_original": "0.6",
+    "named_research": "0.5",
+    "verifiable_other": "0.3",
+    "unknown_or_community": "0.1"
+  },
+  "support_levels": {
+    "high": {"minimum": "0.8"},
+    "medium": {"minimum": "0.4", "maximum_exclusive": "0.8"},
+    "low": {"maximum_exclusive": "0.4"},
+    "unknown": {"when": "no support or refute evidence"},
+    "open_conflict_cap": "medium"
+  },
+  "freshness_days": {"stale_at": 14, "expired_at": 30},
+  "source_cluster_rule": "max effective weight within root source cluster, then max across clusters; never sum reposts",
+  "unknown_semantics": "unknown is not neutral and is not a probability"
+}

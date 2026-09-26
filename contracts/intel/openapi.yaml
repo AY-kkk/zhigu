@@ -1,0 +1,67 @@
+openapi: 3.0.3
+info:
+  title: 知股 · 投资事件情报与证据时间线 API
+  version: "1.0.0"
+  description: |
+    PRD v1.2 / SPEC I-1.0 冻结的 Intel API。统一前缀 /api/finance/intel/v1。
+    成功响应为 {data,error:null,trace_id,meta}; 列表 data 为 {items,next_cursor}。
+    demo 只使用 zhigu_intel_demo Cookie；live 只使用现有 JWT。写操作要求 Idempotency-Key。
+servers:
+  - url: /
+tags:
+  - name: intel-session
+  - name: intel-user
+  - name: intel-admin
+paths:
+  /api/finance/intel/v1/session:
+    get: {tags:[intel-session], summary:恢复会话与回放进度, responses:{"200":{description:Scope},"401":{description:Demo session expired}}}
+  /api/finance/intel/v1/demo-sessions:
+    post: {tags:[intel-session], summary:创建隔离演示空间, parameters:[{name:Idempotency-Key,in:header,required:true,schema:{type:string,minLength:8,maxLength:128}}], requestBody:{required:true,content:{application/json:{schema:{type:object,required:[fixture_set],properties:{fixture_set:{const:events-v1}}}}}}, responses:{"201":{description:Created},"200":{description:Replayed},"400":{description:Bootstrap required}}}
+  /api/finance/intel/v1/instruments:
+    get: {tags:[intel-user], summary:搜索标的, parameters:[{name:q,in:query,schema:{type:string,maxLength:50}},{name:limit,in:query,schema:{type:integer,default:20,maximum:20}}], responses:{"200":{description:Instruments}}}
+  /api/finance/intel/v1/watchlist:
+    get: {tags:[intel-user], summary:当前关注, responses:{"200":{description:Watchlist}}}
+  /api/finance/intel/v1/watchlist/{code}:
+    put: {tags:[intel-user], summary:关注标的, parameters:[{name:code,in:path,required:true,schema:{type:string}}], responses:{"200":{description:Subscription},"422":{description:Limit}}}
+    delete: {tags:[intel-user], summary:取消关注, parameters:[{name:code,in:path,required:true,schema:{type:string}}], responses:{"204":{description:Deleted}}}
+  /api/finance/intel/v1/events:
+    get: {tags:[intel-user], summary:事件流, parameters:[{name:code,in:query,schema:{type:string}},{name:type,in:query,schema:{type:string}},{name:verification,in:query,schema:{type:string}},{name:cursor,in:query,schema:{type:string}},{name:limit,in:query,schema:{type:integer,default:20,maximum:100}}], responses:{"200":{description:EventCards}}}
+  /api/finance/intel/v1/events/{id}:
+    get: {tags:[intel-user], summary:事件详情, parameters:[{name:id,in:path,required:true,schema:{type:string}},{name:version,in:query,schema:{type:integer}}], responses:{"200":{description:EventDetail},"404":{description:Not found}}}
+  /api/finance/intel/v1/events/{id}/timeline:
+    get: {tags:[intel-user], summary:时间线, parameters:[{name:id,in:path,required:true,schema:{type:string}},{name:version,in:query,schema:{type:integer}},{name:cursor,in:query,schema:{type:string}},{name:limit,in:query,schema:{type:integer}}], responses:{"200":{description:TimelineNodes}}}
+  /api/finance/intel/v1/events/{id}/evidence:
+    get: {tags:[intel-user], summary:证据, parameters:[{name:id,in:path,required:true,schema:{type:string}},{name:version,in:query,schema:{type:integer}},{name:claim_key,in:query,schema:{type:string}},{name:grade,in:query,schema:{type:string}},{name:include_inactive,in:query,schema:{type:boolean}},{name:cursor,in:query,schema:{type:string}},{name:limit,in:query,schema:{type:integer}}], responses:{"200":{description:Evidence}}}
+  /api/finance/intel/v1/events/{id}/conflicts:
+    get: {tags:[intel-user], summary:冲突, parameters:[{name:id,in:path,required:true,schema:{type:string}},{name:version,in:query,schema:{type:integer}},{name:status,in:query,schema:{type:string}},{name:cursor,in:query,schema:{type:string}},{name:limit,in:query,schema:{type:integer}}], responses:{"200":{description:Conflicts}}}
+  /api/finance/intel/v1/events/{id}/changes:
+    get: {tags:[intel-user], summary:变更, parameters:[{name:id,in:path,required:true,schema:{type:string}},{name:version,in:query,schema:{type:integer}},{name:cursor,in:query,schema:{type:string}},{name:limit,in:query,schema:{type:integer}}], responses:{"200":{description:Changes}}}
+  /api/finance/intel/v1/source-revisions/{id}:
+    get: {tags:[intel-user], summary:来源修订与出处, parameters:[{name:id,in:path,required:true,schema:{type:string}}], responses:{"200":{description:SourceRevision},"404":{description:Not found}}}
+  /api/finance/intel/v1/notifications:
+    get: {tags:[intel-user], summary:通知中心, parameters:[{name:status,in:query,schema:{type:string}},{name:cursor,in:query,schema:{type:string}},{name:limit,in:query,schema:{type:integer}}], responses:{"200":{description:Notifications}}}
+  /api/finance/intel/v1/notifications/{id}:
+    patch: {tags:[intel-user], summary:更新通知状态, parameters:[{name:id,in:path,required:true,schema:{type:string}}], requestBody:{required:true,content:{application/json:{schema:{type:object,required:[status],properties:{status:{enum:[read,ignored]}}}}}}, responses:{"200":{description:Notification},"409":{description:State conflict}}}
+  /api/finance/intel/v1/events/{id}/mute:
+    put: {tags:[intel-user], summary:静音事项, parameters:[{name:id,in:path,required:true,schema:{type:string}}], requestBody:{required:true,content:{application/json:{schema:{type:object,required:[muted],properties:{muted:{type:boolean}}}}}}, responses:{"200":{description:Mute state}}}
+  /api/finance/intel/v1/data-status:
+    get: {tags:[intel-user], summary:数据覆盖与处理状态, responses:{"200":{description:Coverage}}}
+  /api/finance/intel/v1/replay/actions:
+    post: {tags:[intel-user], summary:隔离回放 step/reset, parameters:[{name:Idempotency-Key,in:header,required:true,schema:{type:string,minLength:8,maxLength:128}}], requestBody:{required:true,content:{application/json:{schema:{type:object,required:[action,expected_version],properties:{action:{enum:[step,reset]},expected_version:{type:integer},branch:{enum:[main,denial]}}}}}}, responses:{"200":{description:ReplayResult},"403":{description:Forbidden in live}}}
+  /api/finance/intel/v1/admin/ingestion-jobs:
+    post: {tags:[intel-admin], summary:创建抓取任务, parameters:[{name:Idempotency-Key,in:header,required:true,schema:{type:string}}], responses:{"202":{description:Accepted},"422":{description:Provider disabled}}}
+  /api/finance/intel/v1/admin/ingestion-jobs/{id}:
+    get: {tags:[intel-admin], summary:查询抓取任务, parameters:[{name:id,in:path,required:true,schema:{type:string}}], responses:{"200":{description:Job}}}
+  /api/finance/intel/v1/admin/source-revisions:
+    post: {tags:[intel-admin], summary:人工导入来源修订, parameters:[{name:Idempotency-Key,in:header,required:true,schema:{type:string}}], responses:{"201":{description:Created}}}
+  /api/finance/intel/v1/admin/review-items:
+    get: {tags:[intel-admin], summary:待处理项, responses:{"200":{description:ReviewItems}}}
+  /api/finance/intel/v1/admin/review-items/{id}/resolve:
+    post: {tags:[intel-admin], summary:处理待处理项, parameters:[{name:id,in:path,required:true,schema:{type:string}},{name:Idempotency-Key,in:header,required:true,schema:{type:string}}], responses:{"200":{description:Resolved}}}
+  /api/finance/intel/v1/admin/events/{id}/reassign:
+    post: {tags:[intel-admin], summary:证据归属纠正, parameters:[{name:id,in:path,required:true,schema:{type:string}},{name:Idempotency-Key,in:header,required:true,schema:{type:string}}], responses:{"200":{description:Reassigned}}}
+components:
+  schemas:
+    Envelope: {type:object,required:[data,error,trace_id,meta],properties:{data:{nullable:true},error:{nullable:true},trace_id:{type:string},meta:{type:object}}}
+    Scope: {type:object,required:[mode,principal_id,role,namespace_label],properties:{mode:{enum:[live,demo]},principal_id:{type:string},role:{type:string},namespace_label:{type:string},expires_at:{type:string,format:date-time},replay_version:{type:integer},generation:{type:integer},branch:{type:string},step_index:{type:integer}}}
+    EventCard: {type:object,required:[event_id,type,title,subjects,verification,phase,freshness,support_level,event_version],properties:{event_id:{type:string},type:{enum:[acquisition,earnings_forecast,regulatory_investigation]},title:{type:string},subjects:{type:array,items:{type:object}},verification:{type:string},phase:{type:string},freshness:{type:string},support_level:{type:string},event_version:{type:integer},open_conflict_count:{type:integer},coverage:{type:object}}}

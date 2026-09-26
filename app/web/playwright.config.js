@@ -11,6 +11,7 @@ export default defineConfig({
   projects: [{ name: 'chromium' }],
   webServer: process.env.E2E_NO_SERVER ? undefined : {
     command: 'npm run dev -- --host 127.0.0.1 --port 5173 --strictPort',
+    env: { VITE_INTEL_ENABLED: 'true' },
     url: 'http://127.0.0.1:5173',
     reuseExistingServer: !process.env.CI,
     timeout: 60000

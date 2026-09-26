@@ -31,7 +31,7 @@ jobs:
         run: uv sync --frozen --no-dev --project ../research-service
       - run: go mod verify
       - run: go test ./... -count=1 -timeout 300s
-      - run: go test -race ./service/finance -count=1 -timeout 300s
+      - run: go test -race ./service/finance ./service/intel ./api/v1/intel -count=1 -timeout 300s
   python:
     name: Python
     runs-on: ubuntu-latest
@@ -73,6 +73,8 @@ jobs:
           cache-dependency-path: app/web/package-lock.json
       - run: npm ci
       - run: npm run build
+        env:
+          VITE_INTEL_ENABLED: "true"
       - run: npx playwright install --with-deps chromium
       - name: Browser smoke checks (no live API)
         run: npm run test:e2e

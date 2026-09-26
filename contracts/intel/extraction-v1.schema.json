@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "intel.extraction.v1",
+  "title": "投资事件材料抽取结果",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "source_revision_id", "entities", "claims", "candidate_events"],
+  "properties": {
+    "schema_version": {"const": "intel.extraction.v1"},
+    "source_revision_id": {"type": "string", "minLength": 1},
+    "entities": {
+      "type": "array",
+      "maxItems": 50,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["text", "kind", "code"],
+        "properties": {
+          "text": {"type": "string", "minLength": 1},
+          "kind": {"enum": ["subject", "counterparty", "regulator", "person", "other"]},
+          "code": {"type": ["string", "null"]}
+        }
+      }
+    },
+    "claims": {
+      "type": "array",
+      "maxItems": 200,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["claim_key", "field", "text", "modality", "grade", "stance", "quote", "params"],
+        "properties": {
+          "claim_key": {"type": "string", "minLength": 1},
+          "field": {"type": "string", "minLength": 1},
+          "text": {"type": "string", "minLength": 1},
+          "modality": {"enum": ["actual", "predicted", "conditional", "reported", "opinion"]},
+          "grade": {"enum": ["fact", "opinion", "inference", "rumor"]},
+          "stance": {"enum": ["support", "refute", "context"]},
+          "quote": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["start", "end", "text"],
+            "properties": {
+              "start": {"type": "integer", "minimum": 0},
+              "end": {"type": "integer", "minimum": 0},
+              "text": {"type": "string", "minLength": 1},
+              "page": {"type": ["integer", "null"], "minimum": 1}
+            }
+          },
+          "params": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["field", "value", "unit", "currency", "period", "basis"],
+              "properties": {
+                "field": {"type": "string", "minLength": 1},
+                "value": {"type": ["string", "null"]},
+                "unit": {"type": ["string", "null"]},
+                "currency": {"type": ["string", "null"]},
+                "period": {"type": ["string", "null"]},
+                "basis": {"type": ["string", "null"]}
+              }
+            }
+          }
+        }
+      }
+    },
+    "candidate_events": {
+      "type": "array",
+      "maxItems": 50,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["event_type", "matter_key", "subject_code", "object_key", "period", "same_matter_description", "explicit_refs"],
+        "properties": {
+          "event_type": {"enum": ["acquisition", "earnings_forecast", "regulatory_investigation"]},
+          "matter_key": {"type": ["string", "null"]},
+          "subject_code": {"type": ["string", "null"]},
+          "object_key": {"type": ["string", "null"]},
+          "period": {"type": ["string", "null"]},
+          "same_matter_description": {"type": "boolean"},
+          "explicit_refs": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    }
+  }
+}

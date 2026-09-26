@@ -1,0 +1,13 @@
+{
+  "schema_version": "intel.source-fixtures.v1",
+  "items": [
+    {"source_revision_id":"rev_m1","source_id":"src_m1","provider":"fixture","publisher":"社区 M1","document_id":"M1","url":"fixture://events-v1/M1","title":"网传收购","rights":"summary","disclosed_at":"2026-09-01T01:00:00Z","access_status":"available","is_repost":false,"root_links":[]},
+    {"source_revision_id":"rev_m2","source_id":"src_m2","provider":"fixture","publisher":"社区 M2","document_id":"M2","url":"fixture://events-v1/M2","title":"转引收购传闻","rights":"summary","disclosed_at":"2026-09-01T02:00:00Z","access_status":"available","is_repost":true,"root_links":["rev_m1"]},
+    {"source_revision_id":"rev_n1","source_id":"src_n1","provider":"fixture","publisher":"DEMO.A 公告","document_id":"N1","url":"fixture://events-v1/N1","title":"收购进展","rights":"summary","disclosed_at":"2026-09-10T01:00:00Z","access_status":"available","is_repost":false,"root_links":["rev_m1"]},
+    {"source_revision_id":"rev_n2","source_id":"src_n2","provider":"fixture","publisher":"DEMO.A 公告","document_id":"N2","url":"fixture://events-v1/N2","title":"更正 N1","rights":"summary","disclosed_at":"2026-09-11T01:00:00Z","access_status":"available","is_repost":false,"root_links":["rev_n1"]},
+    {"source_revision_id":"rev_n3","source_id":"src_n3","provider":"fixture","publisher":"DEMO.B 公告","document_id":"N3","url":"fixture://events-v1/N3","title":"确认交易金额","rights":"summary","disclosed_at":"2026-09-12T01:00:00Z","access_status":"available","is_repost":false,"root_links":["rev_n1","rev_n2"]},
+    {"source_revision_id":"rev_n4","source_id":"src_n4","provider":"fixture","publisher":"DEMO.B 公告","document_id":"N4","url":"fixture://events-v1/N4","title":"更正 N3","rights":"summary","disclosed_at":"2026-09-13T01:00:00Z","access_status":"available","is_repost":false,"root_links":["rev_n3"]},
+    {"source_revision_id":"rev_n5","source_id":"src_n5","provider":"fixture","publisher":"DEMO.A 公告","document_id":"N5","url":"fixture://events-v1/N5","title":"交易终止","rights":"summary","disclosed_at":"2026-10-14T01:00:00Z","access_status":"available","is_repost":false,"root_links":["rev_n1"]},
+    {"source_revision_id":"rev_d1","source_id":"src_d1","provider":"fixture","publisher":"DEMO.A 公告","document_id":"D1","url":"fixture://events-v1/D1","title":"否认收购安排","rights":"summary","disclosed_at":"2026-09-02T01:00:00Z","access_status":"available","is_repost":false,"root_links":["rev_m1"]}
+  ]
+}

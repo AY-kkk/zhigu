@@ -1,0 +1,13 @@
+{
+  "fixture_set": "events-v1",
+  "version": 1,
+  "timezone": "Asia/Shanghai",
+  "description": "PRD v1.2 §7.1 的虚构 S1-S8 主路径和独立 D 分支；本文件不是真实公司材料。",
+  "branches": {
+    "main": {"steps": ["S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8"]},
+    "denial": {"steps": ["S1", "D"]}
+  },
+  "expected_notification_counts": {"main": [1, 1, 2, 3, 4, 5, 6, 7], "denial": [1, 2]},
+  "expected_event_versions": {"main": [1, 1, 2, 3, 4, 5, 6, 7], "denial": [1, 2]},
+  "disclaimer": "仅整理信息，不构成投资建议"
+}
