@@ -1,5 +1,14 @@
 # IMPLEMENTATION_STATUS
 
+日期：2026-09-27。投研观点模块 V1.0：**代码开发 ready_for_review，质量验收未 accepted，live 未验证。**
+
+- 产品基线：`prd/投研观点模块_PRD.md`。
+- 开发合同：`spec/投研观点模块_开发SPEC.md`。
+- 实施计划：`docs/superpowers/plans/2026-09-27-research-viewpoint-module.md`。
+- 已实现：观点/研报/组合三种输入、研报安全上传与文本定位、双角色研究证据登记、七块质证报告、发布门禁、HTML 导出、前端输入与报告页。
+- 已验证：Go、Python、Web 构建、Playwright 输入/报告回归，以及 Go→PostgreSQL→Python→文档证据→报告导出的 fixture 集成链。
+- 未验证：真实模型研究循环、真实数据覆盖、50 条人工质量评测、P90 性能、链接有效率和最终用户签收。缺凭据或人工标签时必须保持 `blocked/unverified`，不得写 accepted。
+
 日期：2026-09-21。阶段：**B 编码已交 `ready_for_review` / 部分 `blocked`，不是 accepted，不是公开运营。**
 
 开发者不得把关口标为 `accepted`。付费模型 live 在 D-05 费用上限与 Key 写入前保持 blocked。

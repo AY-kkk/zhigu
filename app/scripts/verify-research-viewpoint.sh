@@ -9,9 +9,6 @@ case "$MODE" in
 esac
 
 GO_BIN="${GO_BIN:-$(command -v go || true)}"
-if [[ -z "$GO_BIN" && -x /Users/chenyufan/sdk/go1.24.2/bin/go ]]; then
-  GO_BIN=/Users/chenyufan/sdk/go1.24.2/bin/go
-fi
 if [[ -z "$GO_BIN" ]]; then
   echo "go binary not found" >&2
   exit 2
@@ -110,6 +107,12 @@ case "$MODE" in
       echo "eval blocked: tests/quality/research-viewpoint-set50.json missing" >&2
       exit 2
     fi
+    if [[ -z "${ZHIGU_RESEARCH_EVAL_PREDICTIONS:-}" ]]; then
+      record research eval "evaluate-research-viewpoint" blocked
+      python3 "$ROOT/app/scripts/research_viewpoint_manifest.py" --mode eval --results "$RESULTS" --out "$ART" || true
+      echo "eval blocked: ZHIGU_RESEARCH_EVAL_PREDICTIONS is required" >&2
+      exit 2
+    fi
     ;;
 esac
 
@@ -118,6 +121,17 @@ run_py
 run_web
 if [[ "$MODE" == "integration" ]]; then
   run_go "research-viewpoint-chain" ./service/finance -run TestResearchViewpointCrossProcessFixture
+fi
+
+if [[ "$MODE" == "eval" ]]; then
+  if python3 "$ROOT/app/scripts/evaluate-research-viewpoint.py" \
+    --input "$ROOT/tests/quality/research-viewpoint-set50.json" \
+    --predictions "$ZHIGU_RESEARCH_EVAL_PREDICTIONS" \
+    --out "$ART/eval.json"; then
+    record research eval "evaluate-research-viewpoint" pass
+  else
+    record research eval "evaluate-research-viewpoint" fail
+  fi
 fi
 
 python3 "$ROOT/app/scripts/research_viewpoint_manifest.py" --mode "$MODE" --results "$RESULTS" --out "$ART"

@@ -85,7 +85,7 @@ def main():
         "requirements": requirements,
         "required": required,
         "failed_required": failed,
-        "results_file": str(Path(args.results).resolve()),
+        "results_file": str(Path(args.results).resolve().relative_to(Path.cwd().resolve())) if Path(args.results).resolve().is_relative_to(Path.cwd().resolve()) else Path(args.results).name,
         "limits": [
             "fixture and mock evidence are not live evidence",
             "RV-16 evaluation is a separate human/eval gate",

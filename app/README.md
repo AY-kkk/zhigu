@@ -130,3 +130,26 @@ cd app/web && npm ci && VITE_INTEL_ENABLED=true npm run build && npm run test:e2
 - `ZHIGU_RESEARCH_EXECUTOR=fixture` 明确使用 fixture 执行器；缺省尝试 DeerFlow Harness，失败则任务为 failed，不伪装成证据不足。
 - Playwright 需要本机 Chromium；下载失败时不要把 e2e 记成业务绿灯。完整登录→研究闭环需要本机 API。
 - 不承诺公开运营、投资效果或供应商撤回/免费。
+
+
+## 投研观点模块 V1.0
+
+产品基线见 [`prd/投研观点模块_PRD.md`](../prd/投研观点模块_PRD.md)，开发合同见 [`spec/投研观点模块_开发SPEC.md`](../spec/投研观点模块_开发SPEC.md)。
+
+支持三种输入：
+
+1. 只粘贴投资观点；
+2. 只上传 PDF、DOCX 或 TXT 研报；
+3. 观点与研报同时提交。
+
+上传研报既是被质证对象，也可作为事实证据；报告会将其标记为 `user_report / reported_only`，不冒充官方披露。固定证据源为行情、财务三表、公告和用户研报。
+
+验证命令：
+
+```sh
+bash app/scripts/verify-research-viewpoint.sh offline
+bash app/scripts/verify-research-viewpoint.sh integration
+bash app/scripts/verify-research-viewpoint.sh eval
+```
+
+`integration` 的 fixture 链路通过不代表真实模型、真实数据或人工质量验收完成。`eval` 必须提供 `ZHIGU_RESEARCH_EVAL_PREDICTIONS`，否则返回 2 并生成 blocked 记录。

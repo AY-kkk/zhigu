@@ -47,6 +47,7 @@ func TestResearchViewpointCrossProcessFixture(t *testing.T) {
 	api.Register(engine, svc, f.NewModelProxy(db, budget))
 	server := httptest.NewServer(engine)
 	defer server.Close()
+	t.Setenv("ZHIGU_RESEARCH_DOCUMENT_DIR", t.TempDir())
 	root := repoRoot(t)
 	pyRoot := filepath.Join(root, "app/research-service")
 	pyBin := filepath.Join(pyRoot, ".venv/bin/python")
