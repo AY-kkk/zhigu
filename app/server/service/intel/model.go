@@ -2,8 +2,6 @@ package intel
 
 import (
 	"context"
-	"errors"
-	"os"
 )
 
 type ExtractionRequest struct {
@@ -21,6 +19,9 @@ type ExtractionResult struct {
 	Usage         map[string]any
 }
 
+// ModelExtractor remains the fail-closed environment-configured wrapper used by
+// fixtures and deployment checks. Production jobs should freeze ConfigService.Active
+// with FreezeActiveModel and use ModelExtractorV2.
 type ModelExtractor struct {
 	ConfigID      string
 	ConfigDigest  string
@@ -28,23 +29,22 @@ type ModelExtractor struct {
 	Model         string
 	PromptVersion string
 	Enabled       bool
+	v2            *ModelExtractorV2
 }
 
 func NewModelExtractor() *ModelExtractor {
-	configID := os.Getenv("ZHIGU_INTEL_MODEL_CONFIG_ID")
-	digest := os.Getenv("ZHIGU_INTEL_MODEL_CONFIG_DIGEST")
-	protocol := os.Getenv("ZHIGU_INTEL_MODEL_PROTOCOL")
-	model := os.Getenv("ZHIGU_INTEL_MODEL")
-	enabled := configID != "" && digest != "" && (protocol == "openai_chat_completions" || protocol == "openai_responses") && model != ""
-	return &ModelExtractor{ConfigID: configID, ConfigDigest: digest, Protocol: protocol, Model: model, PromptVersion: "intel-extraction-v1", Enabled: enabled}
+	frozen := envModelConfig()
+	v2 := NewModelExtractorV2(frozen)
+	return &ModelExtractor{
+		ConfigID: frozen.ConfigID, ConfigDigest: frozen.ConfigDigest,
+		Protocol: frozen.Protocol, Model: frozen.Model, PromptVersion: frozen.PromptVersion,
+		Enabled: v2.Enabled, v2: v2,
+	}
 }
 
-// Extract is deliberately fail-closed. Fixture extraction is manual/golden data;
-// a live extractor must freeze config and model before any call and must never
-// fabricate output when credentials or config are absent.
 func (m *ModelExtractor) Extract(ctx context.Context, req ExtractionRequest) (ExtractionResult, error) {
-	if !m.Enabled {
+	if m.v2 == nil {
 		return ExtractionResult{}, newError(503, "MODEL_UNAVAILABLE", "模型配置未启用")
 	}
-	return ExtractionResult{}, errors.New("live model extraction requires provider-specific authenticated adapter")
+	return m.v2.Extract(ctx, req)
 }

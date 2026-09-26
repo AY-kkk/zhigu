@@ -43,7 +43,11 @@ func providerConfigs() map[string]ProviderConfig {
 	}
 	out["ifind"] = ifind
 	cninfo := out["cninfo"]
-	cninfo.Reason = "website endpoint requires production HTTPS/terms verification"
+	if os.Getenv("ZHIGU_CNINFO_LIVE_VERIFIED") == "1" {
+		cninfo.Enabled = true
+	} else {
+		cninfo.Reason = "website endpoint requires production HTTPS/terms verification"
+	}
 	out["cninfo"] = cninfo
 	fuyao := out["fuyao"]
 	if fuyao.APIKey == "" {
@@ -63,28 +67,38 @@ type ProviderRequest struct {
 }
 
 type ProviderClient struct {
-	Config ProviderConfig
-	Allow  map[string]struct{}
-	Client *http.Client
+	Config     ProviderConfig
+	Allow      map[string]struct{}
+	AllowPaths map[string]map[string]struct{}
+	Client     *http.Client
 }
 
 func NewProviderClient(config ProviderConfig, allowURLs ...string) *ProviderClient {
 	allow := make(map[string]struct{}, len(allowURLs))
+	allowPaths := make(map[string]map[string]struct{}, len(allowURLs))
 	for _, raw := range allowURLs {
 		if parsed, err := url.Parse(raw); err == nil {
-			allow[canonicalOrigin(parsed)] = struct{}{}
+			origin := canonicalOrigin(parsed)
+			allow[origin] = struct{}{}
+			if parsed.Path != "" && parsed.Path != "/" {
+				if allowPaths[origin] == nil {
+					allowPaths[origin] = make(map[string]struct{})
+				}
+				allowPaths[origin][parsed.Path] = struct{}{}
+			}
 		}
 	}
 	return &ProviderClient{
-		Config: config,
-		Allow:  allow,
+		Config:     config,
+		Allow:      allow,
+		AllowPaths: allowPaths,
 		Client: &http.Client{
 			Timeout: 10 * time.Second,
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
 				if len(via) >= 3 {
 					return errors.New("provider redirect chain too long")
 				}
-				if !providerURLAllowed(req.URL, allow) {
+				if !providerURLAllowed(req.URL, allow) || !providerPathAllowed(req.URL, allowPaths) {
 					return errors.New("provider redirect target is not allowlisted")
 				}
 				if len(via) > 0 && via[0].URL.Host != req.URL.Host {
@@ -109,6 +123,25 @@ func canonicalOrigin(u *url.URL) string {
 	return strings.ToLower(u.Scheme + "://" + u.Hostname() + ":" + port)
 }
 
+func providerPathAllowed(u *url.URL, allowPaths map[string]map[string]struct{}) bool {
+	if u == nil {
+		return false
+	}
+	paths := allowPaths[canonicalOrigin(u)]
+	if len(paths) == 0 {
+		return true
+	}
+	if _, ok := paths[u.Path]; ok {
+		return true
+	}
+	for allowed := range paths {
+		if strings.HasSuffix(allowed, "/") && strings.HasPrefix(u.Path, allowed) {
+			return true
+		}
+	}
+	return false
+}
+
 func providerURLAllowed(u *url.URL, allow map[string]struct{}) bool {
 	if u == nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" {
 		return false
@@ -130,7 +163,7 @@ func (p *ProviderClient) Do(ctx context.Context, req ProviderRequest) ([]byte, h
 		return nil, nil, newError(422, "PROVIDER_DISABLED", "provider 未启用或未授权")
 	}
 	parsed, err := url.Parse(req.URL)
-	if err != nil || !providerURLAllowed(parsed, p.Allow) {
+	if err != nil || !providerURLAllowed(parsed, p.Allow) || !providerPathAllowed(parsed, p.AllowPaths) {
 		return nil, nil, newError(400, "INVALID_PARAM", "provider URL 不在授权范围")
 	}
 	method := strings.ToUpper(req.Method)

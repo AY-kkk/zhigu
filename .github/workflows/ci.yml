@@ -75,6 +75,8 @@ jobs:
       - run: npm run build
         env:
           VITE_INTEL_ENABLED: "true"
-      - run: npx playwright install --with-deps chromium
+      - run: npx playwright install --with-deps chromium firefox webkit
       - name: Browser smoke checks (no live API)
         run: npm run test:e2e
+      - name: Intel cross-browser smoke checks
+        run: npx playwright test e2e/intel.spec.js --config playwright.intel.config.js --project=firefox --project=webkit

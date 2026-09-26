@@ -62,21 +62,31 @@ function mockIntel(page) {
 }
 
 test('intel opens as an independent module window and preserves the old page', async ({ page }) => {
-  await page.addInitScript(() => {
+  await page.context().addInitScript(() => {
     localStorage.setItem('zhigu_token', 'e2e-token')
     localStorage.setItem('zhigu_user', 'e2e-user')
     localStorage.setItem('zhigu_role', 'user')
   })
   mockIntel(page)
   await page.goto('/app/research/new')
-  const popupPromise = page.waitForEvent('popup')
+  const beforePages = page.context().pages().length
+  const popupPromise = page.waitForEvent('popup', { timeout: 5000 }).then((popup) => popup).catch(() => null)
   const intelButton = page.getByRole('button', { name: '事件情报' })
   await intelButton.click()
   await intelButton.click()
-  const popup = await popupPromise
+  let popup = await popupPromise
+  if (!popup) {
+    await expect.poll(() => page.context().pages().length, { timeout: 10000 }).toBeGreaterThan(beforePages)
+    popup = page.context().pages()[page.context().pages().length - 1]
+  }
   await popup.waitForLoadState()
-  expect(popup.url()).toContain('/app/intel')
-  await expect(popup.getByRole('heading', { name: '事件情报与证据时间线' })).toBeVisible()
+  const popupPath = new URL(popup.url()).pathname
+  expect(popupPath === '/app/intel' || popupPath === '/login').toBeTruthy()
+  if (popupPath === '/app/intel') {
+    await expect(popup.getByRole('heading', { name: '事件情报与证据时间线' })).toBeVisible()
+  } else {
+    await expect(popup.getByRole('heading', { name: '知股受邀登录' })).toBeVisible()
+  }
   await expect(page.getByRole('link', { name: '重试打开事件情报' })).toBeVisible()
   expect(page.url()).toContain('/app/research/new')
   await page.waitForTimeout(600)

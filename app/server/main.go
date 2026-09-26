@@ -81,7 +81,7 @@ func main() {
 		if fixtureDir == "" {
 			fixtureDir = "../../contracts/intel/fixtures/events-v1"
 		}
-		intelSvc := intelsvc.NewService(db, []byte(cookieSecret), fixtureDir)
+		intelSvc := intelsvc.NewService(db, []byte(cookieSecret), fixtureDir).WithConfigService(cfg)
 		intelapi.Register(engine, intelSvc)
 		intelSvc.StartWorker(ctx)
 		log.Printf("intel module enabled (mode=%s providers=%s)", os.Getenv("ZHIGU_INTEL_MODE"), os.Getenv("ZHIGU_INTEL_PROVIDERS"))

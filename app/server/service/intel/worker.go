@@ -2,7 +2,11 @@ package intel
 
 import (
 	"context"
+	"encoding/json"
+	"strings"
 	"time"
+
+	"github.com/google/uuid"
 
 	"gorm.io/gorm"
 )
@@ -81,6 +85,101 @@ WHERE id=? AND namespace_id=? AND generation=? AND lease_epoch=? AND status='run
 	return nil
 }
 
+type jobModelRef struct {
+	ConfigID      string `json:"config_id"`
+	ConfigDigest  string `json:"config_digest"`
+	Protocol      string `json:"protocol"`
+	Model         string `json:"model"`
+	PromptVersion string `json:"prompt_version"`
+}
+
+type extractionJobPayload struct {
+	SourceRevisionID string      `json:"source_revision_id"`
+	ModelConfig      jobModelRef `json:"model_config"`
+}
+
+func (s *Service) ProcessJob(ctx context.Context, lease JobLease) error {
+	status, received, processed, quarantined, jobErr := "partial", 0, 0, 0, "fixture ingestion is synchronous through replay actions"
+	if lease.Provider != "fixture" && lease.Provider != "manual" {
+		status, jobErr = "failed", "provider disabled or unauthorized"
+		return s.CompleteJob(ctx, lease, status, received, processed, quarantined, jobErr)
+	}
+	if lease.Kind != "extract" {
+		return s.CompleteJob(ctx, lease, status, received, processed, quarantined, jobErr)
+	}
+	var rawPayload string
+	if err := s.DB.WithContext(ctx).Raw(`SELECT payload::text FROM finance_intel_jobs WHERE id=? AND namespace_id=?`, lease.ID, lease.NamespaceID).Scan(&rawPayload).Error; err != nil {
+		return err
+	}
+	var payload extractionJobPayload
+	if err := json.Unmarshal([]byte(rawPayload), &payload); err != nil {
+		return s.CompleteJob(ctx, lease, "failed", 0, 0, 1, "invalid extraction job payload")
+	}
+	if payload.ModelConfig.Protocol == "fixture" || payload.ModelConfig.Protocol == "manual" {
+		jobErr = "manual extraction requires verified semantic review"
+		return s.CompleteJob(ctx, lease, status, received, processed, quarantined, jobErr)
+	}
+	var sourceRow map[string]any
+	if err := s.DB.WithContext(ctx).Raw(`SELECT id,logical_id,allowed_excerpt FROM finance_intel_source_revisions WHERE namespace_id=? AND logical_id=?`, lease.NamespaceID, payload.SourceRevisionID).Scan(&sourceRow).Error; err != nil {
+		return err
+	}
+	if len(sourceRow) == 0 {
+		return s.CompleteJob(ctx, lease, "failed", 0, 0, 1, "source revision not found")
+	}
+	scope, err := s.scope(ctx, lease.NamespaceID)
+	if err != nil {
+		return err
+	}
+	frozen, err := s.freezeModelForJob(ctx, scope)
+	if err != nil {
+		return s.CompleteJob(ctx, lease, "failed", 0, 0, 1, err.Error())
+	}
+	if frozen.ConfigID != payload.ModelConfig.ConfigID || frozen.ConfigDigest != payload.ModelConfig.ConfigDigest ||
+		frozen.Protocol != payload.ModelConfig.Protocol || frozen.Model != payload.ModelConfig.Model {
+		return s.CompleteJob(ctx, lease, "failed", 0, 0, 1, "frozen model config changed before execution")
+	}
+	extractor := NewModelExtractorV2(frozen)
+	extractor.Call = s.ModelCall
+	text, _ := sourceRow["allowed_excerpt"].(string)
+	usageID, reserveErr := s.ReserveModelUsage(ctx, scope, lease.ID, lease.Attempts, intelInputTokenLimit+intelOutputTokenLimit)
+	if reserveErr != nil {
+		return s.CompleteJob(ctx, lease, "failed", 1, 0, 1, reserveErr.Error())
+	}
+	result, extractErr := extractor.Extract(ctx, ExtractionRequest{SourceRevisionID: payload.SourceRevisionID, Text: text})
+	if extractErr != nil {
+		_ = s.SettleModelUsage(ctx, usageID, 0, true)
+	}
+
+	if extractErr != nil {
+		quarantined = 1
+		status = "failed"
+		if strings.Contains(extractErr.Error(), "REVIEW_REQUIRED") || strings.Contains(extractErr.Error(), "INVALID_CITATION") {
+			status, quarantined = "partial", 1
+		}
+		return s.CompleteJob(ctx, lease, status, 1, 0, quarantined, extractErr.Error())
+	}
+	if err := s.SettleModelUsage(ctx, usageID, usageTotal(result.Usage), false); err != nil {
+		return err
+	}
+	runID := "extr_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+	if err := execSQL(s.DB.WithContext(ctx), `INSERT INTO finance_intel_extraction_runs
+(id,namespace_id,source_revision_id,config_id,config_digest,prompt_version,input_hash,attempt,status,output,validation,usage,mode,created_at)
+VALUES (?,?,?,?,?,?,?,?, 'succeeded', ?::jsonb, ?::jsonb, ?::jsonb, 'live', ?)`,
+		runID, lease.NamespaceID, sourceRow["id"], result.ConfigID, result.ConfigDigest, result.PromptVersion,
+		sha256Text(text), lease.Attempts, mustJSON(result.Output), mustJSON(map[string]any{"schema_version": result.SchemaVersion, "validated": true}),
+		mustJSON(result.Usage), s.now()); err != nil {
+		return err
+	}
+	reviewID := "review_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+	if err := execSQL(s.DB.WithContext(ctx), `INSERT INTO finance_intel_review_items
+(id,namespace_id,revision,kind,status,payload,reason,created_at)
+VALUES (?,?,1,'extraction','pending',?::jsonb,'模型抽取需人工金标准核验',?)`,
+		reviewID, lease.NamespaceID, mustJSON(map[string]any{"extraction_run_id": runID, "source_revision_id": payload.SourceRevisionID}), s.now()); err != nil {
+		return err
+	}
+	return s.CompleteJob(ctx, lease, "succeeded", 1, 1, 0, "")
+}
+
 // StartWorker is a bounded durable queue worker. Provider fetch/model calls are
 // intentionally fail-closed here; fixture/manual jobs are surfaced as partial
 // review work rather than pretending a live extraction succeeded.
@@ -98,16 +197,7 @@ func (s *Service) StartWorker(ctx context.Context) {
 				if err != nil {
 					continue
 				}
-				status, jobErr := "partial", ""
-				switch {
-				case lease.Provider != "fixture" && lease.Provider != "manual":
-					status, jobErr = "failed", "provider disabled or unauthorized"
-				case lease.Kind == "extract":
-					jobErr = "manual extraction requires admin review"
-				default:
-					jobErr = "fixture ingestion is synchronous through replay actions"
-				}
-				_ = s.CompleteJob(ctx, lease, status, 0, 0, 0, jobErr)
+				_ = s.ProcessJob(ctx, lease)
 			}
 		}
 	}()

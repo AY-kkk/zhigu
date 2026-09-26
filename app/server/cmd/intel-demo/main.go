@@ -19,6 +19,7 @@ import (
 
 	intelapi "zhigu/server/api/v1/intel"
 	"zhigu/server/initialize"
+	"zhigu/server/service/finance"
 	intelsvc "zhigu/server/service/intel"
 )
 
@@ -66,7 +67,7 @@ func run() error {
 	if fixtureDir == "" {
 		fixtureDir = "../../contracts/intel/fixtures/events-v1"
 	}
-	svc := intelsvc.NewService(db, []byte(os.Getenv("ZHIGU_INTEL_COOKIE_SECRET")), fixtureDir)
+	svc := intelsvc.NewService(db, []byte(os.Getenv("ZHIGU_INTEL_COOKIE_SECRET")), fixtureDir).WithConfigService(finance.NewConfigService(db))
 	engine := gin.New()
 	engine.Use(gin.Recovery())
 	engine.GET("/healthz", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"status": "ok", "module": "intel-demo"}) })

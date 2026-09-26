@@ -25,6 +25,8 @@ export ZHIGU_INTEL_PUBLIC_ORIGIN='http://localhost:5173'
 export ZHIGU_INTEL_DAILY_TOKEN_LIMIT=200000
 ```
 
+iFinD adapter 动态执行 MCP initialize/tools-list/tools-call 并冻结真实工具名与 schema hash；巨潮 adapter 支持全量分页和空列表；扶摇 adapter 仅同步 A 股标的目录。模型层复用活动配置并冻结 config digest，支持 chat_completions/responses、严格输出 Schema、quote offset、16K/4K token 边界和每日200K预算。
+
 真实模式必须显式配置并验证 `IFIND_MCP_URL,IFIND_AUTHORIZATION,FUYAO_API_KEY` 及 `ZHIGU_INTEL_PROVIDERS`；模型还需 `ZHIGU_INTEL_MODEL_CONFIG_ID,ZHIGU_INTEL_MODEL_CONFIG_DIGEST,ZHIGU_INTEL_MODEL_PROTOCOL,ZHIGU_INTEL_MODEL` 冻结配置。缺凭据时 live provider/模型保持 disabled，不得用 fixture 填充真实空间。公开环境必须改掉仓库示例密钥，并通过 `ZHIGU_INTEL_PUBLIC_ORIGIN` 做同源/Origin 校验。
 
 启动顺序：迁移（包含 `006_intel.sql`）→ Go API/Worker → Vue。演示页先调用 `GET /session` 取得 bootstrap Cookie，再调用 `POST /demo-sessions` 创建隔离空间；刷新通过 session 恢复 step，不自动 reset。
@@ -39,7 +41,7 @@ bash app/scripts/verify-intel.sh live-model  # 缺授权返回 2，不生成“�
 bash app/scripts/verify-intel.sh regression
 ```
 
-offline 至少执行规则/API/迁移/前端 build/Intel Chromium fixture 流程；integration 在上述基础上加 race。`artifacts/intel/<UTC-run-id>/manifest.json` 记录 commit、工作区差异、PRD/SPEC hash、规则/Schema/prompt 版本和 I01–I38 的证据状态。live 数据、live 模型、5 名用户理解和 10 RPS 负载必须单列真实证据，不能用 fixture 或截图替代。
+offline 至少执行规则/API/迁移/前端 build/Intel Chromium fixture 流程；integration 在上述基础上加真实 Vue→Go→PostgreSQL chain 与 race；`browser-matrix` 执行 Firefox/WebKit。`artifacts/intel/<UTC-run-id>/manifest.json` 记录 commit、工作区差异、PRD/SPEC hash、规则/Schema/prompt 版本和 I01–I38 的证据状态。live 数据、live 模型、5 名用户理解和 10 RPS 负载必须单列真实证据，不能用 fixture 或截图替代。
 
 ### 已知限制（必须与上线材料一起披露）
 

@@ -24,10 +24,17 @@ type Service struct {
 	CookieKey  []byte
 	FixtureDir string
 	Now        func() time.Time
+	Configs    *svcfinance.ConfigService
+	ModelCall  ModelCall
 }
 
 func NewService(db *gorm.DB, cookieKey []byte, fixtureDir string) *Service {
 	return &Service{DB: db, CookieKey: append([]byte(nil), cookieKey...), FixtureDir: fixtureDir, Now: func() time.Time { return time.Now().UTC() }}
+}
+
+func (s *Service) WithConfigService(configs *svcfinance.ConfigService) *Service {
+	s.Configs = configs
+	return s
 }
 
 type Scope struct {
@@ -483,6 +490,27 @@ FROM finance_intel_jobs WHERE namespace_id=? AND id=?`, scope.NamespaceID, id).S
 	return row, nil
 }
 
+func (s *Service) freezeModelForJob(ctx context.Context, scope Scope) (FrozenModelConfig, error) {
+	if scope.Mode == "demo" {
+		return FrozenModelConfig{
+			ConfigID: "fixture-manual", ConfigDigest: "fixture-manual-v1", Protocol: "fixture",
+			Model: "fixture-manual-extraction-v1", PromptVersion: intelPromptVersion,
+		}, nil
+	}
+	if s.Configs != nil {
+		if frozen, err := FreezeActiveModel(ctx, s.Configs); err == nil {
+			return frozen, nil
+		}
+	}
+	if frozen := envModelConfig(); NewModelExtractorV2(frozen).Enabled {
+		return frozen, nil
+	}
+	return FrozenModelConfig{
+		ConfigID: "manual-review", ConfigDigest: "manual-review-v1", Protocol: "manual",
+		Model: "manual-verified-extraction", PromptVersion: intelPromptVersion,
+	}, nil
+}
+
 func (s *Service) ImportSourceRevision(ctx context.Context, scope Scope, req ImportSourceRequest) (map[string]any, error) {
 	if len(req.Text) == 0 || len(req.Text) > 100*1024 {
 		return nil, newError(400, "INVALID_PARAM", "text 必须为 1–100KiB")
@@ -493,7 +521,11 @@ func (s *Service) ImportSourceRevision(ctx context.Context, scope Scope, req Imp
 	if req.Rights == "" {
 		req.Rights = "summary"
 	}
-	logicalID := "imported_" + sha256Text(req.Publisher+"\x00"+req.DocumentID+"\x00"+req.Text)[:16]
+	frozen, err := s.freezeModelForJob(ctx, scope)
+	if err != nil {
+		return nil, err
+	}
+	logicalID := "imported_" + sha256Text(req.Publisher + "\x00" + req.DocumentID + "\x00" + req.Text)[:16]
 	var existing map[string]any
 	if err := s.DB.WithContext(ctx).Raw(`SELECT r.logical_id AS revision_id,s.id AS source_id
 FROM finance_intel_source_revisions r JOIN finance_intel_sources s ON s.id=r.source_id
@@ -505,7 +537,7 @@ WHERE r.namespace_id=? AND r.logical_id=?`, scope.NamespaceID, logicalID).Scan(&
 		return existing, nil
 	}
 	var out map[string]any
-	err := s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err = s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var sourceRow map[string]any
 		if err := tx.Raw(`SELECT id FROM finance_intel_sources WHERE namespace_id=? AND publisher=? AND document_id=?`, scope.NamespaceID, req.Publisher, req.DocumentID).Scan(&sourceRow).Error; err != nil {
 			return err
@@ -531,10 +563,17 @@ VALUES (?,?,?,?,?,?,?,?,?::jsonb,NULL,'',?,NULL,'available',false,NULL,?)`,
 			return err
 		}
 		jobID := "job_import_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+		jobPayload := map[string]any{
+			"source_revision_id": logicalID,
+			"model_config": map[string]any{
+				"config_id": frozen.ConfigID, "config_digest": frozen.ConfigDigest,
+				"protocol": frozen.Protocol, "model": frozen.Model, "prompt_version": frozen.PromptVersion,
+			},
+		}
 		if err := execSQL(tx, `INSERT INTO finance_intel_jobs
 (id,namespace_id,kind,provider,payload,cursor,status,owner,lease_epoch,lease_until,attempts,generation,received_count,processed_count,quarantined_count,error,created_at,updated_at)
 VALUES (?,?,'extract','manual',?::jsonb,'','queued',NULL,0,NULL,0,?,1,0,0,'',?,?)`,
-			jobID, scope.NamespaceID, mustJSON(map[string]any{"source_revision_id": logicalID}), scope.Generation, now, now); err != nil {
+			jobID, scope.NamespaceID, mustJSON(jobPayload), scope.Generation, now, now); err != nil {
 			return err
 		}
 		out = map[string]any{"source_id": sourceID, "revision_id": logicalID, "job_id": jobID}

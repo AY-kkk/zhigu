@@ -10,4 +10,4 @@
 
 - 新增演示“开始前不创建会话”状态后，1700/1440/390 三视口 `visual_layout_audit.mjs` 为 0 error；桌面 section 覆盖有 2 个 warning，移动 section 覆盖完整。
 - 新增窗口动作、安全登录回跳、跨窗口 storage 重鉴权后，Playwright Intel Chromium 5/5 通过。
-- 仍未验证：Firefox/WebKit/Edge 原生矩阵、真实后端密度、10 RPS 负载、5名用户理解。
+- Firefox/WebKit Playwright 已通过；仍未验证 Edge/Safari 原生、真实后端密度、10 RPS 负载、5名用户理解。

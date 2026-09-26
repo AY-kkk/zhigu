@@ -206,7 +206,7 @@ func TestSignedListCursorAndGenerationFence(t *testing.T) {
 	if body.Data.NextCursor == "" {
 		t.Fatalf("missing signed cursor: %s", page.Body.String())
 	}
-	tampered := body.Data.NextCursor[:max(1, len(body.Data.NextCursor)-1)] + "x"
+	tampered := "x" + body.Data.NextCursor
 	bad := doJSON(t, engine, http.MethodGet, "/api/finance/intel/v1/notifications?limit=1&cursor="+url.QueryEscape(tampered), "demo", "", demoCookie, nil)
 	if bad.Code != http.StatusBadRequest || !strings.Contains(bad.Body.String(), "INVALID_PARAM") {
 		t.Fatalf("tampered cursor status=%d body=%s", bad.Code, bad.Body.String())
@@ -225,12 +225,6 @@ func TestSignedListCursorAndGenerationFence(t *testing.T) {
 	}
 }
 
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
 
 func TestReplayIdempotencyReplaysSameBodyAndRejectsDifferentBody(t *testing.T) {
 	gin.SetMode(gin.TestMode)

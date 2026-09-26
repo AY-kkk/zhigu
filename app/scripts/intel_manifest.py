@@ -72,7 +72,7 @@ def main() -> None:
             "I01-I08": "pass: route/window/demo isolation, safe redirects and storage reauth checks run locally",
             "I09-I20": "pass: deterministic fixture/rules tests run locally",
             "I21-I26": "partial: recovery/idempotency tests cover demo replay; production worker/load not proven",
-            "I27-I32": "partial: Chromium 375px fixture smoke; native browser matrix and manual keyboard review pending",
+            "I27-I32": "partial: Chromium/Firefox/WebKit Playwright and 375px smoke pass; Edge/Safari native plus manual keyboard review pending",
             "I33-I36": "blocked: live sources, load, and five-user validation require external evidence",
             "I37": "pass: existing research/strategy regression subset ran in this workspace",
             "I38": "partial: manifest, test logs and 60s fixture video generated; URL deployment evidence pending",

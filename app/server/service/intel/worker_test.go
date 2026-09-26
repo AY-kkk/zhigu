@@ -2,7 +2,10 @@ package intel
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
+
+	"zhigu/server/service/finance"
 
 	"zhigu/server/testdb"
 )
@@ -76,4 +79,66 @@ func TestOutboxLeaseAndCompletionAreFenced(t *testing.T) {
 	if status != "sent" {
 		t.Fatalf("outbox status=%q", status)
 	}
+}
+
+func TestWorkerExecutesFrozenModelExtraction(t *testing.T) {
+	db := testdb.Start(t)
+	configs := finance.NewConfigService(db)
+	svc := NewService(db, []byte("intel-test-cookie-secret"), testFixtureDir(t)).WithConfigService(configs)
+	ctx := context.Background()
+	saved, err := configs.SaveModel(ctx, map[string]any{
+		"base_url": "https://api.example.com/v1", "protocol": "openai_chat_completions", "model": "model-x",
+	}, "secret-key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := configs.MarkTested(ctx, saved.ID, saved.ConfigDigest); err != nil {
+		t.Fatal(err)
+	}
+	if err := configs.Activate(ctx, saved.ID); err != nil {
+		t.Fatal(err)
+	}
+	scope, err := svc.LiveScope(ctx, 99, "admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	created, err := svc.ImportSourceRevision(ctx, scope, ImportSourceRequest{
+		Publisher: "授权公告", DocumentID: "LIVE-1", URL: "https://example.com/live-1",
+		Title: "真实材料占位", Text: "公司披露一项交易进展。", Rights: "summary", ImportReason: "授权样本",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var payload extractionJobPayload
+	var payloadRaw string
+	if err := db.Raw(`SELECT payload::text FROM finance_intel_jobs WHERE namespace_id=? AND id=(SELECT id FROM finance_intel_jobs WHERE namespace_id=? ORDER BY created_at DESC LIMIT 1)`, scope.NamespaceID, scope.NamespaceID).Scan(&payloadRaw).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal([]byte(payloadRaw), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.ModelConfig.ConfigID != saved.ID || payload.ModelConfig.ConfigDigest != saved.ConfigDigest {
+		t.Fatalf("payload=%#v", payload)
+	}
+	svc.ModelCall = func(_ context.Context, cfg FrozenModelConfig, _ []byte) ([]byte, error) {
+		output := extractionFixtureOutput(payload.SourceRevisionID, "公司披露一项交易进展。")
+		raw, _ := json.Marshal(output)
+		response, _ := json.Marshal(map[string]any{"choices": []any{map[string]any{"message": map[string]any{"content": string(raw)}}}, "usage": map[string]any{"total_tokens": 12}})
+		return response, nil
+	}
+	lease, err := svc.ClaimJob(ctx, "worker-model")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.ProcessJob(ctx, lease); err != nil {
+		t.Fatal(err)
+	}
+	var runs int
+	if err := db.Raw(`SELECT count(*) FROM finance_intel_extraction_runs WHERE namespace_id=?`, scope.NamespaceID).Scan(&runs).Error; err != nil {
+		t.Fatal(err)
+	}
+	if runs != 1 {
+		t.Fatalf("extraction runs=%d", runs)
+	}
+	_ = created
 }
