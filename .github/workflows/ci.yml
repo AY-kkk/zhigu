@@ -52,7 +52,7 @@ jobs:
         working-directory: app/research-service
         env:
           ZHIGU_RESEARCH_SQLITE: /tmp/zhigu-ci-jobs.sqlite
-        run: .venv/bin/python -m pytest tests -q -k 'not test_actual_harness_import'
+        run: .venv/bin/python -m pytest tests -q -k 'not actual_harness_import'
       - name: Public contract checks
         run: app/research-service/.venv/bin/python -m pytest handoff/tests -q -k 'not test_repository_pins_and_reuse_paths'
       - name: Public tree checks

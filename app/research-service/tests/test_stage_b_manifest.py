@@ -25,9 +25,10 @@ def test_b02_gate_prerequisites():
 
 
 def test_b04_runtime_provenance():
-    client = ROOT / "references/deer-flow/backend/packages/harness/deerflow/client.py"
-    text = client.read_text(encoding="utf-8")
-    assert "class DeerFlowClient" in text
+    adapter = ROOT / "app/research-service/app/deerflow_adapter.py"
+    text = adapter.read_text(encoding="utf-8")
+    assert "class FinanceDeerFlowAdapter" in text
+    assert "DeerFlowClient" in text
     lock = ROOT / "app/research-service/uv.lock"
     assert lock.exists() and lock.stat().st_size > 0
 
@@ -69,7 +70,7 @@ def test_b17_role_limits_enforced():
 
 
 def test_b18_live_provider_capabilities():
-    raw = json.loads((ROOT / "artifacts/stage-b/source-contract.json").read_text(encoding="utf-8"))
+    raw = json.loads((ROOT / "contracts/stage-b/source-contract.json").read_text(encoding="utf-8"))
     blob = json.dumps(raw, ensure_ascii=False)
     for token in ("600519.SH", "300750.SZ", "000333.SZ", "00700.HK"):
         assert token in blob
@@ -136,7 +137,7 @@ def test_b35_handoff_completeness():
         "spec/阶段B_开发SPEC.md",
         "spec/验收与接入清单.md",
         "app/scripts/verify-stage-b.sh",
-        "artifacts/stage-b/source-contract.json",
+        "contracts/stage-b/source-contract.json",
         "app/server/migrations/finance/003_stage_b.sql",
     ):
         assert (ROOT / rel).exists(), rel

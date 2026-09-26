@@ -2,8 +2,9 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 MODE="${1:-offline}"
-if [ -x /Users/chenyufan/sdk/go1.24.2/bin/go ]; then
-  export PATH="/Users/chenyufan/sdk/go1.24.2/bin:${PATH:-}"
+if ! command -v go >/dev/null 2>&1; then
+  echo "go is required for intel verification" >&2
+  exit 2
 fi
 export GOTOOLCHAIN=local
 cd "$ROOT"
