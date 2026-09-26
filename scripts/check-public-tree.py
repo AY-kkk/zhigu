@@ -29,8 +29,8 @@ def main():
             for p in path.parts
         ):
             errors.append(f"{name}: local/private artifact")
-        if name.startswith("references/") and len(path.parts) > 2:
-            errors.append(f"{name}: upstream source checkout")
+        if name.startswith("references/"):
+            errors.append(f"{name}: local reference snapshot must not be published")
         if (path.name.startswith(".env") and path.name != ".env.example") or path.suffix in {
             ".pem", ".key", ".sqlite", ".sqlite3", ".db", ".log"
         }:
