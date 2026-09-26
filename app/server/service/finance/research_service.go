@@ -739,6 +739,16 @@ func (s *ResearchService) Publish(ctx context.Context, runID string, expectedVer
 		if err := tx.Where("run_id = ?", runID).Find(&allowed).Error; err != nil {
 			return err
 		}
+		if err := s.hydrateReportEvidence(tx, runID, &report); err != nil {
+			return err
+		}
+		if report.SchemaVersion == "research-report.v2" {
+			var claimForGate Claim
+			_ = json.Unmarshal(run.ClaimSnapshot, &claimForGate)
+			if err := ValidateReportV2(report, allowed, claimForGate); err != nil {
+				return err
+			}
+		}
 		okIDs := map[string]struct{}{}
 		for _, ev := range allowed {
 			okIDs[ev.ID] = struct{}{}
@@ -777,9 +787,6 @@ func (s *ResearchService) Publish(ctx context.Context, runID string, expectedVer
 		if report.QualityStatus == "completed" {
 			v := verdictFromFactChecks(report.FactChecks)
 			report.Verdict = &v
-		}
-		if err := s.hydrateReportEvidence(tx, runID, &report); err != nil {
-			return err
 		}
 		now := s.Clock.Now()
 		body, _ := json.Marshal(report)
@@ -926,6 +933,21 @@ func pointerValue(value *string) string {
 		return ""
 	}
 	return *value
+}
+
+func (s *ResearchService) ExportHTML(ctx context.Context, runID string) ([]byte, error) {
+	view, err := s.GetResearch(ctx, runID)
+	if err != nil {
+		return nil, err
+	}
+	if view.Report == nil || view.Claim == nil {
+		return nil, NewError(409, "conflict", "NO_REPORT", "当前研究没有已发布报告")
+	}
+	var evidence []modelfinance.Evidence
+	if err := s.DB.WithContext(ctx).Where("run_id = ?", runID).Find(&evidence).Error; err != nil {
+		return nil, err
+	}
+	return []byte(RenderReportHTML(*view.Report, *view.Claim, evidence, view.Document)), nil
 }
 
 func (s *ResearchService) hydrateReportEvidence(tx *gorm.DB, runID string, report *VerifiedReport) error {

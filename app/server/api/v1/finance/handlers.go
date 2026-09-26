@@ -33,6 +33,7 @@ func Register(engine *gin.Engine, svc *finance.ResearchService, proxy *finance.M
 	consumer.PATCH("/claims/:id", a.PatchClaim)
 	consumer.POST("/research", a.Create)
 	consumer.GET("/research/:id", a.Get)
+	consumer.GET("/research/:id/export", a.ExportResearch)
 	consumer.GET("/research", a.List)
 	consumer.POST("/research/:id/cancel", a.Cancel)
 	consumer.DELETE("/research/:id", a.Delete)
@@ -148,6 +149,22 @@ func (a *API) Get(c *gin.Context) {
 		return
 	}
 	httpx.OK(c, http.StatusOK, out)
+}
+
+func (a *API) ExportResearch(c *gin.Context) {
+	if c.Query("format") != "" && c.Query("format") != "html" {
+		httpx.Fail(c, http.StatusBadRequest, "UNSUPPORTED_EXPORT", "仅支持 format=html")
+		return
+	}
+	ctx := finance.WithUser(c.Request.Context(), httpx.CurrentUserID(c), roleOf(c))
+	raw, err := a.Svc.ExportHTML(ctx, c.Param("id"))
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	c.Header("Content-Type", "text/html; charset=utf-8")
+	c.Header("Content-Disposition", `attachment; filename="research-report.html"`)
+	c.Data(http.StatusOK, "text/html; charset=utf-8", raw)
 }
 
 func (a *API) List(c *gin.Context) {
