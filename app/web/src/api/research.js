@@ -3,8 +3,20 @@ import http from '../utils/http.js'
 export function login(username, password) {
   return http.post('/api/finance/auth/login', { username, password })
 }
-export function parseClaim(text, config = {}) {
-  return http.post('/api/finance/claims/parse', { text }, config)
+export function parseClaim(input, config = {}) {
+  const payload = typeof input === 'string' ? { text: input } : input
+  return http.post('/api/finance/claims/parse', payload, config)
+}
+export function uploadResearchDocument(file, draftId = '') {
+  const form = new FormData()
+  form.append('file', file)
+  if (draftId) form.append('draft_id', draftId)
+  return http.post('/api/finance/research-documents', form, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  })
+}
+export function getResearchDocument(id, config = {}) {
+  return http.get(`/api/finance/research-documents/${id}`, config)
 }
 export function patchClaim(id, payload, config = {}) {
   return http.patch(`/api/finance/claims/${id}`, payload, config)

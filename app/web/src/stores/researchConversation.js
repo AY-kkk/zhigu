@@ -9,7 +9,8 @@ import {
   listInstruments,
   listResearch,
   parseClaim,
-  patchClaim
+  patchClaim,
+  uploadResearchDocument
 } from '../api/research.js'
 import { STAGE_A_PUBLIC_MODE } from '../config/publicMode.js'
 import {
@@ -48,11 +49,18 @@ function splitHorizon(horizon) {
 export const useResearchConversation = defineStore('researchConversation', {
   state: () => ({
     draftText: '',
+    focusText: '',
+    document: null,
+    documentFile: null,
+    documentUploading: false,
+    documentError: '',
     parseBusy: false,
     parseError: '',
     parseSeq: 0,
     draft: null,
     parsedText: '',
+    parsedDocumentId: '',
+    parsedFocusText: '',
     instrumentId: '',
     horizon: '',
     confirmBusy: false,
@@ -89,18 +97,27 @@ export const useResearchConversation = defineStore('researchConversation', {
   }),
   getters: {
     charCount: (state) => countChars(state.draftText),
-    staleDraft: (state) => !!state.draft && state.draftText.trim() !== state.parsedText.trim(),
+    staleDraft: (state) => !!state.draft && (
+      state.draftText.trim() !== state.parsedText.trim()
+      || (state.document?.document_id || '') !== state.parsedDocumentId
+      || state.focusText.trim() !== state.parsedFocusText.trim()
+    ),
+    inputMode: (state) => state.draft?.input_mode || (
+      state.draftText.trim() && state.document ? 'claim_and_report'
+        : state.document ? 'report_only' : 'claim_only'
+    ),
     canParse: (state) => {
       const n = countChars(state.draftText)
-      return n >= 20 && n <= 2000 && !state.parseBusy && !state.confirmBusy
+      const textOK = n === 0 || (n >= 20 && n <= 2000)
+      return textOK && (n > 0 || !!state.document?.document_id) && !state.parseBusy && !state.confirmBusy && !state.documentUploading
     },
-    canStart: (state) => {
+    canStart: (state, getters) => {
       return !!state.draft
         && !!state.instrumentId
         && !!state.horizon.trim()
         && !state.confirmBusy
         && !state.parseBusy
-        && state.draftText.trim() === state.parsedText.trim()
+        && !getters.staleDraft
     },
     isActiveRun: (state) => ACTIVE_STATUSES.includes(state.runView?.status),
     hasPublishedReport: (state) => !!state.runView?.report,
@@ -124,10 +141,17 @@ export const useResearchConversation = defineStore('researchConversation', {
       this.loadSeq += 1
       this.evidenceSeq += 1
       this.draftText = ''
+      this.focusText = ''
+      this.document = null
+      this.documentFile = null
+      this.documentUploading = false
+      this.documentError = ''
       this.parseBusy = false
       this.parseError = ''
       this.draft = null
       this.parsedText = ''
+      this.parsedDocumentId = ''
+      this.parsedFocusText = ''
       this.instrumentId = ''
       this.horizon = ''
       this.confirmBusy = false
@@ -166,12 +190,31 @@ export const useResearchConversation = defineStore('researchConversation', {
     setDraftText(text) {
       this.draftText = text
       this.parseError = ''
-      if (this.draft && text.trim() !== this.parsedText.trim()) {
-        this.draft = null
-        this.instrumentId = ''
-        this.horizon = ''
-        this.createAttempt = null
+    },
+    setFocusText(text) {
+      this.focusText = text
+      this.parseError = ''
+    },
+    async uploadDocument(file) {
+      this.documentError = ''
+      this.documentUploading = true
+      try {
+        const res = await uploadResearchDocument(file)
+        this.document = res.data
+        this.documentFile = file
+        this.parseError = ''
+      } catch (error) {
+        this.document = null
+        this.documentFile = null
+        this.documentError = mapRequestError(error, '研报上传失败，可重试')
+      } finally {
+        this.documentUploading = false
       }
+    },
+    removeDocument() {
+      this.document = null
+      this.documentFile = null
+      this.documentError = ''
     },
     fillExample(text) {
       this.setDraftText(text)
@@ -220,12 +263,17 @@ export const useResearchConversation = defineStore('researchConversation', {
       this.parseSeq += 1
       const seq = this.parseSeq
       const snapshot = this.draftText
-      this.userMessage = { id: uid('claim'), text: snapshot, createAt: now() }
+      const documentId = this.document?.document_id || ''
+      const focus = this.focusText.trim()
+      const display = snapshot || this.document?.filename || '上传研报'
+      this.userMessage = { id: uid('claim'), text: display, createAt: now() }
       try {
-        const res = await parseClaim(snapshot)
+        const res = await parseClaim({ text: snapshot, document_id: documentId, focus_text: focus })
         if (seq !== this.parseSeq) return
         this.draft = res.data
         this.parsedText = snapshot
+        this.parsedDocumentId = documentId
+        this.parsedFocusText = focus
         const candidates = res.data.candidates || []
         this.instrumentId = candidates.length === 1 ? candidates[0].instrument_id : this.instrumentId
         this.mergeInstruments(candidates)
@@ -326,6 +374,11 @@ export const useResearchConversation = defineStore('researchConversation', {
         this.runLoading = false
         if (!keepLocal) {
           this.draftText = ''
+      this.focusText = ''
+      this.document = null
+      this.documentFile = null
+      this.documentUploading = false
+      this.documentError = ''
           const text = res.data.claim?.text || ''
           if (text) {
             this.userMessage = this.userMessage?.text === text

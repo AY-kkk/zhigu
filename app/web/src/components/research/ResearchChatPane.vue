@@ -103,6 +103,14 @@
           @click="conversation.fillExample(item.text)"
         ><ZhiguIcon :name="item.key === 'fact' ? 'report' : item.key === 'challenge' ? 'search' : 'verify'" :size="16" />{{ item.label }}</button>
       </div>
+      <ResearchDocumentUpload
+        v-if="isNew && !conversation.currentRunId"
+        :document="conversation.document"
+        :busy="conversation.documentUploading"
+        :error="conversation.documentError"
+        @upload="conversation.uploadDocument"
+        @remove="conversation.removeDocument"
+      />
       <ResearchComposer
         ref="composerRef"
         :model-value="conversation.draftText"
@@ -113,13 +121,13 @@
         :field-label="composerMeta.fieldLabel"
         :disabled="composerMeta.disabled"
         :busy="composerMeta.busy"
-        :min-chars="composerMeta.minChars"
+        :min-chars="conversation.document ? 0 : composerMeta.minChars"
         :show-arrow="composerMeta.showArrow"
         :focus-token="conversation.composerFocusToken"
         @update:model-value="conversation.setDraftText"
         @submit="onSubmit"
       />
-      <p v-if="isPristine" class="zhigu-reading coverage">从一条具体观点开始 · 支持已覆盖的 A 股与港股单公司研究</p>
+      <p v-if="isPristine" class="zhigu-reading coverage">粘贴观点、上传研报，或两者同时提交 · 支持已覆盖的 A 股与港股单公司研究</p>
     </div>
   </div>
 </template>
@@ -138,6 +146,7 @@ import ResearchStatus from './ResearchStatus.vue'
 import EvidenceLine from './EvidenceLine.vue'
 import Report from './Report.vue'
 import ResearchComposer from './ResearchComposer.vue'
+import ResearchDocumentUpload from './ResearchDocumentUpload.vue'
 import ResearchErrorState from './ResearchErrorState.vue'
 import EvidenceReference from './EvidenceReference.vue'
 
@@ -199,8 +208,8 @@ const composerMeta = computed(() => {
     }
   }
   return {
-    disabled: false, label: '解析观点', showArrow: true, minChars: 20, fieldLabel: '投资观点',
-    placeholder: '粘贴一个关于单家 A 股或港股公司的投资观点，20–2,000 字',
+    disabled: false, label: '解析观点', showArrow: true, minChars: 20, fieldLabel: '投资观点（可选）',
+    placeholder: '粘贴一个关于单家 A 股或港股公司的投资观点，20–2,000 字；也可以只上传研报',
     hint: conversation.parseError ? '' : '',
     error: '', busy: conversation.parseBusy
   }

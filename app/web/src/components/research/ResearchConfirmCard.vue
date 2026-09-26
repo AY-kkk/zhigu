@@ -1,6 +1,10 @@
 <template>
   <Card class="confirm-card" :bordered="true" shadows="never" title="确认研究范围">
-    <p class="lead">选择标的公司和研究期限后，才会创建研究任务。确认后将冻结本次研究的数据截止时间。</p>
+    <p class="lead">确认输入、标的公司和研究期限后，才会创建研究任务。确认后将冻结本次研究的数据截止时间。</p>
+    <p class="input-mode" data-testid="input-mode">输入方式：{{ inputModeLabel }}</p>
+    <p v-if="conversation.document" class="document">研报：{{ conversation.document.filename }} · 同时作为证据和被质证对象</p>
+    <p v-if="conversation.focusText" class="focus">聚焦：{{ conversation.focusText }}</p>
+    <p class="cost">预计消耗：1 次研究额度</p>
     <div class="field">
       <label for="instrument">标的公司</label>
       <Select
@@ -81,6 +85,11 @@ function onSearch(q) {
   }, 200)
 }
 const items = computed(() => (conversation.draft?.items || []).slice(0, 6))
+const inputModeLabel = computed(() => ({
+  claim_only: '仅观点',
+  report_only: '仅研报',
+  claim_and_report: '观点 + 研报'
+}[conversation.inputMode] || '未确认'))
 const missing = computed(() => {
   if (!conversation.instrumentId) return '请搜索并选择覆盖目录中的证券后再确认。'
   if (!conversation.horizon.trim()) return '请填写起止日期（YYYY-MM-DD/YYYY-MM-DD）后再确认。'
@@ -99,6 +108,7 @@ async function onConfirm() {
 .confirm-card { max-width: 100%; border-radius: var(--zg-radius-card); background: var(--zg-surface); }
 .confirm-card :deep(.semi-card-body) { padding: 24px; }
 .lead { color: var(--zg-text-secondary); font-size: 14px; line-height: 22px; margin: 0 0 8px; }
+.input-mode, .document, .focus, .cost { margin: 6px 0 0; font-size: 13px; line-height: 20px; }
 .field { display: grid; gap: 8px; margin: 16px 0; }
 .field label { font-size: 14px; font-weight: 500; }
 .claims ul { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 8px; }
