@@ -1,11 +1,11 @@
 {
-  "run_id": "20260926T103043224561Z-live-model",
+  "run_id": "20260926T110524548835Z-live-model",
   "mode": "live-model",
   "status": "blocked",
-  "commit": "f5aa3a26b4c9d7b9a114dadeb5237ab7069ed993",
+  "commit": "c3d030be6bf26a25a81c6978e758732ea775a9c4",
   "branch": "feat/zhigu-editorial-frontend",
-  "dirty_files_hash": "90ce8dbd6e1de6dc77497f02488306db5ce0682063cca9e48ed8ac535076b29b",
-  "dirty_file_count": 132,
+  "dirty_files_hash": "3b806f0a2cb0013c7d4470ab0e359f59b5f7187e732f3ee7ef38d5d5b84c7f28",
+  "dirty_file_count": 138,
   "prd_sha256": "0a107abe4454e14858999cc794764f41429636f21476fe0e99f869013d69d7a2",
   "spec_sha256": "7ce153050f546884c2d879ef1545ce449cd9f4fe50d735e35596deec1bb8690d",
   "rule_version": "rules-v1",
@@ -29,7 +29,7 @@
     "I01-I08": "pass: route/window/demo isolation, safe redirects and storage reauth checks run locally",
     "I09-I20": "pass: deterministic fixture/rules tests run locally",
     "I21-I26": "partial: recovery/idempotency tests cover demo replay; production worker/load not proven",
-    "I27-I32": "partial: Chromium 375px fixture smoke; native browser matrix and manual keyboard review pending",
+    "I27-I32": "partial: Chromium/Firefox/WebKit Playwright and 375px smoke pass; Edge/Safari native plus manual keyboard review pending",
     "I33-I36": "blocked: live sources, load, and five-user validation require external evidence",
     "I37": "pass: existing research/strategy regression subset ran in this workspace",
     "I38": "partial: manifest, test logs and 60s fixture video generated; URL deployment evidence pending"
@@ -39,5 +39,5 @@
     "No public URL or production deploy is claimed by this manifest.",
     "Source/provider rights and live request IDs must be added before production sign-off."
   ],
-  "generated_at": "2026-09-26T10:30:43.289036+00:00"
+  "generated_at": "2026-09-26T11:05:24.616754+00:00"
 }
