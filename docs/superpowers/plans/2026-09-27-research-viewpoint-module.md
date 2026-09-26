@@ -50,7 +50,7 @@
 - Consumes: existing `ClaimDraft`, `ResearchRun`, `ResearchTask`, `Evidence`, `Report`.
 - Produces: `ResearchDocument`, `ResearchDocumentSpan`, `ClaimFactCheck`; columns `ClaimDraft.SourceMode`, `ClaimDraft.DocumentID`, `ResearchRun.DocumentID`, `ResearchRun.InputMode`.
 
-- [ ] **Step 1: Write the failing migration test**
+- [x] **Step 1: Write the failing migration test**
 
 ```go
 func TestResearchViewpointMigration(t *testing.T) {
@@ -69,7 +69,7 @@ func TestResearchViewpointMigration(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run the test and verify the failure**
+- [x] **Step 2: Run the test and verify the failure**
 
 ```bash
 GOTOOLCHAIN=local \
@@ -78,7 +78,7 @@ GOTOOLCHAIN=local \
 
 Expected: FAIL because migration `007_research_viewpoint.sql` does not exist.
 
-- [ ] **Step 3: Add migration and GORM models**
+- [x] **Step 3: Add migration and GORM models**
 
 Use the exact SQL in SPEC §4 and structs below:
 
@@ -125,7 +125,7 @@ type ClaimFactCheck struct {
 }
 ```
 
-- [ ] **Step 4: Run migration tests**
+- [x] **Step 4: Run migration tests**
 
 ```bash
 GOTOOLCHAIN=local \
@@ -134,7 +134,7 @@ GOTOOLCHAIN=local \
 
 Expected: PASS.
 
-- [ ] **Step 5: Run all Go tests**
+- [x] **Step 5: Run all Go tests**
 
 ```bash
 GOTOOLCHAIN=local \
@@ -143,7 +143,7 @@ GOTOOLCHAIN=local \
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add app/server/migrations/finance/007_research_viewpoint.sql \
@@ -167,7 +167,7 @@ git commit -m "feat(research): add viewpoint document and fact-check persistence
 - Produces: `DocumentService.Upload(ctx, UploadDocumentInput) (DocumentView, error)` and `DocumentService.Get(ctx, documentID) (DocumentView, error)`.
 - API: `POST /api/finance/research-documents`, `GET /api/finance/research-documents/:id`.
 
-- [ ] **Step 1: Write upload validation tests**
+- [x] **Step 1: Write upload validation tests**
 
 ```go
 func TestDocumentUploadValidation(t *testing.T) {
@@ -195,7 +195,7 @@ func TestDocumentOwnerIsolation(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run tests to verify failure**
+- [x] **Step 2: Run tests to verify failure**
 
 ```bash
 GOTOOLCHAIN=local \
@@ -204,7 +204,7 @@ GOTOOLCHAIN=local \
 
 Expected: FAIL because `DocumentService` is undefined.
 
-- [ ] **Step 3: Implement `DocumentService`**
+- [x] **Step 3: Implement `DocumentService`**
 
 Required behavior:
 
@@ -230,11 +230,11 @@ func (s *DocumentService) Upload(ctx context.Context, in UploadDocumentInput) (D
 
 Use local extractors with fixed dependency versions. TXT uses UTF-8 text; PDF uses page-preserving extraction; DOCX preserves paragraph indexes. Extraction errors persist as `failed` and never produce fake spans.
 
-- [ ] **Step 4: Add API handlers**
+- [x] **Step 4: Add API handlers**
 
 `POST` parses multipart `file` and optional `draft_id`; `GET` returns only non-sensitive metadata and extraction status. Both handlers call `UserIDFrom(ctx)` and never accept an owner ID from the request.
 
-- [ ] **Step 5: Run service and API tests**
+- [x] **Step 5: Run service and API tests**
 
 ```bash
 GOTOOLCHAIN=local \
@@ -243,7 +243,7 @@ GOTOOLCHAIN=local \
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add app/server/service/finance/document_service.go \
@@ -269,7 +269,7 @@ git commit -m "feat(research): upload and extract research reports securely"
 - Consumes: `ResearchDocument.ExtractedText`, spans, `MatchInstrumentsFromText`.
 - Produces: `ClaimParseResult`, updated `ParseInput{Text,DocumentID,FocusText}`, updated `ParseOutput{InputMode,DocumentID,Items,NeedsConfirmation}`.
 
-- [ ] **Step 1: Write input-mode tests**
+- [x] **Step 1: Write input-mode tests**
 
 ```go
 func TestParseInputMode(t *testing.T) {
@@ -286,7 +286,7 @@ func TestParseRejectsMissingInput(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run tests to verify failure**
+- [x] **Step 2: Run tests to verify failure**
 
 ```bash
 GOTOOLCHAIN=local \
@@ -295,15 +295,15 @@ GOTOOLCHAIN=local \
 
 Expected: FAIL because `ParseInput` has no `DocumentID`.
 
-- [ ] **Step 3: Implement structured parsing**
+- [x] **Step 3: Implement structured parsing**
 
 The parser must produce `ClaimItem` candidates from either viewpoint text or report spans. It must keep `ClaimID` stable within a revision and include `source_span_id` on report-derived items. Numeric parsing records metric, value, unit, period, and source span. If the company is ambiguous, return candidates and `needs_confirmation=true`; never auto-select among multiple companies.
 
-- [ ] **Step 4: Enforce revision invalidation**
+- [x] **Step 4: Enforce revision invalidation**
 
 Changing `text`, `document_id`, or `focus_text` creates a new parse revision. PATCH may edit instrument, horizon, and items but must reject an input hash change with `REPARSE_REQUIRED`. Reuse of a confirmed draft returns `DRAFT_ALREADY_CONFIRMED`.
 
-- [ ] **Step 5: Run tests**
+- [x] **Step 5: Run tests**
 
 ```bash
 GOTOOLCHAIN=local \
@@ -312,7 +312,7 @@ GOTOOLCHAIN=local \
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add app/server/service/finance/claim_parser.go \
@@ -340,7 +340,7 @@ git commit -m "feat(research): parse claim-only and report-backed research input
 - Produces: `ResearchResult.arguments`, `counterevidence`, `unknowns`, `evidence_ids`, and evidence records with `verification_status`.
 - Tool: `read_document_spans(document_id, page_start, page_end, query, limit) -> {spans, evidence_ids, unknowns}`.
 
-- [ ] **Step 1: Write worker isolation tests**
+- [x] **Step 1: Write worker isolation tests**
 
 ```python
 def test_read_document_spans_is_owner_and_run_scoped(task_db):
@@ -352,7 +352,7 @@ def test_report_claim_is_not_independent_fact():
     assert any(x["verification_status"] == "reported_only" for x in result["arguments"])
 ```
 
-- [ ] **Step 2: Run tests to verify failure**
+- [x] **Step 2: Run tests to verify failure**
 
 ```bash
 cd app/research-service
@@ -361,17 +361,17 @@ PYTHONPATH=. .venv/bin/python -m pytest tests/test_research_viewpoint_worker.py 
 
 Expected: FAIL because the document tool is undefined.
 
-- [ ] **Step 3: Implement document tool and prompts**
+- [x] **Step 3: Implement document tool and prompts**
 
 The tool calls the Go internal API with the existing task token. It cannot read local paths. Returned spans become registered evidence only through `POST /internal/finance/evidence`. `reported_only` is required for report facts not independently matched to official/structured sources.
 
 Prompts must explicitly require: claim-by-claim analysis, source labels, no fixed assumptions, no invented counterevidence, and `status=insufficient` when no evidence exists.
 
-- [ ] **Step 4: Remove fixture conclusions from the real executor path**
+- [x] **Step 4: Remove fixture conclusions from the real executor path**
 
 The non-fixture path must run the configured model workflow to completion. If the harness/model is unavailable, return `failed` with `HARNESS_UNAVAILABLE`; it must not call `fixture_result` and must not emit `simulated=false` usage for fixture content.
 
-- [ ] **Step 5: Run Python tests**
+- [x] **Step 5: Run Python tests**
 
 ```bash
 cd app/research-service
@@ -381,7 +381,7 @@ PYTHONPATH=. ZHIGU_RESEARCH_SQLITE=/tmp/zhigu-rv-worker.sqlite \
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add app/research-service/app/schemas.py \
@@ -408,7 +408,7 @@ git commit -m "feat(research): add report-aware bounded research execution"
 - Produces: `VerifiedReportV2`, `FactCheck`, `Challenge`, `ReasoningGap`, `TailRisk`, `TestCondition`, `EvidenceRef`, `AdjudicateClaims`.
 - API report field remains `report`; schema version changes to `research-report.v2`.
 
-- [ ] **Step 1: Add the semantic regression test**
+- [x] **Step 1: Add the semantic regression test**
 
 ```go
 func TestChallengeWithOppositeCashFlowPreventsSupportedVerdict(t *testing.T) {
@@ -422,7 +422,7 @@ func TestChallengeWithOppositeCashFlowPreventsSupportedVerdict(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run the test to verify failure**
+- [x] **Step 2: Run the test to verify failure**
 
 ```bash
 GOTOOLCHAIN=local \
@@ -431,15 +431,15 @@ GOTOOLCHAIN=local \
 
 Expected: FAIL because `AdjudicateClaim` is undefined.
 
-- [ ] **Step 3: Implement claim-level adjudication**
+- [x] **Step 3: Implement claim-level adjudication**
 
 Use explicit evidence relations produced by worker results. Never infer relevance solely from six Chinese keywords. A claim with unresolved supporting and challenging evidence is `uncertain`; evidence proving an unmet precondition is `prerequisite_missing`; direct contradictory evidence is `contradicted`. Preserve claim-level results in `finance_claim_fact_checks` and the report.
 
-- [ ] **Step 4: Build `VerifiedReportV2` synthesis**
+- [x] **Step 4: Build `VerifiedReportV2` synthesis**
 
 No field may contain fixed content copied between runs. `challenges`, `reasoning_gaps`, `tail_risks`, and `test_conditions` must bind `claim_id` and `evidence_ids` where factual. Empty collections require a typed reason object, not a generic fabricated sentence.
 
-- [ ] **Step 5: Run all finance tests**
+- [x] **Step 5: Run all finance tests**
 
 ```bash
 GOTOOLCHAIN=local \
@@ -448,7 +448,7 @@ GOTOOLCHAIN=local \
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add app/server/service/finance/types.go \
@@ -476,7 +476,7 @@ git commit -m "feat(research): generate evidence-bound seven-section reports"
 - Produces: `ValidateReportV2`, `RenderReportHTML(report, claim, evidence, document) ([]byte,error)`.
 - API: `GET /api/finance/research/:id/export?format=html`.
 
-- [ ] **Step 1: Write gate and export tests**
+- [x] **Step 1: Write gate and export tests**
 
 ```go
 func TestReportV2RejectsMissingRequiredSection(t *testing.T) {
@@ -494,7 +494,7 @@ func TestExportHTMLHasNoScriptAndHasDisclaimer(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run tests to verify failure**
+- [x] **Step 2: Run tests to verify failure**
 
 ```bash
 GOTOOLCHAIN=local \
@@ -503,15 +503,15 @@ GOTOOLCHAIN=local \
 
 Expected: FAIL.
 
-- [ ] **Step 3: Implement fail-closed gate**
+- [x] **Step 3: Implement fail-closed gate**
 
 The gate must verify ownership, evidence whitelist, citation coverage, numeric basis, `as_of`, seven required sections, source grade, and incomplete verdict rules. Record each check with report pointer and failure reason. Any failure blocks publication.
 
-- [ ] **Step 4: Implement single-file HTML export**
+- [x] **Step 4: Implement single-file HTML export**
 
 Escape all source text. Inline only generated CSS. Render evidence excerpts as text and external URLs as sanitized links. Do not include original report full text. Re-check owner authorization on every export request.
 
-- [ ] **Step 5: Run tests**
+- [x] **Step 5: Run tests**
 
 ```bash
 GOTOOLCHAIN=local \
@@ -520,7 +520,7 @@ GOTOOLCHAIN=local \
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add app/server/service/finance/report_gate_v2.go \
@@ -548,7 +548,7 @@ git commit -m "feat(research): gate and export complete viewpoint reports"
 - Consumes: Task 2 and Task 3 APIs.
 - Produces: `uploadDocument(file)`, `conversation.inputMode`, `conversation.document`, `conversation.parseCurrent()`, `conversation.startResearch()`.
 
-- [ ] **Step 1: Write Playwright input tests**
+- [x] **Step 1: Write Playwright input tests**
 
 ```js
 test('claim, report, and combined inputs reach confirmation', async ({ page }) => {
@@ -565,7 +565,7 @@ test('claim, report, and combined inputs reach confirmation', async ({ page }) =
 })
 ```
 
-- [ ] **Step 2: Run test to verify failure**
+- [x] **Step 2: Run test to verify failure**
 
 ```bash
 cd app/web
@@ -574,15 +574,15 @@ npx playwright test e2e/research-viewpoint-input.spec.js
 
 Expected: FAIL because upload control and input-mode labels are missing.
 
-- [ ] **Step 3: Implement upload and state transitions**
+- [x] **Step 3: Implement upload and state transitions**
 
 The composer accepts optional text and optional file. It disables parse only when both are absent. File changes clear the old draft. The confirmation card shows source mode, report filename, target/evidence roles, claims, company, horizon, cost/quota, and data cutoff.
 
-- [ ] **Step 4: Implement failure and stale-state behavior**
+- [x] **Step 4: Implement failure and stale-state behavior**
 
 Show upload extraction errors with retry. Editing text or replacing a file invalidates confirmation. Do not auto-create a run. A late parse response for an older revision must not overwrite the current UI.
 
-- [ ] **Step 5: Run focused Playwright tests**
+- [x] **Step 5: Run focused Playwright tests**
 
 ```bash
 cd app/web
@@ -591,7 +591,7 @@ npx playwright test e2e/research-viewpoint-input.spec.js
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add app/web/src/api/research.js \
@@ -620,7 +620,7 @@ git commit -m "feat(web): support claim and research-report inputs"
 - Consumes: `research-report.v2` response and evidence API.
 - Produces: rendered seven sections, report download link, evidence relation and `verification_status`.
 
-- [ ] **Step 1: Write report rendering tests**
+- [x] **Step 1: Write report rendering tests**
 
 ```js
 test('report renders all seven sections and source grade', async ({ page }) => {
@@ -634,7 +634,7 @@ test('report renders all seven sections and source grade', async ({ page }) => {
 })
 ```
 
-- [ ] **Step 2: Run test to verify failure**
+- [x] **Step 2: Run test to verify failure**
 
 ```bash
 cd app/web
@@ -643,15 +643,15 @@ npx playwright test e2e/research-viewpoint-report.spec.js
 
 Expected: FAIL because current report lacks the required sections.
 
-- [ ] **Step 3: Implement report components**
+- [x] **Step 3: Implement report components**
 
 The fact table uses four exact statuses. Challenges must show title/argument/evidence. Reasoning gaps use `from -> to -> missing`. Risks and test conditions remain separate. Evidence index displays source grade and independent verification status.
 
-- [ ] **Step 4: Add report download**
+- [x] **Step 4: Add report download**
 
 Add a button to `/api/finance/research/:id/export?format=html` with a generated filename. The page disclaimer remains visible even if the summary is empty.
 
-- [ ] **Step 5: Run focused Playwright tests**
+- [x] **Step 5: Run focused Playwright tests**
 
 ```bash
 cd app/web
@@ -660,7 +660,7 @@ npx playwright test e2e/research-viewpoint-report.spec.js
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add app/web/src/components/research/Report.vue \
@@ -686,7 +686,7 @@ git commit -m "feat(web): render complete viewpoint verification reports"
 - Consumes: all previous tasks, isolated PostgreSQL, Go server, Python worker, Vite and Playwright.
 - Produces: `artifacts/research-viewpoint/<UTC-run-id>/manifest.json`, `results.tsv`, logs and screenshots.
 
-- [ ] **Step 1: Write fail-closed manifest test**
+- [x] **Step 1: Write fail-closed manifest test**
 
 ```python
 def test_missing_required_evidence_fails_manifest(tmp_path):
@@ -694,15 +694,15 @@ def test_missing_required_evidence_fails_manifest(tmp_path):
     assert result.returncode != 0
 ```
 
-- [ ] **Step 2: Implement verifier**
+- [x] **Step 2: Implement verifier**
 
 Modes are `offline`, `integration`, `live`, `eval`. `integration` must start isolated PostgreSQL and the real Go+Python chain; it cannot use Playwright API mocks. Missing required tests, skipped live gates, absent logs, or stale hashes must create `failed`/`blocked` records and a non-zero exit.
 
-- [ ] **Step 3: Add three-input real-chain test**
+- [x] **Step 3: Add three-input real-chain test**
 
 Run one `claim_only`, one `report_only`, and one `claim_and_report` scenario against real APIs. Assert persisted input mode, registered document spans, supporter/challenger task separation, report sections, citations, and export.
 
-- [ ] **Step 4: Run integration verification**
+- [x] **Step 4: Run integration verification**
 
 ```bash
 GOTOOLCHAIN=local \
@@ -711,7 +711,7 @@ GOTOOLCHAIN=local \
 
 Expected: exit 0 and a manifest whose required RV-01..RV-15 are `pass`; live/eval fields remain explicitly `blocked` or `unverified` where unavailable.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add app/web/e2e/research-viewpoint-chain.spec.js \
@@ -736,11 +736,11 @@ git commit -m "test(research): verify real viewpoint research chain"
 - Consumes: completed runs from Task 9 and human labels.
 - Produces: `eval.json`, `manifest.json`, release report and exact evidence boundaries.
 
-- [ ] **Step 1: Freeze 50 evaluation cases**
+- [x] **Step 1: Freeze 50 evaluation cases**
 
 The set must include claim-only, report-only, combined, missing evidence, conflicting evidence, numeric unit errors, one-time gains, cash-flow gaps, and ambiguous companies. Each case stores expected fact-check status and required challenge themes.
 
-- [ ] **Step 2: Implement evaluation scoring**
+- [x] **Step 2: Implement evaluation scoring**
 
 The script calculates fact error rate, challenge relevance score, citation coverage, link validity, numeric/period errors, and fabricated-source count. It exits non-zero if any threshold fails.
 
@@ -754,15 +754,15 @@ python3 app/scripts/evaluate-research-viewpoint.py \
 
 Expected: only call PASS when the PRD thresholds in §11.2 are met.
 
-- [ ] **Step 4: Record separate evidence levels**
+- [x] **Step 4: Record separate evidence levels**
 
 `验收报告.md` must separately list fixture tests, real integration, live data, live model, and human evaluation. It must not convert skipped or unavailable evidence into success.
 
-- [ ] **Step 5: Update public release documentation**
+- [x] **Step 5: Update public release documentation**
 
 Restore or update the seven tracked public files before release. Document data modes, upload privacy, report limitations, and “not investment advice”. Run `python3 scripts/check-public-tree.py` and require exit 0.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add tests/quality/research-viewpoint-set50.json \
