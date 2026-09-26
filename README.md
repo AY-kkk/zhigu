@@ -16,16 +16,16 @@
 
 </div>
 
-## 最近交互
+## 产品介绍
 
-以下视频展示当前工作台中的观点研究、策略配置与事件追踪交互：
+以下 60 秒视频以克制的视觉语言概览知股的三大核心模块：投研观点、交易策略与事件追踪。视频使用工程预览与样本界面说明产品工作流，不构成投资建议。
 
 <video controls preload="metadata" width="100%">
-  <source src="./artifacts/intel/投资事件情报演示_60s.webm" type="video/webm">
+  <source src="./artifacts/product-video/zhigu-product-intro-60s.webm" type="video/webm">
   您的浏览器不支持视频播放。
 </video>
 
-[观看完整交互视频（60 秒）](./artifacts/intel/投资事件情报演示_60s.webm)
+[观看产品介绍视频（60 秒）](./artifacts/product-video/zhigu-product-intro-60s.webm)
 
 ## 三大核心模块
 
