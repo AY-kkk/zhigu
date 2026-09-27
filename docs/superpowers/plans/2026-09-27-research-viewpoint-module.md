@@ -28,7 +28,7 @@
 | Responsibility | Files |
 |---|---|
 | Migration and models | `app/server/migrations/finance/007_research_viewpoint.sql`, `app/server/model/finance/models.go` |
-| Document upload/extraction | `app/server/service/finance/document_service.go`, `app/server/api/v1/finance/handlers.go`, `app/server/router/finance/consumer.go` |
+| Document upload/extraction | `app/server/service/finance/document_service.go`, `app/server/service/finance/web_source.go`, `app/server/api/v1/finance/handlers.go`, `app/server/router/finance/consumer.go` |
 | Claim parsing | `app/server/service/finance/claim_parser.go`, `app/server/service/finance/research_service.go` |
 | Report schema and gate | `app/server/service/finance/types.go`, `app/server/service/finance/report_gate_v2.go`, `app/server/service/finance/publish_gate.go` |
 | Worker contract | `app/research-service/app/schemas.py`, `app/research-service/app/jobs.py`, `app/research-service/app/tools/document.py` |
@@ -775,6 +775,55 @@ git commit -m "docs(research): record viewpoint MVP quality and release evidence
 
 ---
 
+### Task 11: External article links
+
+**Files:**
+- Create: `app/server/service/finance/web_source.go`
+- Create: `app/server/service/finance/web_document.go`
+- Create: `app/server/service/finance/web_source_test.go`
+- Modify: `app/server/migrations/finance/009_research_web_sources.sql`
+- Modify: `app/server/api/v1/finance/handlers.go`
+- Modify: `app/web/src/components/research/ResearchDocumentUpload.vue`
+- Modify: `app/web/src/stores/researchConversation.js`
+- Test: `app/web/e2e/research-viewpoint-input.spec.js`
+
+**Interfaces:**
+- Consumes: existing `ResearchDocument`, `ClaimParseResult`, and `read_document_spans`.
+- Produces: `POST /api/finance/research-links`, `ImportWebLinkInput`, `WebFetcher`, `external_web / reported_only` evidence.
+
+- [x] **Step 1: Write SSRF, redirect, and WeChat extraction tests**
+
+```go
+func TestWebURLValidationRejectsUnsafeLinks(t *testing.T) { ... }
+func TestImportWebLinkExtractsWeChatStyleArticle(t *testing.T) { ... }
+func TestWebLinkRegistersExternalWebEvidence(t *testing.T) { ... }
+```
+
+- [x] **Step 2: Run tests to verify the link path is missing**
+
+Run: `go test ./service/finance -run 'TestWebURL|TestImportWebLink|TestWebLinkRegisters' -v`
+Expected: PASS after implementation; before implementation, compilation fails on `WebFetcher`.
+
+- [x] **Step 3: Implement safe public fetching and HTML extraction**
+
+`validatePublicWebURL` accepts only public `http/https` URLs on ports 80/443, rejects credentials/private hosts, validates every redirect, limits body size to 5 MB, and extracts `#js_content`/`article`/`main` paragraphs with title and span offsets.
+
+- [x] **Step 4: Add API, frontend link input, and source labels**
+
+The UI accepts a link without a file, sends it to `/api/finance/research-links`, shows `external_web / reported_only`, and keeps link material in the same target/evidence flow as uploaded reports.
+
+- [x] **Step 5: Run link and regression tests**
+
+Run: `go test ./service/finance ./api/v1/finance -run 'TestWeb|TestImportWeb|TestResearchLink|TestDocument' -v` and `npx playwright test e2e/research-viewpoint-input.spec.js`.
+Expected: PASS.
+
+- [x] **Step 6: Commit**
+
+```bash
+git add app/server/service/finance/web_source.go app/server/service/finance/web_document.go   app/server/service/finance/web_source_test.go app/server/migrations/finance/009_research_web_sources.sql   app/server/api/v1/finance/handlers.go app/web/src/components/research/ResearchDocumentUpload.vue   app/web/src/stores/researchConversation.js app/web/e2e/research-viewpoint-input.spec.js
+git commit -m "feat(research): ingest public web articles as debate evidence"
+```
+
 ## Self-Review
 
 ### Spec coverage
@@ -814,6 +863,7 @@ git commit -m "docs(research): record viewpoint MVP quality and release evidence
 | RV-14 | Task 9 |
 | RV-15 | Task 6 and Task 8 |
 | RV-16 | Task 10 |
+| RV-17 | Task 11 |
 
 ### Placeholder scan
 
@@ -832,4 +882,4 @@ This plan contains no unresolved planning markers or unspecified validation. Eac
 
 ## Execution Order
 
-Tasks 1–3 form the input vertical slice. Tasks 4–6 form the research/report backend. Tasks 7–8 connect the interface. Tasks 9–10 are release gates. Do not start Task 9 until Tasks 1–8 are green; do not claim delivery before Task 10 passes or its missing evidence is explicitly reported as blocked.
+Tasks 1–3 form the input vertical slice. Tasks 4–6 form the research/report backend. Tasks 7–8 connect the interface. Task 11 adds public web article ingestion. Tasks 9–10 are release gates. Do not start Task 9 until Tasks 1–8 are green; do not claim delivery before Task 10 passes or its missing evidence is explicitly reported as blocked.

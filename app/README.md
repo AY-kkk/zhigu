@@ -139,10 +139,10 @@ cd app/web && npm ci && VITE_INTEL_ENABLED=true npm run build && npm run test:e2
 支持三种输入：
 
 1. 只粘贴投资观点；
-2. 只上传 PDF、DOCX 或 TXT 研报；
+2. 只上传 PDF、DOCX、TXT 研报，或粘贴微信公众号等公开网页链接；
 3. 观点与研报同时提交。
 
-上传研报既是被质证对象，也可作为事实证据；报告会将其标记为 `user_report / reported_only`，不冒充官方披露。固定证据源为行情、财务三表、公告和用户研报。
+上传研报或网页材料既是被质证对象，也可作为事实证据；网页材料标记为 `external_web / reported_only`，不冒充官方披露。固定证据源为行情、财务三表、公告、用户研报和用户提交的公开网页。
 
 验证命令：
 

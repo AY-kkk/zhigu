@@ -1,6 +1,6 @@
 # 投研观点模块 开发 SPEC
 
-版本：V1.0  
+版本：V1.1
 日期：2026-09-27  
 产品基线：[投研观点模块 PRD](../prd/投研观点模块_PRD.md)  
 PRD SHA-256：`7dbd020a75548a9996e6a93a424112139e093d36437ce66a59afac3064521def`  
@@ -10,14 +10,14 @@ PRD SHA-256：`7dbd020a75548a9996e6a93a424112139e093d36437ce66a59afac3064521def`
 
 ## 1. 目标与范围
 
-实现“手动粘贴观点 / 上传研报 / 两者同时提交”到“生成可追溯质证报告”的完整 MVP。
+实现“手动粘贴观点 / 上传研报或提交网页链接 / 两者同时提交”到“生成可追溯质证报告”的完整 MVP。
 
 固定证据源：
 
 1. 行情；
 2. 财务三表及结构化财务指标；
 3. 公司公告和交易所披露；
-4. 用户上传研报。
+4. 用户上传研报或提交的公开网页。
 
 不在本期实现文章入口、任意互联网搜索、多研报比较、OCR、智能追问或工作区保存。
 
@@ -31,7 +31,7 @@ PRD SHA-256：`7dbd020a75548a9996e6a93a424112139e093d36437ce66a59afac3064521def`
 | Fact Check | 对单条主张的成立/被前置/不成立/存疑判定 |
 | Evidence | 本次研究中登记且可定位的来源记录 |
 | Target Report | 被质证的上传研报 |
-| Source Report | 可直接支持或挑战结论的上传研报证据 |
+| Source Report | 可直接支持或挑战结论的上传研报或网页证据 |
 | Run | 一次不可变输入快照对应的研究任务 |
 | Publish | 通过程序校验后对外可见的报告版本 |
 
@@ -99,7 +99,7 @@ insufficient      证据不足
 
 ## 4. 数据库合同
 
-新增迁移 `app/server/migrations/finance/007_research_viewpoint.sql`。
+新增迁移 `app/server/migrations/finance/007_research_viewpoint.sql` 与 `009_research_web_sources.sql`。
 
 ### 4.1 研报文件
 
@@ -110,7 +110,7 @@ CREATE TABLE IF NOT EXISTS finance_research_documents (
   draft_id TEXT,
   run_id TEXT,
   filename TEXT NOT NULL,
-  media_type TEXT NOT NULL CHECK (media_type IN ('application/pdf','application/vnd.openxmlformats-officedocument.wordprocessingml.document','text/plain')),
+  media_type TEXT NOT NULL CHECK (media_type IN ('application/pdf','application/vnd.openxmlformats-officedocument.wordprocessingml.document','text/plain','text/html')),
   byte_size BIGINT NOT NULL CHECK (byte_size > 0 AND byte_size <= 20971520),
   content_hash TEXT NOT NULL,
   storage_key TEXT NOT NULL,
@@ -168,6 +168,19 @@ CREATE TABLE IF NOT EXISTS finance_claim_fact_checks (
 );
 ```
 
+外部链接扩展字段：
+
+```sql
+ALTER TABLE finance_research_documents ADD COLUMN origin_type TEXT NOT NULL DEFAULT 'upload';
+ALTER TABLE finance_research_documents ADD COLUMN source_url TEXT NOT NULL DEFAULT '';
+ALTER TABLE finance_research_documents ADD COLUMN canonical_url TEXT NOT NULL DEFAULT '';
+ALTER TABLE finance_research_documents ADD COLUMN source_domain TEXT NOT NULL DEFAULT '';
+ALTER TABLE finance_research_documents ADD COLUMN title TEXT NOT NULL DEFAULT '';
+ALTER TABLE finance_research_documents ADD COLUMN fetch_status TEXT NOT NULL DEFAULT 'succeeded';
+ALTER TABLE finance_research_documents ADD COLUMN http_status INTEGER;
+ALTER TABLE finance_research_documents ADD COLUMN fetched_at TIMESTAMPTZ;
+```
+
 `VerifiedReport` 新增字段：
 
 ```go
@@ -216,7 +229,27 @@ Content-Type: multipart/form-data
 - 内容哈希重复：返回既有 document，不重复存储
 - 提取失败：document 保留，`extraction_status=failed`
 
-### 5.2 查询提取状态
+### 5.2 导入外部链接
+
+```http
+POST /api/finance/research-links
+Content-Type: application/json
+```
+
+请求：
+
+```json
+{
+  "url": "https://mp.weixin.qq.com/s/...",
+  "draft_id": "可选"
+}
+```
+
+成功响应与 5.1 相同，额外返回 `origin_type=url`、`source_url`、`canonical_url`、`source_domain`、`title`、`fetched_at`。链接既是被质证对象，也可被 `read_document_spans` 登记为 `external_web / reported_only` 证据。
+
+拒绝条件：非 `http/https`、URL 带用户凭据、localhost/私网/链路本地地址、非 80/443 端口、重定向到私网、非 HTML/纯文本内容、正文为空或超过 5 MB。
+
+### 5.3 查询提取状态
 
 ```http
 GET /api/finance/research-documents/:id
@@ -224,7 +257,7 @@ GET /api/finance/research-documents/:id
 
 返回提取状态、页数、可用 span 数；不得返回其他用户的文件。
 
-### 5.3 解析草稿
+### 5.4 解析草稿
 
 ```http
 POST /api/finance/claims/parse
@@ -255,7 +288,7 @@ report_only
 claim_and_report
 ```
 
-### 5.4 确认与创建研究
+### 5.5 确认与创建研究
 
 保留：
 
@@ -266,7 +299,7 @@ POST /api/finance/research
 
 PATCH 可修改 `instrument_id`、`horizon_start`、`horizon_end`、`items`，但修改 `text` 或 `document_id` 必须重新解析。创建请求仍使用 `Idempotency-Key`，不得由客户端提交 `as_of`。
 
-### 5.5 查询研究
+### 5.6 查询研究
 
 ```http
 GET /api/finance/research/:id
@@ -300,7 +333,7 @@ GET /api/finance/research/:id
 }
 ```
 
-### 5.6 报告下载
+### 5.7 报告下载
 
 ```http
 GET /api/finance/research/:id/export?format=html
@@ -487,6 +520,7 @@ calculate_metric
 | RV-14 | Playwright + Go/PG/worker | 真实链路生成七块报告 |
 | RV-15 | Go unit | HTML 单文件、无脚本、免责声明 |
 | RV-16 | Eval | 50 条人工样本和质量指标 |
+| RV-17 | Go/API | 外部链接 SSRF、重定向、正文提取、来源等级与链接输入链路 |
 
 Mock UI 通过只能覆盖 RV-12/13，不得替代 RV-14/16。
 
@@ -533,7 +567,7 @@ Mock UI 通过只能覆盖 RV-12/13，不得替代 RV-14/16。
 
 只有以下条件全部满足才可交付：
 
-1. RV-01 至 RV-15 全部通过；
+1. RV-01 至 RV-15、RV-17 全部通过；
 2. RV-16 达到质量门槛；
 3. 真实数据与真实模型证据齐全；
 4. 公共树检查通过；
