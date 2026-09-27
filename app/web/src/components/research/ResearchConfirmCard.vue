@@ -2,7 +2,8 @@
   <Card class="confirm-card" :bordered="true" shadows="never" title="确认研究范围">
     <p class="lead">确认输入、标的公司和研究期限后，才会创建研究任务。确认后将冻结本次研究的数据截止时间。</p>
     <p class="input-mode" data-testid="input-mode">输入方式：{{ inputModeLabel }}</p>
-    <p v-if="conversation.document" class="document">研报：{{ conversation.document.filename }} · 同时作为证据和被质证对象</p>
+    <p v-if="conversation.document" class="document">{{ conversation.document.origin_type === 'url' ? '网页材料' : '研报' }}：{{ conversation.document.title || conversation.document.filename }} · 同时作为证据和被质证对象</p>
+    <p v-if="conversation.document?.source_url" class="focus">{{ conversation.document.source_url }}</p>
     <p v-if="conversation.focusText" class="focus">聚焦：{{ conversation.focusText }}</p>
     <p class="cost">预计消耗：1 次研究额度</p>
     <div class="field">

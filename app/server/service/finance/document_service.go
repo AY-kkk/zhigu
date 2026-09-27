@@ -26,7 +26,8 @@ const (
 )
 
 type DocumentService struct {
-	DB *gorm.DB
+	DB      *gorm.DB
+	Fetcher WebFetcher
 }
 
 type UploadDocumentInput struct {
@@ -48,6 +49,14 @@ type DocumentSpan struct {
 
 type DocumentView struct {
 	DocumentID       string     `json:"document_id"`
+	OriginType       string     `json:"origin_type"`
+	SourceURL        string     `json:"source_url,omitempty"`
+	CanonicalURL     string     `json:"canonical_url,omitempty"`
+	SourceDomain     string     `json:"source_domain,omitempty"`
+	Title            string     `json:"title,omitempty"`
+	FetchStatus      string     `json:"fetch_status,omitempty"`
+	HTTPStatus       *int       `json:"http_status,omitempty"`
+	FetchedAt        *time.Time `json:"fetched_at,omitempty"`
 	Filename         string     `json:"filename"`
 	MediaType        string     `json:"media_type"`
 	ByteSize         int64      `json:"byte_size"`
@@ -64,13 +73,14 @@ type DocumentView struct {
 }
 
 type extractedDocument struct {
+	Title     string
 	Text      string
 	Spans     []DocumentSpan
 	PageCount *int
 }
 
 func NewDocumentService(db *gorm.DB) *DocumentService {
-	return &DocumentService{DB: db}
+	return &DocumentService{DB: db, Fetcher: PublicWebFetcher{}}
 }
 
 func mediaTypeForFilename(filename string) string {
@@ -246,6 +256,9 @@ func (s *DocumentService) view(row modelfinance.ResearchDocument) (DocumentView,
 	}
 	return DocumentView{
 		DocumentID: row.ID, Filename: row.Filename, MediaType: row.MediaType,
+		OriginType: row.OriginType, SourceURL: row.SourceURL, CanonicalURL: row.CanonicalURL,
+		SourceDomain: row.SourceDomain, Title: row.Title, FetchStatus: row.FetchStatus,
+		HTTPStatus: row.HTTPStatus, FetchedAt: row.FetchedAt,
 		ByteSize: row.ByteSize, ContentHash: row.ContentHash,
 		ExtractionStatus: row.ExtractionStatus, ExtractionError: errText,
 		PageCount: row.PageCount, SpanCount: int(count), CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
@@ -290,7 +303,9 @@ func (s *DocumentService) now(_ context.Context) time.Time {
 
 func compatibleMediaType(got, want string) bool {
 	got = strings.ToLower(strings.TrimSpace(strings.Split(got, ";")[0]))
-	return got == want || got == "application/octet-stream" || (want == "text/plain" && strings.HasPrefix(got, "text/"))
+	return got == want || got == "application/octet-stream" ||
+		(want == "text/plain" && strings.HasPrefix(got, "text/")) ||
+		(want == "text/html" && got == "application/xhtml+xml")
 }
 
 func stringPtr(s string) *string {
@@ -309,6 +324,8 @@ func extractResearchDocument(mediaType string, raw []byte) (extractedDocument, e
 		return extractPDFDocument(raw)
 	case "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
 		return extractDOCXDocument(raw)
+	case "text/html", "application/xhtml+xml":
+		return extractHTMLDocument(raw)
 	default:
 		return extractedDocument{}, NewError(400, "validation", "UNSUPPORTED_DOCUMENT", "仅支持 PDF、DOCX、TXT")
 	}

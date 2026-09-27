@@ -41,6 +41,13 @@ type ResearchService struct {
 	Docs   *DocumentService
 }
 
+func NewServiceWithDocumentFetcher(db *gorm.DB, client ResearchClient, budget BudgetService, _ *FixtureConfig, fetcher WebFetcher) *ResearchService {
+	if mb, ok := budget.(*MemoryBudget); ok {
+		mb.Attach(db)
+	}
+	return &ResearchService{DB: db, Client: client, Budget: budget, Clock: SystemClock{}, Live: NewLiveSource(), Docs: NewDocumentServiceWithFetcher(db, fetcher)}
+}
+
 func NewService(db *gorm.DB, client ResearchClient, budget BudgetService, _ *FixtureConfig) *ResearchService {
 	if mb, ok := budget.(*MemoryBudget); ok {
 		mb.Attach(db)

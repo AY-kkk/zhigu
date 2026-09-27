@@ -109,6 +109,7 @@
         :busy="conversation.documentUploading"
         :error="conversation.documentError"
         @upload="conversation.uploadDocument"
+        @submit-link="conversation.importDocumentLink"
         @remove="conversation.removeDocument"
       />
       <ResearchComposer

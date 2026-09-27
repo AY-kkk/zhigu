@@ -10,7 +10,8 @@ import {
   listResearch,
   parseClaim,
   patchClaim,
-  uploadResearchDocument
+  uploadResearchDocument,
+  importResearchLink
 } from '../api/research.js'
 import { STAGE_A_PUBLIC_MODE } from '../config/publicMode.js'
 import {
@@ -212,6 +213,24 @@ export const useResearchConversation = defineStore('researchConversation', {
         this.document = null
         this.documentFile = null
         this.documentError = mapRequestError(error, '研报上传失败，可重试')
+      } finally {
+        this.documentUploading = false
+      }
+    },
+    async importDocumentLink(url) {
+      const value = String(url || '').trim()
+      if (!value) return
+      this.documentError = ''
+      this.documentUploading = true
+      try {
+        const res = await importResearchLink(value)
+        this.document = res.data
+        this.documentFile = null
+        this.parseError = ''
+      } catch (error) {
+        this.document = null
+        this.documentFile = null
+        this.documentError = mapRequestError(error, '网页读取失败，可检查链接后重试')
       } finally {
         this.documentUploading = false
       }

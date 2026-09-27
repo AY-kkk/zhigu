@@ -87,6 +87,14 @@ type ResearchDocument struct {
 	ByteSize         int64      `gorm:"column:byte_size"`
 	ContentHash      string     `gorm:"column:content_hash"`
 	StorageKey       string     `gorm:"column:storage_key"`
+	OriginType       string     `gorm:"column:origin_type;default:upload"`
+	SourceURL        string     `gorm:"column:source_url"`
+	CanonicalURL     string     `gorm:"column:canonical_url"`
+	SourceDomain     string     `gorm:"column:source_domain"`
+	Title            string     `gorm:"column:title"`
+	FetchStatus      string     `gorm:"column:fetch_status;default:succeeded"`
+	HTTPStatus       *int       `gorm:"column:http_status"`
+	FetchedAt        *time.Time `gorm:"column:fetched_at"`
 	ExtractionStatus string     `gorm:"column:extraction_status"`
 	ExtractedText    *string    `gorm:"column:extracted_text"`
 	ExtractionError  *string    `gorm:"column:extraction_error"`

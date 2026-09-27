@@ -15,6 +15,12 @@ export function uploadResearchDocument(file, draftId = '') {
     headers: { 'Content-Type': 'multipart/form-data' }
   })
 }
+export function importResearchLink(url, draftId = '') {
+  return http.post('/api/finance/research-links', {
+    url,
+    ...(draftId ? { draft_id: draftId } : {})
+  })
+}
 export function getResearchDocument(id, config = {}) {
   return http.get(`/api/finance/research-documents/${id}`, config)
 }

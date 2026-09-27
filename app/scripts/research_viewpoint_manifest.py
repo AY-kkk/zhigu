@@ -22,15 +22,16 @@ REQS = {
     "RV-14": ["testresearchviewpointcrossprocessfixture"],
     "RV-15": ["testexporthtmlhasnoscriptandhasdisclaimer"],
     "RV-16": ["evaluate-research-viewpoint"],
+    "RV-17": ["testimportweblink", "testweblinkregistersexternalwebevidence", "testresearchlinkapiimport"],
 }
 
 def norm(value):
     return "".join(ch for ch in str(value).lower() if ch.isalnum())
 
 REQUIRED_BY_MODE = {
-    "offline": [f"RV-{i:02d}" for i in range(1, 16)],
-    "integration": [f"RV-{i:02d}" for i in range(1, 16)],
-    "live": [f"RV-{i:02d}" for i in range(1, 17)],
+    "offline": [f"RV-{i:02d}" for i in range(1, 16)] + ["RV-17"],
+    "integration": [f"RV-{i:02d}" for i in range(1, 16)] + ["RV-17"],
+    "live": [f"RV-{i:02d}" for i in range(1, 17)] + ["RV-17"],
     "eval": ["RV-16"],
 }
 

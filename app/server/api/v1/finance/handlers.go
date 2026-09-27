@@ -27,6 +27,7 @@ func Register(engine *gin.Engine, svc *finance.ResearchService, proxy *finance.M
 	consumer := engine.Group("/api/finance")
 	consumer.Use(httpx.AuthRequired())
 	consumer.POST("/research-documents", a.UploadResearchDocument)
+	consumer.POST("/research-links", a.ImportResearchLink)
 	consumer.GET("/research-documents/:id", a.GetResearchDocument)
 	consumer.POST("/claims/parse", a.Parse)
 	consumer.GET("/claims/:id", a.GetClaim)
@@ -224,6 +225,23 @@ func (a *API) UploadResearchDocument(c *gin.Context) {
 		Content: content,
 		DraftID: c.PostForm("draft_id"),
 	})
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	httpx.OK(c, http.StatusCreated, out)
+}
+
+func (a *API) ImportResearchLink(c *gin.Context) {
+	var req struct {
+		URL     string `json:"url"`
+		DraftID string `json:"draft_id"`
+	}
+	if !httpx.BindJSON(c, &req) {
+		return
+	}
+	ctx := finance.WithUser(c.Request.Context(), httpx.CurrentUserID(c), roleOf(c))
+	out, err := a.Svc.Docs.ImportURL(ctx, finance.ImportWebLinkInput{URL: req.URL, DraftID: req.DraftID})
 	if err != nil {
 		fail(c, err)
 		return

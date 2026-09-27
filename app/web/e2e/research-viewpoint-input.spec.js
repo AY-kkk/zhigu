@@ -16,6 +16,20 @@ async function mockResearchApi(page, mode) {
     const req = route.request()
     const url = new URL(req.url())
     const fulfill = (status, body) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) })
+    if (req.method() === 'POST' && url.pathname.endsWith('/research-links')) {
+      return fulfill(201, wrap({
+        document_id: 'doc_link_e2e',
+        filename: '微信公众号文章',
+        title: '微信公众号文章',
+        media_type: 'text/html',
+        origin_type: 'url',
+        source_url: 'https://mp.weixin.qq.com/s/example',
+        canonical_url: 'https://mp.weixin.qq.com/s/example',
+        source_domain: 'mp.weixin.qq.com',
+        extraction_status: 'succeeded',
+        span_count: 1
+      }))
+    }
     if (req.method() === 'POST' && url.pathname.endsWith('/research-documents')) {
       return fulfill(201, wrap({
         document_id: 'doc_e2e',
@@ -64,4 +78,16 @@ test('claim, report, and combined inputs reach confirmation', async ({ page }) =
     await expect(page.getByTestId('input-mode')).toContainText(label)
     await expect(page.getByRole('button', { name: '确认并开始研究' })).toBeVisible()
   }
+})
+
+test('external article link reaches report-only confirmation', async ({ page }) => {
+  await seedSession(page)
+  await mockResearchApi(page, 'report_only')
+  await page.goto('/app/research/new')
+  await page.getByLabel('网页链接').fill('https://mp.weixin.qq.com/s/example')
+  await page.getByRole('button', { name: '读取链接' }).click()
+  await expect(page.getByText('微信公众号文章')).toBeVisible()
+  await page.getByRole('button', { name: '解析观点' }).click()
+  await expect(page.getByTestId('input-mode')).toContainText('仅研报')
+  await expect(page.getByText('https://mp.weixin.qq.com/s/example')).toBeVisible()
 })

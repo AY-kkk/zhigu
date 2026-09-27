@@ -116,7 +116,7 @@ case "$MODE" in
     ;;
 esac
 
-run_go "go-finance-tests" ./service/finance
+run_go "go-finance-tests" ./service/finance ./api/v1/finance
 run_py
 run_web
 if [[ "$MODE" == "integration" ]]; then

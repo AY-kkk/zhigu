@@ -299,9 +299,20 @@ func documentSpanRecords(tx *gorm.DB, run modelfinance.ResearchRun, params map[s
 		if span.ParagraphIndex != nil {
 			locator += fmt.Sprintf(", paragraph %d", *span.ParagraphIndex)
 		}
+		sourceKind := "user_report"
+		sourceGrade := "user_report"
+		sourceURL := ""
+		if doc.OriginType == "url" {
+			sourceKind = "web_article"
+			sourceGrade = "external_web"
+			sourceURL = doc.CanonicalURL
+			if sourceURL == "" {
+				sourceURL = doc.SourceURL
+			}
+		}
 		out = append(out, ProviderRecord{
-			InstrumentID: run.InstrumentID, SourceID: doc.ID, SourceURL: "",
-			SourceKind: "user_report", SourceGrade: "user_report", VerificationStatus: "reported_only",
+			InstrumentID: run.InstrumentID, SourceID: doc.ID, SourceURL: sourceURL,
+			SourceKind: sourceKind, SourceGrade: sourceGrade, VerificationStatus: "reported_only",
 			Title: doc.Filename, Locator: locator, Text: span.Text, Metrics: []Metric{},
 			PublishedAt: doc.CreatedAt, AvailableAt: doc.CreatedAt, RetrievedAt: doc.CreatedAt,
 			DataVersion: doc.ContentHash, Mode: run.Mode, Basis: defaultBasis("", "text"),
