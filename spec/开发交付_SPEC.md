@@ -15,7 +15,7 @@
 
 1. [一期 PRD v2](../prd/金融C端Agent_MVP_PRD.md)。
 2. [面客架构 v2](金融C端Agent_面客产品架构_v2.md)。
-3. 本文 → [仓库清单](../references/README.md) → [机器契约](../handoff/contracts/) → [验收案例](../handoff/acceptance-cases.json)。
+3. 本文 → 本地参考仓库清单（不随公开仓库分发） → [机器契约](../handoff/contracts/) → [验收案例](../handoff/acceptance-cases.json)。
 4. [直接交给编程 Agent 的指令](../handoff/CODING_AGENT_PROMPT.md)。
 
 优先级：用户最新指令 > PRD v2 > 架构 v2 > 本文的实现细化。冲突需指出，不静默修改。旧《技术设计与开源复用》只作历史源码线索，不能恢复成自选股一期或单 Go Agent 方案。
