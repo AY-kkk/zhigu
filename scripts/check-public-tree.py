@@ -24,13 +24,13 @@ def main():
     for name in filter(None, files):
         path = Path(name)
         full = ROOT / path
-        if name.startswith(("app/gosaas/", "reviews/")) or any(
+        if name.startswith(("app/gosaas/", "reviews/", "docs/reviews/", ".playwright-cli/", "git-hub说明文档/")) or name == "docs/superpowers/plans/2026-10-05-futures-review-fixes.md" or any(
             p in {"node_modules", ".venv", "__pycache__", "test-results", "playwright-report"}
             for p in path.parts
         ):
             errors.append(f"{name}: local/private artifact")
-        if name.startswith("references/") and len(path.parts) > 2:
-            errors.append(f"{name}: upstream source checkout")
+        if name.startswith("references/"):
+            errors.append(f"{name}: local reference snapshot must not be published")
         if (path.name.startswith(".env") and path.name != ".env.example") or path.suffix in {
             ".pem", ".key", ".sqlite", ".sqlite3", ".db", ".log"
         }:

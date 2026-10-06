@@ -12,22 +12,22 @@
 ![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
 ![Vue](https://img.shields.io/badge/Vue-3-4FC08D?logo=vuedotjs&logoColor=white)
 
-[最近交互](#最近交互) · [三大核心模块](#三大核心模块) · [技术架构](#技术架构) · [快速开始](#快速开始) · [文档导航](#文档导航)
+[产品介绍](#产品介绍) · [核心模块](#核心模块) · [技术架构](#技术架构) · [快速开始](#快速开始) · [文档导航](#文档导航)
 
 </div>
 
-## 最近交互
+## 产品介绍
 
-以下视频展示当前工作台中的观点研究、策略配置与事件追踪交互：
+以下 60 秒视频以克制的视觉语言概览知股的三大核心模块：投研观点、交易策略与事件追踪。视频使用工程预览与样本界面说明产品工作流，不构成投资建议。
 
 <video controls preload="metadata" width="100%">
-  <source src="./artifacts/intel/投资事件情报演示_60s.webm" type="video/webm">
+  <source src="./artifacts/product-video/zhigu-product-intro-60s.webm" type="video/webm">
   您的浏览器不支持视频播放。
 </video>
 
-[观看完整交互视频（60 秒）](./artifacts/intel/投资事件情报演示_60s.webm)
+[观看产品介绍视频（60 秒）](./artifacts/product-video/zhigu-product-intro-60s.webm)
 
-## 三大核心模块
+## 核心模块
 
 ### 1. 投研观点
 
@@ -62,6 +62,16 @@
 
 边界：事件追踪负责发现变化和组织证据，不推断未披露的产业链关系，不直接给出买卖指令。
 
+### 4. 期货研究（工程预览）
+
+**把期货观点拆成数据快照、支持/反证、条件跟踪和可复核报告。**
+
+- 独立管理品种、实际合约、来源授权、观测版本、研究任务和假设检查。
+- 研究执行使用冻结快照、短期任务授权、预算预留和严格报告发布校验。
+- 文档提取、删除清理、导出脱敏和任务取消与旧三个模块隔离。
+
+边界：当前仅完成离线工程与契约验证，真实来源、真实模型、性能、灰度和回滚门槛尚未通过；模块默认保持 `off/read_only`，不能表述为已开放 live 或已具备真实投研能力。
+
 ## 产品边界
 
 - 本项目是研究与工程预览，不执行真实交易，不提供收益承诺或荐股服务。
@@ -83,7 +93,7 @@ flowchart LR
     R --> V
 ```
 
-- **Vue 3**：投研观点、交易策略、事件追踪以及管理入口。
+- **Vue 3**：投研观点、交易策略、事件追踪、期货研究预览以及管理入口。
 - **Go**：身份权限、业务状态、策略 DSL、回测、证据登记、预算、版本与发布门禁。
 - **Python**：执行受限研究任务，对接受控金融工具和研究 Harness。
 - **PostgreSQL**：保存业务事实、策略版本、事件、证据和审计记录。
@@ -148,6 +158,9 @@ artifacts/             交互演示和可复核验证产物
 | 事件追踪需求 | [投资事件情报与证据时间线 PRD](prd/投资事件情报与证据时间线_PRD_严格研发测试评审_2026-09-25.md) |
 | 策略开发契约 | [策略模块开发 SPEC](spec/策略模块_开发SPEC.md) |
 | 事件追踪开发契约 | [投资事件情报与证据时间线开发 SPEC](spec/投资事件情报与证据时间线_开发SPEC.md) |
+| 期货研究产品边界 | [期货研究模块 PRD](prd/期货研究模块_PRD.md) |
+| 期货研究开发契约 | [期货研究模块开发 SPEC](spec/期货研究模块_开发SPEC.md) |
+| 期货研究运行与门槛 | [期货研究维护手册](docs/futures-operations.md) |
 | 阶段 B 数据与模型边界 | [阶段 B 开发 SPEC](spec/阶段B_开发SPEC.md) |
 | 本地开发与可选 Harness | [开发指南](spec/development.md) |
 | 当前实现与验收边界 | [实现状态](app/IMPLEMENTATION_STATUS.md) / [发布验证](docs/release-validation.md) |

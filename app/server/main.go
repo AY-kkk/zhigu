@@ -10,10 +10,12 @@ import (
 	"github.com/gin-gonic/gin"
 
 	financeapi "zhigu/server/api/v1/finance"
+	futuresapi "zhigu/server/api/v1/futures"
 	intelapi "zhigu/server/api/v1/intel"
 	"zhigu/server/httpx"
 	"zhigu/server/initialize"
 	"zhigu/server/service/finance"
+	futuressvc "zhigu/server/service/futures"
 	intelsvc "zhigu/server/service/intel"
 	"zhigu/server/service/market"
 	strategymarket "zhigu/server/service/strategy_market"
@@ -21,6 +23,9 @@ import (
 )
 
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "--futures-extract-v1" {
+		os.Exit(futuressvc.RunFuturesExtractionCLI())
+	}
 	addr := os.Getenv("ZHIGU_HTTP_ADDR")
 	if addr == "" {
 		addr = ":8080"
@@ -31,6 +36,28 @@ func main() {
 	}
 	if err := initialize.Migrate(db); err != nil {
 		log.Fatalf("migrate: %v", err)
+	}
+	futuresDB, futuresDBErr := initialize.OpenDB()
+	if futuresDBErr != nil {
+		log.Printf("futures database unavailable: %v", futuresDBErr)
+	}
+	futuresEnabled := os.Getenv("ZHIGU_FUTURES_ENABLED") == "true"
+	futuresState := futuressvc.RuntimeState{Enabled: futuresEnabled, Ready: false, Mode: "off", Reason: "FUTURES_NOT_IMPLEMENTED"}
+	var futuresDomain *futuressvc.Domain
+	if futuresDBErr == nil {
+		if sqlDB, err := futuresDB.DB(); err == nil {
+			sqlDB.SetMaxOpenConns(4)
+			sqlDB.SetMaxIdleConns(2)
+		}
+		state, err := futuressvc.Bootstrap(context.Background(), futuresDB, futuressvc.Config{Enabled: futuresEnabled, Mode: os.Getenv("ZHIGU_FUTURES_MODE")})
+		if err != nil {
+			log.Printf("futures bootstrap failed; module remains isolated: %v", err)
+		}
+		futuresState = state
+		if err == nil && futuressvc.MaintenanceAvailable(futuresDB) {
+			futuresDomain = futuressvc.NewDomain(futuresDB, os.Getenv("ZHIGU_FUTURES_STORAGE_DIR")).WithMode(futuresState.Mode).WithEnabled(futuresEnabled)
+			go futuressvc.StartFuturesMaintenance(context.Background(), futuresDB, futuresDomain)
+		}
 	}
 	if err := initialize.Seed(db); err != nil {
 		log.Fatalf("seed: %v", err)
@@ -60,6 +87,14 @@ func main() {
 	})
 	financeapi.Register(engine, svc, proxy)
 	financeapi.RegisterAdmin(engine, cfg, svc)
+	futuresapi.Register(engine, futuressvc.NewService(futuresEnabled).WithRuntimeState(futuresState).WithDomain(futuresDomain))
+	if futuresDomain != nil {
+		futuresGrants := futuressvc.NewGrantManager(futuressvc.NewDBGrantStore(futuresDB), futuressvc.DBLeaseAuthorizer{DB: futuresDB}, nil)
+		futuresapi.RegisterInternal(engine, futuresGrants, futuresDomain)
+		if futuresState.Ready && futuresState.Mode == "live" {
+			go futuressvc.StartRunScheduler(context.Background(), futuresDB, futuresDomain, futuresGrants)
+		}
+	}
 	mkt := market.NewService(db)
 	hub := workbench.NewHub(db, mkt).UseConfig(cfg)
 	financeapi.RegisterStrategy(engine, hub)

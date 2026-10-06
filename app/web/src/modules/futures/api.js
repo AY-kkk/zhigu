@@ -1,0 +1,56 @@
+import http from '../../utils/http.js'
+
+// Reuse only JWT/envelope transport, never a stock or intel business API.
+export async function getCapabilities(signal) {
+  const response = await http.get('/api/v1/futures/capabilities', { signal })
+  return response.data
+}
+
+const idempotencyHeaders = (key) => ({ 'Idempotency-Key': key || crypto.randomUUID() })
+const listParams = (cursor, limit = 20) => ({ cursor, limit })
+
+export const getProducts = (cursor, limit, signal) => http.get('/api/v1/futures/products', { params: listParams(cursor, limit), signal }).then(r => r.data)
+export const getContracts = (productId, cursor, limit, signal) => http.get(`/api/v1/futures/products/${encodeURIComponent(productId)}/contracts`, { params: listParams(cursor, limit), signal }).then(r => r.data)
+export const getWorkbench = (productId, query, signal) => http.get(`/api/v1/futures/products/${encodeURIComponent(productId)}/workbench`, { params: query, signal }).then(r => r.data)
+export const createDraft = (input, key, signal) => http.post('/api/v1/futures/drafts', input, { headers: idempotencyHeaders(key), signal }).then(r => r.data)
+export const getDraft = (id, signal) => http.get(`/api/v1/futures/drafts/${encodeURIComponent(id)}`, { signal }).then(r => r.data)
+export const patchDraft = (id, body, signal) => http.patch(`/api/v1/futures/drafts/${encodeURIComponent(id)}`, body, { signal }).then(r => r.data)
+export const deleteDraft = (id, key, signal) => http.delete(`/api/v1/futures/drafts/${encodeURIComponent(id)}`, { headers: idempotencyHeaders(key), signal }).then(r => r.data)
+export const parseDraft = (id, expectedRevision, key, signal) => http.post(`/api/v1/futures/drafts/${encodeURIComponent(id)}/parse`, { expected_revision: expectedRevision }, { headers: idempotencyHeaders(key), signal }).then(r => r.data)
+export const getClaims = (id, cursor, limit, signal) => http.get(`/api/v1/futures/drafts/${encodeURIComponent(id)}/claims`, { params: listParams(cursor, limit), signal }).then(r => r.data)
+export const uploadDocument = (file, key, signal) => {
+  const form = new FormData()
+  form.append('file', file)
+  return http.post('/api/v1/futures/documents', form, { headers: idempotencyHeaders(key), signal }).then(r => r.data)
+}
+export const getDocument = (id, signal) => http.get(`/api/v1/futures/documents/${encodeURIComponent(id)}`, { signal }).then(r => r.data)
+export const deleteDocument = (id, key, signal) => http.delete(`/api/v1/futures/documents/${encodeURIComponent(id)}`, { headers: idempotencyHeaders(key), signal }).then(r => r.data)
+export const createRun = (body, key, signal) => http.post('/api/v1/futures/runs', body, { headers: idempotencyHeaders(key), signal }).then(r => r.data)
+export const getRuns = (cursor, limit, signal) => http.get('/api/v1/futures/runs', { params: listParams(cursor, limit), signal }).then(r => r.data)
+export const getRun = (id, signal) => http.get(`/api/v1/futures/runs/${encodeURIComponent(id)}`, { signal }).then(r => r.data)
+export const deleteRun = (id, body, key, signal) => http.delete(`/api/v1/futures/runs/${encodeURIComponent(id)}`, { data: body, headers: idempotencyHeaders(key), signal }).then(r => r.data)
+export const cancelRun = (id, key, signal) => http.post(`/api/v1/futures/runs/${encodeURIComponent(id)}/cancel`, null, { headers: idempotencyHeaders(key), signal }).then(r => r.data)
+export const getEvidence = (runId, evidenceId, signal) => http.get(`/api/v1/futures/runs/${encodeURIComponent(runId)}/evidence/${encodeURIComponent(evidenceId)}`, { signal }).then(r => r.data)
+export const exportRun = (id, signal) => http.get(`/api/v1/futures/runs/${encodeURIComponent(id)}/export`, { responseType: 'blob', signal })
+export const getDeleteImpact = (id, signal) => http.get(`/api/v1/futures/runs/${encodeURIComponent(id)}/delete-impact`, { signal }).then(r => r.data)
+export const createHypothesis = (body, key, signal) => http.post('/api/v1/futures/hypotheses', body, { headers: idempotencyHeaders(key), signal }).then(r => r.data)
+export const getHypotheses = (cursor, limit, signal) => http.get('/api/v1/futures/hypotheses', { params: listParams(cursor, limit), signal }).then(r => r.data)
+export const getHypothesis = (id, signal) => http.get(`/api/v1/futures/hypotheses/${encodeURIComponent(id)}`, { signal }).then(r => r.data)
+export const patchHypothesis = (id, body, signal) => http.patch(`/api/v1/futures/hypotheses/${encodeURIComponent(id)}`, body, { signal }).then(r => r.data)
+export const deleteHypothesis = (id, key, signal) => http.delete(`/api/v1/futures/hypotheses/${encodeURIComponent(id)}`, { headers: idempotencyHeaders(key), signal }).then(r => r.data)
+export const getChecks = (id, cursor, limit, signal) => http.get(`/api/v1/futures/hypotheses/${encodeURIComponent(id)}/checks`, { params: listParams(cursor, limit), signal }).then(r => r.data)
+export const createCheck = (id, body, key, signal) => http.post(`/api/v1/futures/hypotheses/${encodeURIComponent(id)}/checks`, body, { headers: idempotencyHeaders(key), signal }).then(r => r.data)
+export const getRecap = (id, signal) => http.get(`/api/v1/futures/hypotheses/${encodeURIComponent(id)}/recap`, { signal }).then(r => r.data)
+export const putRecap = (id, body, signal) => http.put(`/api/v1/futures/hypotheses/${encodeURIComponent(id)}/recap`, body, { signal }).then(r => r.data)
+export const getWatchlist = (signal) => http.get('/api/v1/futures/watchlist', { signal }).then(r => r.data)
+export const putWatchlist = (body, signal) => http.put('/api/v1/futures/watchlist', body, { signal }).then(r => r.data)
+export const getNotifications = (cursor, limit, signal) => http.get('/api/v1/futures/notifications', { params: listParams(cursor, limit), signal }).then(r => r.data)
+export const markNotification = (id, signal) => http.patch(`/api/v1/futures/notifications/${encodeURIComponent(id)}`, { read: true }, { signal }).then(r => r.data)
+export const getSources = (cursor, limit, signal) => http.get('/api/v1/admin/futures/sources', { params: listParams(cursor, limit), signal }).then(r => r.data)
+export const createSource = (manifest, key, signal) => http.post('/api/v1/admin/futures/sources', { manifest }, { headers: idempotencyHeaders(key), signal }).then(r => r.data)
+export const patchSource = (id, body, signal) => http.patch(`/api/v1/admin/futures/sources/${encodeURIComponent(id)}`, body, { signal }).then(r => r.data)
+export const createSourceVersion = (id, body, key, signal) => http.post(`/api/v1/admin/futures/sources/${encodeURIComponent(id)}/versions`, body, { headers: idempotencyHeaders(key), signal }).then(r => r.data)
+export const getAdmission = (cursor, limit, signal) => http.get('/api/v1/admin/futures/admission', { params: listParams(cursor, limit), signal }).then(r => r.data)
+export const putAdmission = (productId, body, signal) => http.put(`/api/v1/admin/futures/admission/${encodeURIComponent(productId)}`, body, { signal }).then(r => r.data)
+export const getOperations = (signal) => http.get('/api/v1/admin/futures/operations', { signal }).then(r => r.data)
+export const patchOperations = (body, signal) => http.patch('/api/v1/admin/futures/operations', body, { signal }).then(r => r.data)

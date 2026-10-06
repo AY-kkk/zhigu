@@ -1,0 +1,19 @@
+{
+  "arguments": {
+    "stage": "verify",
+    "messages": [
+      {
+        "role": "user",
+        "content": "中文观点 <tag> & 1.25"
+      }
+    ],
+    "nested": {
+      "z": 2,
+      "a": [
+        1,
+        "two"
+      ]
+    }
+  },
+  "sha256": "6121c8f819940db98eda203cd6303369e12c347a380d4027a3f17668b8895e7e"
+}

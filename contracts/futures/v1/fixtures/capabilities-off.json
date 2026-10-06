@@ -1,0 +1,25 @@
+{
+  "schema_version": "futures.capabilities.v1",
+  "enabled": false,
+  "ready": false,
+  "mode": "off",
+  "reason": "FUTURES_NOT_IMPLEMENTED",
+  "products": [],
+  "features": {
+    "research": false,
+    "tracking": false,
+    "export": false
+  },
+  "limits": {
+    "daily_runs": 5,
+    "active_runs": 1,
+    "active_hypotheses": 20,
+    "model_calls": 8,
+    "tool_calls": 24,
+    "tokens": 48000,
+    "user_daily_cny": "5",
+    "module_daily_cny": "50",
+    "queue_timeout_seconds": 60,
+    "execution_timeout_seconds": 180
+  }
+}

@@ -41,9 +41,13 @@ const BASE_CONSUMER_ITEMS = [
   { key: 'research', text: '投研观点', icon: 'research' },
   { key: 'strategies', text: '交易策略', icon: 'strategies' }
 ]
-const CONSUMER_ITEMS = import.meta.env.VITE_INTEL_ENABLED === 'true'
-  ? [...BASE_CONSUMER_ITEMS, { key: 'intel', text: '事件情报', icon: 'research', title: '在新窗口打开' }]
-  : BASE_CONSUMER_ITEMS
+const INTEL_ITEM = { key: 'intel', text: '事件情报', icon: 'research', title: '在新窗口打开' }
+const FUTURES_ITEM = { key: 'futures', text: '期货研究', icon: 'research', to: '/app/futures' }
+const CONSUMER_ITEMS = [
+  ...BASE_CONSUMER_ITEMS,
+  ...(import.meta.env.VITE_INTEL_ENABLED === 'true' ? [INTEL_ITEM] : []),
+  ...(import.meta.env.VITE_FUTURES_ENABLED === 'true' ? [FUTURES_ITEM] : [])
+]
 
 const props = defineProps({
   stacked: { type: Boolean, default: false },
@@ -69,6 +73,7 @@ const selected = computed(() => {
   if (route.path.startsWith('/app/profile')) return 'profile'
   if (route.path.startsWith('/app/strategies')) return 'strategies'
   if (route.path.startsWith('/app/research')) return 'research'
+  if (route.path.startsWith('/app/futures')) return 'futures'
   return ''
 })
 

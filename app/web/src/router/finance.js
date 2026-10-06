@@ -2,8 +2,10 @@ import { createRouter, createWebHistory } from 'vue-router'
 import ConsumerLayout from '../layout/consumer/index.vue'
 import AdminLayout from '../layout/admin/index.vue'
 import IntelLayout from '../layout/intel/index.vue'
+import { buildFuturesAdminRoute, buildFuturesRoutes } from '../modules/futures/routes.js'
 
 const intelEnabled = import.meta.env.VITE_INTEL_ENABLED === 'true'
+const futuresEnabled = import.meta.env.VITE_FUTURES_ENABLED === 'true'
 const intelMeta = (mode, tab, extra = {}) => ({ module: 'intel', mode, intelTab: tab, ...extra })
 const intelRoutes = intelEnabled
   ? [{
@@ -23,6 +25,8 @@ const intelRoutes = intelEnabled
       ]
     }]
   : []
+const futuresRoutes = buildFuturesRoutes(futuresEnabled)
+const futuresAdminRoute = buildFuturesAdminRoute(futuresEnabled)
 
 const router = createRouter({
   history: createWebHistory(),
@@ -30,6 +34,8 @@ const router = createRouter({
     { path: '/', redirect: '/app/research/new' },
     { path: '/login', component: () => import('../view/research/login.vue') },
     ...intelRoutes,
+    ...futuresRoutes,
+    ...(futuresAdminRoute ? [futuresAdminRoute] : []),
     {
       path: '/app',
       component: ConsumerLayout,

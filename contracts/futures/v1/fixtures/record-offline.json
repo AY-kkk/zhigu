@@ -1,0 +1,48 @@
+{
+  "schema_version": "futures.record.v1",
+  "id": "record_test",
+  "revision": 1,
+  "supersedes_id": null,
+  "scope": "public",
+  "owner_id": null,
+  "mode": "live",
+  "product_id": "SHFE.CU",
+  "contract_id": null,
+  "source_id": "offline-test-only",
+  "source_version": "test-v1",
+  "source_cluster": "test",
+  "source_type": "industry_data",
+  "metric": "exchange_inventory",
+  "value": "1000",
+  "unit": "tonne",
+  "currency": null,
+  "caliber_id": "test-caliber",
+  "period_start": "2026-09-21",
+  "period_end": "2026-09-25",
+  "trading_day": null,
+  "published_at": "2026-10-01T08:00:00Z",
+  "published_precision": "timestamp",
+  "version_available_at": "2026-10-01T08:00:00Z",
+  "first_observed_at": "2026-10-01T08:00:00Z",
+  "retrieved_at": "2026-10-01T08:00:00Z",
+  "usable_at": "2026-10-01T08:00:00Z",
+  "quality": {
+    "acquisition": "available",
+    "freshness": "current",
+    "verification": "source_recorded"
+  },
+  "rights": {
+    "display": true,
+    "model_use": true,
+    "export": false,
+    "retain_until": "2026-10-15T08:00:00Z",
+    "version": "test-v1"
+  },
+  "locator": {
+    "source_url": null,
+    "page": null,
+    "row_key": "test-row",
+    "quote": null
+  },
+  "content_hash": "offline-test-hash"
+}

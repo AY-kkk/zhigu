@@ -1,0 +1,50 @@
+{
+  "schema_version": "futures.hypothesis.v1",
+  "id": "hypothesis_test",
+  "scope": {
+    "domain": "futures",
+    "mode": "live",
+    "owner_id": 1
+  },
+  "version": 1,
+  "run_id": "run_test",
+  "report_id": "report_test",
+  "claim_ids": [
+    "claim_test"
+  ],
+  "proposition": "合成离线契约样例：检查同口径库存变化，不代表当前市场判断",
+  "product_id": "SHFE.CU",
+  "contract_id": null,
+  "expires_at": "2026-10-15T08:00:00Z",
+  "retention_deadline": "2026-12-30T08:00:00Z",
+  "lifecycle": "draft",
+  "user_view": "undetermined",
+  "view_reason": null,
+  "reviewed_check_version": null,
+  "needs_review": false,
+  "conditions": [
+    {
+      "id": "condition_support",
+      "role": "validation",
+      "kind": "metric_change",
+      "series_id": "series_test",
+      "operator": "lt",
+      "threshold": "0",
+      "unit": "tonne",
+      "periods": null,
+      "instruction": "检查相邻发布期变化；缺失则unknown"
+    },
+    {
+      "id": "condition_invalidate",
+      "role": "invalidation",
+      "kind": "metric_change",
+      "series_id": "series_test",
+      "operator": "gt",
+      "threshold": "0",
+      "unit": "tonne",
+      "periods": null,
+      "instruction": "检查相邻发布期变化；缺失则unknown"
+    }
+  ],
+  "created_at": "2026-10-01T08:00:00Z"
+}
