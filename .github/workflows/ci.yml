@@ -1,7 +1,7 @@
 name: CI
 on:
   push:
-    branches: [main]
+    branches: [main, 'codex/**', 'feat/**']
   pull_request:
   workflow_dispatch:
 permissions:
@@ -46,6 +46,8 @@ jobs:
           enable-cache: true
       - name: Install fixture dependencies from lock
         run: uv sync --frozen --no-dev --project app/research-service
+      - name: Install futures worker dependencies from lock
+        run: uv sync --frozen --no-dev --project app/futures-service
       - name: Install test dependencies
         run: uv pip install --python app/research-service/.venv/bin/python pytest rfc3339-validator
       - name: Fixture and regression tests
@@ -55,6 +57,10 @@ jobs:
         run: .venv/bin/python -m pytest tests -q -k 'not actual_harness_import'
       - name: Public contract checks
         run: app/research-service/.venv/bin/python -m pytest handoff/tests -q -k 'not test_repository_pins_and_reuse_paths'
+      - name: Futures worker and contract checks
+        run: |
+          PYTHONPATH=app/futures-service/src app/futures-service/.venv/bin/python -m unittest discover -s app/futures-service/tests -p 'test_*.py'
+          app/research-service/.venv/bin/python app/scripts/verify-futures-contracts.py
       - name: Public tree checks
         run: python3 scripts/check-public-tree.py
   web:
@@ -75,8 +81,13 @@ jobs:
       - run: npm run build
         env:
           VITE_INTEL_ENABLED: "true"
+          VITE_FUTURES_ENABLED: "true"
+      - name: Futures SFC and route checks
+        run: node --test src/modules/futures/tests/*.test.mjs
       - run: npx playwright install --with-deps chromium firefox webkit
       - name: Browser smoke checks (no live API)
         run: PLAYWRIGHT_SMOKE=1 npm run test:e2e
       - name: Intel cross-browser smoke checks
         run: npx playwright test e2e/intel.spec.js --config playwright.intel.config.js --project=firefox --project=webkit
+      - name: Futures browser smoke checks (fixture APIs only)
+        run: npx playwright test e2e/futures.spec.js --project=chromium

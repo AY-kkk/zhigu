@@ -47,7 +47,9 @@
         "financials",
         "market",
         "news",
-        "fixture"
+        "fixture",
+        "user_report",
+        "web_article"
       ]
     },
     "published_at": {
@@ -135,6 +137,23 @@
         ]
       },
       "maxItems": 100
+    },
+    "source_grade": {
+      "type": "string",
+      "enum": [
+        "official_filing",
+        "structured_data",
+        "user_report",
+        "external_web",
+        "fixture"
+      ]
+    },
+    "verification_status": {
+      "type": "string",
+      "enum": [
+        "independent_verified",
+        "reported_only"
+      ]
     }
   },
   "required": [

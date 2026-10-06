@@ -55,6 +55,13 @@
             },
             "maxItems": 40,
             "uniqueItems": true
+          },
+          "verification_status": {
+            "type": "string",
+            "enum": [
+              "independent_verified",
+              "reported_only"
+            ]
           }
         },
         "required": [
@@ -134,6 +141,13 @@
             },
             "maxItems": 40,
             "uniqueItems": true
+          },
+          "verification_status": {
+            "type": "string",
+            "enum": [
+              "independent_verified",
+              "reported_only"
+            ]
           }
         },
         "required": [

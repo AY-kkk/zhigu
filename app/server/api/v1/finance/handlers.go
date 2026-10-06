@@ -26,11 +26,15 @@ func Register(engine *gin.Engine, svc *finance.ResearchService, proxy *finance.M
 
 	consumer := engine.Group("/api/finance")
 	consumer.Use(httpx.AuthRequired())
+	consumer.POST("/research-documents", a.UploadResearchDocument)
+	consumer.POST("/research-links", a.ImportResearchLink)
+	consumer.GET("/research-documents/:id", a.GetResearchDocument)
 	consumer.POST("/claims/parse", a.Parse)
 	consumer.GET("/claims/:id", a.GetClaim)
 	consumer.PATCH("/claims/:id", a.PatchClaim)
 	consumer.POST("/research", a.Create)
 	consumer.GET("/research/:id", a.Get)
+	consumer.GET("/research/:id/export", a.ExportResearch)
 	consumer.GET("/research", a.List)
 	consumer.POST("/research/:id/cancel", a.Cancel)
 	consumer.DELETE("/research/:id", a.Delete)
@@ -77,13 +81,15 @@ func (a *API) Login(c *gin.Context) {
 
 func (a *API) Parse(c *gin.Context) {
 	var req struct {
-		Text string `json:"text"`
+		Text       string `json:"text"`
+		DocumentID string `json:"document_id"`
+		FocusText  string `json:"focus_text"`
 	}
 	if !httpx.BindJSON(c, &req) {
 		return
 	}
 	ctx := finance.WithUser(c.Request.Context(), httpx.CurrentUserID(c), roleOf(c))
-	out, err := a.Svc.ParseClaim(ctx, finance.ParseInput{Text: req.Text})
+	out, err := a.Svc.ParseClaim(ctx, finance.ParseInput{Text: req.Text, DocumentID: req.DocumentID, FocusText: req.FocusText})
 	if err != nil {
 		fail(c, err)
 		return
@@ -146,6 +152,22 @@ func (a *API) Get(c *gin.Context) {
 	httpx.OK(c, http.StatusOK, out)
 }
 
+func (a *API) ExportResearch(c *gin.Context) {
+	if c.Query("format") != "" && c.Query("format") != "html" {
+		httpx.Fail(c, http.StatusBadRequest, "UNSUPPORTED_EXPORT", "仅支持 format=html")
+		return
+	}
+	ctx := finance.WithUser(c.Request.Context(), httpx.CurrentUserID(c), roleOf(c))
+	raw, err := a.Svc.ExportHTML(ctx, c.Param("id"))
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	c.Header("Content-Type", "text/html; charset=utf-8")
+	c.Header("Content-Disposition", `attachment; filename="research-report.html"`)
+	c.Data(http.StatusOK, "text/html; charset=utf-8", raw)
+}
+
 func (a *API) List(c *gin.Context) {
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
 	ctx := finance.WithUser(c.Request.Context(), httpx.CurrentUserID(c), roleOf(c))
@@ -175,6 +197,66 @@ func (a *API) Delete(c *gin.Context) {
 		return
 	}
 	httpx.OK(c, http.StatusAccepted, gin.H{"deletion_status": status})
+}
+
+func (a *API) UploadResearchDocument(c *gin.Context) {
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 22<<20)
+	fileHeader, err := c.FormFile("file")
+	if err != nil {
+		httpx.Fail(c, http.StatusBadRequest, "INVALID_MULTIPART", "缺少研报文件")
+		return
+	}
+	file, err := fileHeader.Open()
+	if err != nil {
+		httpx.Fail(c, http.StatusBadRequest, "INVALID_MULTIPART", "无法读取研报文件")
+		return
+	}
+	defer file.Close()
+	content, err := io.ReadAll(io.LimitReader(file, 20*1024*1024+1))
+	if err != nil {
+		httpx.Fail(c, http.StatusBadRequest, "INVALID_MULTIPART", "读取研报文件失败")
+		return
+	}
+	ctx := finance.WithUser(c.Request.Context(), httpx.CurrentUserID(c), roleOf(c))
+	out, err := a.Svc.Docs.Upload(ctx, finance.UploadDocumentInput{
+		Filename: fileHeader.Filename,
+		MediaType: fileHeader.Header.Get("Content-Type"),
+		ByteSize: fileHeader.Size,
+		Content: content,
+		DraftID: c.PostForm("draft_id"),
+	})
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	httpx.OK(c, http.StatusCreated, out)
+}
+
+func (a *API) ImportResearchLink(c *gin.Context) {
+	var req struct {
+		URL     string `json:"url"`
+		DraftID string `json:"draft_id"`
+	}
+	if !httpx.BindJSON(c, &req) {
+		return
+	}
+	ctx := finance.WithUser(c.Request.Context(), httpx.CurrentUserID(c), roleOf(c))
+	out, err := a.Svc.Docs.ImportURL(ctx, finance.ImportWebLinkInput{URL: req.URL, DraftID: req.DraftID})
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	httpx.OK(c, http.StatusCreated, out)
+}
+
+func (a *API) GetResearchDocument(c *gin.Context) {
+	ctx := finance.WithUser(c.Request.Context(), httpx.CurrentUserID(c), roleOf(c))
+	out, err := a.Svc.Docs.Get(ctx, c.Param("id"))
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	httpx.OK(c, http.StatusOK, out)
 }
 
 func (a *API) Evidence(c *gin.Context) {

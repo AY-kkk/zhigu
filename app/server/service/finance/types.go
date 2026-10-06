@@ -3,9 +3,10 @@ package finance
 import "time"
 
 type ClaimItem struct {
-	ClaimID   string `json:"claim_id"`
-	Text      string `json:"text"`
-	ClaimType string `json:"claim_type"`
+	ClaimID      string `json:"claim_id"`
+	Text         string `json:"text"`
+	ClaimType    string `json:"claim_type"`
+	SourceSpanID string `json:"source_span_id,omitempty"`
 }
 
 type Claim struct {
@@ -29,14 +30,19 @@ type ResearchTask struct {
 	MaxModelCalls       int       `json:"max_model_calls"`
 	MaxToolCalls        int       `json:"max_tool_calls"`
 	DeadlineAt          time.Time `json:"deadline_at"`
+	DocumentID          string    `json:"document_id,omitempty"`
+	InputMode           string    `json:"input_mode,omitempty"`
 	TaskToken           string    `json:"-"`
 	Protocol            string    `json:"-"`
 }
 
 type Argument struct {
-	ClaimType   string   `json:"claim_type"`
-	Text        string   `json:"text"`
-	EvidenceIDs []string `json:"evidence_ids"`
+	ClaimID            string   `json:"claim_id,omitempty"`
+	Title              string   `json:"title,omitempty"`
+	ClaimType          string   `json:"claim_type"`
+	Text               string   `json:"text"`
+	EvidenceIDs        []string `json:"evidence_ids"`
+	VerificationStatus string   `json:"verification_status,omitempty"`
 }
 
 type Usage struct {
@@ -81,6 +87,12 @@ type VerifiedReport struct {
 	Assumptions         []string   `json:"assumptions"`
 	ChangeConditions    []string   `json:"change_conditions"`
 	Unknowns            []string   `json:"unknowns"`
+	FactChecks          []FactCheck `json:"fact_checks"`
+	Challenges          []Challenge `json:"challenges"`
+	ReasoningGaps       []ReasoningGap `json:"reasoning_gaps"`
+	TailRisks           []TailRisk `json:"tail_risks"`
+	TestConditions      []TestCondition `json:"test_conditions"`
+	EvidenceIndex       []EvidenceRef `json:"evidence_index"`
 	EvidenceIDs         []string   `json:"evidence_ids"`
 	ModelConfigVersion  string     `json:"model_config_version"`
 	SourcePolicyVersion string     `json:"source_policy_version"`
@@ -135,11 +147,18 @@ type CreateResearchOutput struct {
 }
 
 type ParseInput struct {
-	Text string
+	Text       string
+	DocumentID string
+	FocusText  string
 }
 
 type ParseOutput struct {
 	DraftID            string       `json:"draft_id"`
+	InputMode          string       `json:"input_mode"`
+	DocumentID         string       `json:"document_id,omitempty"`
+	FocusText          string       `json:"focus_text,omitempty"`
+	Document           *DocumentView `json:"document,omitempty"`
+	Numbers            []NumberMention `json:"numbers"`
 	Revision           int          `json:"revision"`
 	ParseStatus        string       `json:"parse_status"`
 	Candidates         []Instrument `json:"candidates"`
@@ -156,6 +175,9 @@ type ParseOutput struct {
 
 type PatchDraftInput struct {
 	Revision     int         `json:"revision"`
+	Text         *string     `json:"text,omitempty"`
+	DocumentID   *string     `json:"document_id,omitempty"`
+	FocusText    *string     `json:"focus_text,omitempty"`
 	InstrumentID *string     `json:"instrument_id"`
 	HorizonStart *string     `json:"horizon_start"`
 	HorizonEnd   *string     `json:"horizon_end"`
@@ -171,6 +193,9 @@ type Instrument struct {
 
 type ResearchView struct {
 	RunID              string          `json:"run_id"`
+	InputMode          string          `json:"input_mode"`
+	DocumentID         string          `json:"document_id,omitempty"`
+	Document           *DocumentView   `json:"document,omitempty"`
 	Status             string          `json:"status"`
 	Stage              string          `json:"stage"`
 	Mode               string          `json:"mode"`

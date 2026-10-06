@@ -19,6 +19,8 @@ type ProviderRecord struct {
 	SourceID     string      `json:"source_id"`
 	SourceURL    string      `json:"source_url"`
 	SourceKind   string      `json:"source_kind"`
+	SourceGrade  string      `json:"source_grade"`
+	VerificationStatus string `json:"verification_status"`
 	Title        string      `json:"title"`
 	Locator      string      `json:"locator"`
 	Text         string      `json:"text"`
@@ -63,7 +65,9 @@ func (r ProviderRecord) CanonicalMap() map[string]any {
 	}
 	return map[string]any{
 		"instrument_id": r.InstrumentID, "source_id": r.SourceID, "source_url": r.SourceURL,
-		"source_kind": r.SourceKind, "title": r.Title, "locator": r.Locator, "text": r.Text,
+		"source_kind": r.SourceKind, "source_grade": r.SourceGrade,
+		"verification_status": r.VerificationStatus,
+		"title": r.Title, "locator": r.Locator, "text": r.Text,
 		"metrics":      metrics,
 		"published_at": r.PublishedAt.UTC().Format(time.RFC3339),
 		"available_at": r.AvailableAt.UTC().Format(time.RFC3339),
@@ -79,6 +83,7 @@ func (r ProviderRecord) Hash() (string, error) {
 func (r ProviderRecord) ToEvidenceIn() EvidenceIn {
 	return EvidenceIn{
 		SourceID: r.SourceID, Title: r.Title, SourceURL: r.SourceURL, SourceKind: r.SourceKind,
+		SourceGrade: r.SourceGrade, VerificationStatus: r.VerificationStatus,
 		Locator: r.Locator, Text: r.Text, Metrics: r.Metrics,
 		PublishedAt: r.PublishedAt, AvailableAt: r.AvailableAt, RetrievedAt: r.RetrievedAt,
 		ContentHash: ContentHash(r.Text), DataVersion: r.DataVersion, Mode: r.Mode,

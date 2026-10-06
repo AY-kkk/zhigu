@@ -223,8 +223,9 @@ ALTER TABLE sample_a DROP CONSTRAINT IF EXISTS gone_constraint;
 	if len(exp.fks) != 1 || exp.fks[0].ref != "finance_users" {
 		t.Fatalf("fks = %v", exp.fks)
 	}
-	if exp.checks["sample_a"] != 1 {
-		t.Fatalf("checks = %v", exp.checks)
+	// Named CHECK constraints are verified by name, not by per-table count.
+	if exp.checks["sample_a"] != 0 {
+		t.Fatalf("named checks leaked into count = %v", exp.checks)
 	}
 }
 

@@ -1,0 +1,4042 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Zhigu Futures P0 development contract",
+    "version": "F-1.0",
+    "description": "Futures v1 contract. All 42 operations are registered behind JWT owner/mode gating; live data and model readiness remain runtime-gated."
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/api/v1/futures/capabilities": {
+      "get": {
+        "operationId": "get__api_v1_futures_capabilities",
+        "description": "Identity required; callable while off. Products are per-user admitted products; limits are server-enforced configured ceilings, not remaining balance.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Capabilities"
+                    },
+                    "error": {
+                      "type": "null"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 validation; 401 identity; 403 admission/admin; 404 owner-scoped absence; 409 revision/idempotency; 413 upload; 429 quota; 503 off/unready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/futures/products": {
+      "get": {
+        "operationId": "get__api_v1_futures_products",
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/Product"
+                          }
+                        },
+                        "next_cursor": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "items",
+                        "next_cursor"
+                      ]
+                    },
+                    "error": {
+                      "type": "null"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 validation; 401 identity; 403 admission/admin; 404 owner-scoped absence; 409 revision/idempotency; 413 upload; 429 quota; 503 off/unready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/futures/products/{id}/contracts": {
+      "get": {
+        "operationId": "get__api_v1_futures_products_id_contracts",
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/Contract"
+                          }
+                        },
+                        "next_cursor": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "items",
+                        "next_cursor"
+                      ]
+                    },
+                    "error": {
+                      "type": "null"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 validation; 401 identity; 403 admission/admin; 404 owner-scoped absence; 409 revision/idempotency; 413 upload; 429 quota; 503 off/unready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/futures/products/{id}/workbench": {
+      "get": {
+        "operationId": "get__api_v1_futures_products_id_workbench",
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Workbench"
+                    },
+                    "error": {
+                      "type": "null"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 validation; 401 identity; 403 admission/admin; 404 owner-scoped absence; 409 revision/idempotency; 413 upload; 429 quota; 503 off/unready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "contract_id",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "window",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "enum": [
+                20,
+                60,
+                120
+              ],
+              "default": 60
+            }
+          },
+          {
+            "name": "price_type",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "settlement",
+                "close"
+              ],
+              "default": "settlement"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/futures/drafts": {
+      "post": {
+        "operationId": "post__api_v1_futures_drafts",
+        "description": "",
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Draft"
+                    },
+                    "error": {
+                      "type": "null"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 validation; 401 identity; 403 admission/admin; 404 owner-scoped absence; 409 revision/idempotency; 413 upload; 429 quota; 503 off/unready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DraftInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/futures/drafts/{id}": {
+      "get": {
+        "operationId": "get__api_v1_futures_drafts_id",
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Draft"
+                    },
+                    "error": {
+                      "type": "null"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 validation; 401 identity; 403 admission/admin; 404 owner-scoped absence; 409 revision/idempotency; 413 upload; 429 quota; 503 off/unready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "patch__api_v1_futures_drafts_id",
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Draft"
+                    },
+                    "error": {
+                      "type": "null"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 validation; 401 identity; 403 admission/admin; 404 owner-scoped absence; 409 revision/idempotency; 413 upload; 429 quota; 503 off/unready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "expected_revision": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "input": {
+                    "$ref": "#/components/schemas/DraftInput"
+                  }
+                },
+                "required": [
+                  "expected_revision",
+                  "input"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "delete__api_v1_futures_drafts_id",
+        "description": "",
+        "responses": {
+          "202": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Deletion"
+                    },
+                    "error": {
+                      "type": "null"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 validation; 401 identity; 403 admission/admin; 404 owner-scoped absence; 409 revision/idempotency; 413 upload; 429 quota; 503 off/unready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/futures/drafts/{id}/parse": {
+      "post": {
+        "operationId": "post__api_v1_futures_drafts_id_parse",
+        "description": "",
+        "responses": {
+          "202": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Draft"
+                    },
+                    "error": {
+                      "type": "null"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 validation; 401 identity; 403 admission/admin; 404 owner-scoped absence; 409 revision/idempotency; 413 upload; 429 quota; 503 off/unready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "expected_revision": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "expected_revision"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/futures/documents": {
+      "post": {
+        "operationId": "post__api_v1_futures_documents",
+        "description": "",
+        "responses": {
+          "202": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Document"
+                    },
+                    "error": {
+                      "type": "null"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 validation; 401 identity; 403 admission/admin; 404 owner-scoped absence; 409 revision/idempotency; 413 upload; 429 quota; 503 off/unready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                },
+                "required": [
+                  "file"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/futures/documents/{id}": {
+      "get": {
+        "operationId": "get__api_v1_futures_documents_id",
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Document"
+                    },
+                    "error": {
+                      "type": "null"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 validation; 401 identity; 403 admission/admin; 404 owner-scoped absence; 409 revision/idempotency; 413 upload; 429 quota; 503 off/unready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "delete__api_v1_futures_documents_id",
+        "description": "",
+        "responses": {
+          "202": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Deletion"
+                    },
+                    "error": {
+                      "type": "null"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 validation; 401 identity; 403 admission/admin; 404 owner-scoped absence; 409 revision/idempotency; 413 upload; 429 quota; 503 off/unready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/futures/runs": {
+      "post": {
+        "operationId": "post__api_v1_futures_runs",
+        "description": "",
+        "responses": {
+          "202": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Run"
+                    },
+                    "error": {
+                      "type": "null"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 validation; 401 identity; 403 admission/admin; 404 owner-scoped absence; 409 revision/idempotency; 413 upload; 429 quota; 503 off/unready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunCreate"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "get__api_v1_futures_runs",
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/Run"
+                          }
+                        },
+                        "next_cursor": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "items",
+                        "next_cursor"
+                      ]
+                    },
+                    "error": {
+                      "type": "null"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 validation; 401 identity; 403 admission/admin; 404 owner-scoped absence; 409 revision/idempotency; 413 upload; 429 quota; 503 off/unready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/futures/runs/{id}": {
+      "get": {
+        "operationId": "get__api_v1_futures_runs_id",
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Run"
+                    },
+                    "error": {
+                      "type": "null"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 validation; 401 identity; 403 admission/admin; 404 owner-scoped absence; 409 revision/idempotency; 413 upload; 429 quota; 503 off/unready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "delete__api_v1_futures_runs_id",
+        "description": "",
+        "responses": {
+          "202": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Deletion"
+                    },
+                    "error": {
+                      "type": "null"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 validation; 401 identity; 403 admission/admin; 404 owner-scoped absence; 409 revision/idempotency; 413 upload; 429 quota; 503 off/unready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "impact_version": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "cascade_hypotheses": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "impact_version",
+                  "cascade_hypotheses"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/futures/runs/{id}/cancel": {
+      "post": {
+        "operationId": "post__api_v1_futures_runs_id_cancel",
+        "description": "",
+        "responses": {
+          "202": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Run"
+                    },
+                    "error": {
+                      "type": "null"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 validation; 401 identity; 403 admission/admin; 404 owner-scoped absence; 409 revision/idempotency; 413 upload; 429 quota; 503 off/unready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/futures/runs/{id}/evidence/{evidenceId}": {
+      "get": {
+        "operationId": "get__api_v1_futures_runs_id_evidence_evidenceId",
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Record"
+                    },
+                    "error": {
+                      "type": "null"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 validation; 401 identity; 403 admission/admin; 404 owner-scoped absence; 409 revision/idempotency; 413 upload; 429 quota; 503 off/unready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "evidenceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/futures/runs/{id}/export": {
+      "get": {
+        "operationId": "get__api_v1_futures_runs_id_export",
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "Owner-only sanitized HTML attachment; recheck export rights at request time. Cache-Control: no-store. No external script or remote images.",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 validation; 401 identity; 403 admission/admin; 404 owner-scoped absence; 409 revision/idempotency; 413 upload; 429 quota; 503 off/unready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/futures/runs/{id}/delete-impact": {
+      "get": {
+        "operationId": "get__api_v1_futures_runs_id_delete-impact",
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/DeleteImpact"
+                    },
+                    "error": {
+                      "type": "null"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 validation; 401 identity; 403 admission/admin; 404 owner-scoped absence; 409 revision/idempotency; 413 upload; 429 quota; 503 off/unready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/futures/hypotheses/{id}": {
+      "delete": {
+        "operationId": "delete__api_v1_futures_hypotheses_id",
+        "description": "",
+        "responses": {
+          "202": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Deletion"
+                    },
+                    "error": {
+                      "type": "null"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 validation; 401 identity; 403 admission/admin; 404 owner-scoped absence; 409 revision/idempotency; 413 upload; 429 quota; 503 off/unready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ]
+      },
+      "get": {
+        "operationId": "get__api_v1_futures_hypotheses_id",
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Hypothesis"
+                    },
+                    "error": {
+                      "type": "null"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 validation; 401 identity; 403 admission/admin; 404 owner-scoped absence; 409 revision/idempotency; 413 upload; 429 quota; 503 off/unready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "patch__api_v1_futures_hypotheses_id",
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Hypothesis"
+                    },
+                    "error": {
+                      "type": "null"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 validation; 401 identity; 403 admission/admin; 404 owner-scoped absence; 409 revision/idempotency; 413 upload; 429 quota; 503 off/unready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HypothesisPatch"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/futures/hypotheses": {
+      "post": {
+        "operationId": "post__api_v1_futures_hypotheses",
+        "description": "",
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Hypothesis"
+                    },
+                    "error": {
+                      "type": "null"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 validation; 401 identity; 403 admission/admin; 404 owner-scoped absence; 409 revision/idempotency; 413 upload; 429 quota; 503 off/unready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HypothesisCreate"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "get__api_v1_futures_hypotheses",
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/Hypothesis"
+                          }
+                        },
+                        "next_cursor": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "items",
+                        "next_cursor"
+                      ]
+                    },
+                    "error": {
+                      "type": "null"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 validation; 401 identity; 403 admission/admin; 404 owner-scoped absence; 409 revision/idempotency; 413 upload; 429 quota; 503 off/unready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/futures/hypotheses/{id}/checks": {
+      "get": {
+        "operationId": "get__api_v1_futures_hypotheses_id_checks",
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/Check"
+                          }
+                        },
+                        "next_cursor": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "items",
+                        "next_cursor"
+                      ]
+                    },
+                    "error": {
+                      "type": "null"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 validation; 401 identity; 403 admission/admin; 404 owner-scoped absence; 409 revision/idempotency; 413 upload; 429 quota; 503 off/unready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ]
+      },
+      "post": {
+        "operationId": "post__api_v1_futures_hypotheses_id_checks",
+        "description": "Only manual conditions; owner proof and reason mandatory; program metrics cannot be overridden.",
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Check"
+                    },
+                    "error": {
+                      "type": "null"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 validation; 401 identity; 403 admission/admin; 404 owner-scoped absence; 409 revision/idempotency; 413 upload; 429 quota; 503 off/unready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "expected_version": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "condition_id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "result": {
+                    "type": "string",
+                    "enum": [
+                      "met",
+                      "not_met",
+                      "unknown"
+                    ]
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "evidence_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  }
+                },
+                "required": [
+                  "expected_version",
+                  "condition_id",
+                  "result",
+                  "reason",
+                  "evidence_ids"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/futures/hypotheses/{id}/recap": {
+      "get": {
+        "operationId": "get__api_v1_futures_hypotheses_id_recap",
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Recap"
+                    },
+                    "error": {
+                      "type": "null"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 validation; 401 identity; 403 admission/admin; 404 owner-scoped absence; 409 revision/idempotency; 413 upload; 429 quota; 503 off/unready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ]
+      },
+      "put": {
+        "operationId": "put__api_v1_futures_hypotheses_id_recap",
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Recap"
+                    },
+                    "error": {
+                      "type": "null"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 validation; 401 identity; 403 admission/admin; 404 owner-scoped absence; 409 revision/idempotency; 413 upload; 429 quota; 503 off/unready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Recap"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/futures/watchlist": {
+      "get": {
+        "operationId": "get__api_v1_futures_watchlist",
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Watchlist"
+                    },
+                    "error": {
+                      "type": "null"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 validation; 401 identity; 403 admission/admin; 404 owner-scoped absence; 409 revision/idempotency; 413 upload; 429 quota; 503 off/unready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "put__api_v1_futures_watchlist",
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Watchlist"
+                    },
+                    "error": {
+                      "type": "null"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 validation; 401 identity; 403 admission/admin; 404 owner-scoped absence; 409 revision/idempotency; 413 upload; 429 quota; 503 off/unready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "expected_version": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "product_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "maxItems": 20,
+                    "uniqueItems": true
+                  }
+                },
+                "required": [
+                  "expected_version",
+                  "product_ids"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/futures/notifications": {
+      "get": {
+        "operationId": "get__api_v1_futures_notifications",
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/Notification"
+                          }
+                        },
+                        "next_cursor": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "items",
+                        "next_cursor"
+                      ]
+                    },
+                    "error": {
+                      "type": "null"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 validation; 401 identity; 403 admission/admin; 404 owner-scoped absence; 409 revision/idempotency; 413 upload; 429 quota; 503 off/unready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/futures/notifications/{id}": {
+      "patch": {
+        "operationId": "patch__api_v1_futures_notifications_id",
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Notification"
+                    },
+                    "error": {
+                      "type": "null"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 validation; 401 identity; 403 admission/admin; 404 owner-scoped absence; 409 revision/idempotency; 413 upload; 429 quota; 503 off/unready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "read": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "read"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/futures/sources": {
+      "get": {
+        "operationId": "get__api_v1_admin_futures_sources",
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/Source"
+                          }
+                        },
+                        "next_cursor": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "items",
+                        "next_cursor"
+                      ]
+                    },
+                    "error": {
+                      "type": "null"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 validation; 401 identity; 403 admission/admin; 404 owner-scoped absence; 409 revision/idempotency; 413 upload; 429 quota; 503 off/unready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ]
+      },
+      "post": {
+        "operationId": "post__api_v1_admin_futures_sources",
+        "description": "Admin only. Register versioned manifest, initially registered; health and enablement require probes.",
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Source"
+                    },
+                    "error": {
+                      "type": "null"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 validation; 401 identity; 403 admission/admin; 404 owner-scoped absence; 409 revision/idempotency; 413 upload; 429 quota; 503 off/unready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "manifest": {
+                    "$ref": "#/components/schemas/SourceManifest"
+                  }
+                },
+                "required": [
+                  "manifest"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/futures/sources/{id}": {
+      "patch": {
+        "operationId": "patch__api_v1_admin_futures_sources_id",
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Source"
+                    },
+                    "error": {
+                      "type": "null"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 validation; 401 identity; 403 admission/admin; 404 owner-scoped absence; 409 revision/idempotency; 413 upload; 429 quota; 503 off/unready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "expected_version": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "enabled",
+                      "paused",
+                      "revoked"
+                    ]
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "expected_version",
+                  "status",
+                  "reason"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/futures/admission": {
+      "get": {
+        "operationId": "get__api_v1_admin_futures_admission",
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/Admission"
+                          }
+                        },
+                        "next_cursor": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "items",
+                        "next_cursor"
+                      ]
+                    },
+                    "error": {
+                      "type": "null"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 validation; 401 identity; 403 admission/admin; 404 owner-scoped absence; 409 revision/idempotency; 413 upload; 429 quota; 503 off/unready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/futures/admission/{productId}": {
+      "put": {
+        "operationId": "put__api_v1_admin_futures_admission_productId",
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Admission"
+                    },
+                    "error": {
+                      "type": "null"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 validation; 401 identity; 403 admission/admin; 404 owner-scoped absence; 409 revision/idempotency; 413 upload; 429 quota; 503 off/unready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "productId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "expected_version": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "blocked",
+                      "admitted",
+                      "suspended"
+                    ]
+                  },
+                  "evidence_manifest_id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "expected_version",
+                  "status",
+                  "evidence_manifest_id",
+                  "reason"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/futures/operations": {
+      "get": {
+        "operationId": "get__api_v1_admin_futures_operations",
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Operations"
+                    },
+                    "error": {
+                      "type": "null"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 validation; 401 identity; 403 admission/admin; 404 owner-scoped absence; 409 revision/idempotency; 413 upload; 429 quota; 503 off/unready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "patch__api_v1_admin_futures_operations",
+        "description": "Admin only; available while off. Does not bypass data, model, budget or release gates.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Operations"
+                    },
+                    "error": {
+                      "type": "null"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 validation; 401 identity; 403 admission/admin; 404 owner-scoped absence; 409 revision/idempotency; 413 upload; 429 quota; 503 off/unready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "expected_version": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "off",
+                      "read_only",
+                      "live"
+                    ]
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "allowed_user_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer",
+                      "minimum": 1
+                    }
+                  }
+                },
+                "required": [
+                  "expected_version",
+                  "mode",
+                  "reason",
+                  "allowed_user_ids"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/futures/drafts/{id}/claims": {
+      "get": {
+        "operationId": "get__api_v1_futures_drafts_id_claims",
+        "description": "All candidates for current parsed_revision. Client selects at most 12; no silent truncation.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/Claim"
+                          }
+                        },
+                        "next_cursor": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "items",
+                        "next_cursor"
+                      ]
+                    },
+                    "error": {
+                      "type": "null"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 validation; 401 identity; 403 admission/admin; 404 owner-scoped absence; 409 revision/idempotency; 413 upload; 429 quota; 503 off/unready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/futures/sources/{id}/versions": {
+      "post": {
+        "operationId": "post__api_v1_admin_futures_sources_id_versions",
+        "description": "",
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Source"
+                    },
+                    "error": {
+                      "type": "null"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 validation; 401 identity; 403 admission/admin; 404 owner-scoped absence; 409 revision/idempotency; 413 upload; 429 quota; 503 off/unready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "expected_version": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "manifest": {
+                    "$ref": "#/components/schemas/SourceManifest"
+                  }
+                },
+                "required": [
+                  "expected_version",
+                  "manifest"
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "Scope": {
+        "$ref": "./types.schema.json#/$defs/Scope"
+      },
+      "Quality": {
+        "$ref": "./types.schema.json#/$defs/Quality"
+      },
+      "Rights": {
+        "$ref": "./types.schema.json#/$defs/Rights"
+      },
+      "Versions": {
+        "$ref": "./types.schema.json#/$defs/Versions"
+      },
+      "Locator": {
+        "$ref": "./types.schema.json#/$defs/Locator"
+      },
+      "Record": {
+        "$ref": "./types.schema.json#/$defs/Record"
+      },
+      "Claim": {
+        "$ref": "./types.schema.json#/$defs/Claim"
+      },
+      "Calculation": {
+        "$ref": "./types.schema.json#/$defs/Calculation"
+      },
+      "Condition": {
+        "$ref": "./types.schema.json#/$defs/Condition"
+      },
+      "ClaimReview": {
+        "$ref": "./types.schema.json#/$defs/ClaimReview"
+      },
+      "ReasoningStep": {
+        "$ref": "./types.schema.json#/$defs/ReasoningStep"
+      },
+      "Report": {
+        "$ref": "./types.schema.json#/$defs/Report"
+      },
+      "Limits": {
+        "$ref": "./types.schema.json#/$defs/Limits"
+      },
+      "Task": {
+        "$ref": "./types.schema.json#/$defs/Task"
+      },
+      "Hypothesis": {
+        "$ref": "./types.schema.json#/$defs/Hypothesis"
+      },
+      "Capabilities": {
+        "$ref": "./types.schema.json#/$defs/Capabilities"
+      },
+      "DraftInput": {
+        "$ref": "./types.schema.json#/$defs/DraftInput"
+      },
+      "Draft": {
+        "$ref": "./types.schema.json#/$defs/Draft"
+      },
+      "RunCreate": {
+        "$ref": "./types.schema.json#/$defs/RunCreate"
+      },
+      "Run": {
+        "$ref": "./types.schema.json#/$defs/Run"
+      },
+      "Product": {
+        "$ref": "./types.schema.json#/$defs/Product"
+      },
+      "Contract": {
+        "$ref": "./types.schema.json#/$defs/Contract"
+      },
+      "Workbench": {
+        "$ref": "./types.schema.json#/$defs/Workbench"
+      },
+      "Document": {
+        "$ref": "./types.schema.json#/$defs/Document"
+      },
+      "Notification": {
+        "$ref": "./types.schema.json#/$defs/Notification"
+      },
+      "Watchlist": {
+        "$ref": "./types.schema.json#/$defs/Watchlist"
+      },
+      "DeleteImpact": {
+        "$ref": "./types.schema.json#/$defs/DeleteImpact"
+      },
+      "Deletion": {
+        "$ref": "./types.schema.json#/$defs/Deletion"
+      },
+      "HypothesisCreate": {
+        "$ref": "./types.schema.json#/$defs/HypothesisCreate"
+      },
+      "HypothesisPatch": {
+        "$ref": "./types.schema.json#/$defs/HypothesisPatch"
+      },
+      "Check": {
+        "$ref": "./types.schema.json#/$defs/Check"
+      },
+      "Recap": {
+        "$ref": "./types.schema.json#/$defs/Recap"
+      },
+      "Source": {
+        "$ref": "./types.schema.json#/$defs/Source"
+      },
+      "Admission": {
+        "$ref": "./types.schema.json#/$defs/Admission"
+      },
+      "Operations": {
+        "$ref": "./types.schema.json#/$defs/Operations"
+      },
+      "Ack": {
+        "$ref": "./types.schema.json#/$defs/Ack"
+      },
+      "Error": {
+        "$ref": "./types.schema.json#/$defs/Error"
+      },
+      "PublicLimits": {
+        "$ref": "./types.schema.json#/$defs/PublicLimits"
+      },
+      "SourceManifest": {
+        "$ref": "./types.schema.json#/$defs/SourceManifest"
+      }
+    }
+  }
+}

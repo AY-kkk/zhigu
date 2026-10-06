@@ -1,0 +1,44 @@
+{
+  "schema_version": "futures.task.v1",
+  "scope": {
+    "domain": "futures",
+    "mode": "live",
+    "owner_id": 1
+  },
+  "task_id": "task_test",
+  "run_id": "run_test",
+  "generation": 1,
+  "draft_id": "draft_test",
+  "draft_revision": 1,
+  "manifest_id": "manifest_test",
+  "product_id": "SHFE.CU",
+  "contract_id": null,
+  "claims": [
+    {
+      "id": "claim_test",
+      "kind": "hypothesis",
+      "text": "合成离线契约样例：检查同口径库存变化，不代表当前市场判断",
+      "locator": null
+    }
+  ],
+  "as_of": "2026-10-01T08:00:00Z",
+  "horizon_end": "2026-10-15T08:00:00Z",
+  "versions": {
+    "template": "test-v1",
+    "formula": "test-v1",
+    "policy": "test-v1",
+    "model_config": "test-v1",
+    "source_manifest": "test-v1"
+  },
+  "limits": {
+    "max_model_calls": 6,
+    "max_tool_calls": 24,
+    "remaining_tokens": 40000,
+    "deadline": "2026-10-01T08:03:00Z"
+  },
+  "allowed_tools": [
+    "futures_get_observations",
+    "futures_get_evidence",
+    "futures_calculate"
+  ]
+}

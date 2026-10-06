@@ -38,13 +38,21 @@ type ResearchService struct {
 	Budget BudgetService
 	Clock  Clock
 	Live   *LiveSource
+	Docs   *DocumentService
+}
+
+func NewServiceWithDocumentFetcher(db *gorm.DB, client ResearchClient, budget BudgetService, _ *FixtureConfig, fetcher WebFetcher) *ResearchService {
+	if mb, ok := budget.(*MemoryBudget); ok {
+		mb.Attach(db)
+	}
+	return &ResearchService{DB: db, Client: client, Budget: budget, Clock: SystemClock{}, Live: NewLiveSource(), Docs: NewDocumentServiceWithFetcher(db, fetcher)}
 }
 
 func NewService(db *gorm.DB, client ResearchClient, budget BudgetService, _ *FixtureConfig) *ResearchService {
 	if mb, ok := budget.(*MemoryBudget); ok {
 		mb.Attach(db)
 	}
-	return &ResearchService{DB: db, Client: client, Budget: budget, Clock: SystemClock{}, Live: NewLiveSource()}
+	return &ResearchService{DB: db, Client: client, Budget: budget, Clock: SystemClock{}, Live: NewLiveSource(), Docs: NewDocumentService(db)}
 }
 
 func (s *ResearchService) ParseClaim(ctx context.Context, in ParseInput) (ParseOutput, error) {
@@ -53,9 +61,20 @@ func (s *ResearchService) ParseClaim(ctx context.Context, in ParseInput) (ParseO
 		return ParseOutput{}, NewError(401, "forbidden", "UNAUTHENTICATED", "未登录")
 	}
 	text := strings.TrimSpace(in.Text)
-	n := utf8.RuneCountInString(text)
-	if n < 20 || n > 2000 {
-		return ParseOutput{}, NewError(400, "validation", "INVALID_TEXT", "观点须为 20 至 2000 字")
+	inputMode, err := inputModeFor(text, in.DocumentID)
+	if err != nil {
+		return ParseOutput{}, err
+	}
+	if text != "" {
+		n := utf8.RuneCountInString(text)
+		if n < 20 || n > 2000 {
+			return ParseOutput{}, NewError(400, "validation", "INVALID_TEXT", "观点须为 20 至 2000 字")
+		}
+	}
+	documentID := strings.TrimSpace(in.DocumentID)
+	focusText := NormalizeText(strings.TrimSpace(in.FocusText))
+	if utf8.RuneCountInString(focusText) > 1000 {
+		return ParseOutput{}, NewError(400, "validation", "INVALID_FOCUS_TEXT", "聚焦指令不能超过 1000 字")
 	}
 	now := s.Clock.Now()
 	var recent int64
@@ -67,42 +86,68 @@ func (s *ResearchService) ParseClaim(ctx context.Context, in ParseInput) (ParseO
 	if int(recent) >= ParsePerMinuteMax {
 		return ParseOutput{}, NewError(429, "budget", "PARSE_RATE_LIMIT", "解析每分钟最多 5 次")
 	}
+
+	var document *DocumentView
+	documentText := ""
+	var spans []DocumentSpan
+	if documentID != "" {
+		view, err := s.Docs.Get(ctx, documentID)
+		if err != nil {
+			return ParseOutput{}, err
+		}
+		if view.ExtractionStatus != "succeeded" {
+			return ParseOutput{}, NewError(409, "conflict", "DOCUMENT_NOT_READY", "研报文本尚不可用")
+		}
+		documentText, err = s.Docs.GetText(ctx, documentID)
+		if err != nil {
+			return ParseOutput{}, err
+		}
+		spans, err = s.Docs.ListSpans(ctx, documentID)
+		if err != nil {
+			return ParseOutput{}, err
+		}
+		document = &view
+	}
+
+	items := extractClaimItems(text, focusText, spans)
+	if len(items) == 0 {
+		return ParseOutput{}, NewError(422, "validation", "NO_CLAIM_ITEMS", "未识别到可核验主张")
+	}
+	numbers := extractNumberMentions(text, "")
+	for _, span := range spans {
+		numbers = append(numbers, extractNumberMentions(span.Text, span.SpanID)...)
+	}
+
 	mode := DataMode()
 	asOf := DefaultAsOf(now)
 	start, end := HorizonDates(asOf)
 	horizon := start + "/" + end
 	protocol := ProtocolChatCompletions
 	modelVer := "model_fixture_v1"
-	parseStatus := "failed"
+	parseStatus := "succeeded"
 	var instrument *string
 	var candidates []Instrument
-	if mode != ModeLive && strings.Contains(text, "演示公司") {
+	lookupText := text
+	if documentText != "" {
+		lookupText += "\n" + truncateRunes(documentText, 20000)
+	}
+	if mode != ModeLive && strings.Contains(lookupText, "演示公司") {
 		demo := InstrumentDemo
 		instrument = &demo
 		candidates = []Instrument{{ID: InstrumentDemo, Symbol: "DEMO:COMPANY", Name: "演示公司", Market: MarketA}}
-		parseStatus = "succeeded"
 	}
 	if mode == ModeLive {
 		_ = EnsureLiveCatalog(ctx)
-		matched := MatchInstrumentsFromText(text, 8)
+		matched := MatchInstrumentsFromText(lookupText, 8)
 		candidates = toPublicInstruments(matched)
 		if len(matched) == 1 {
 			id := matched[0].ID
 			instrument = &id
-			parseStatus = "succeeded"
-		} else if len(matched) > 0 {
-			parseStatus = "succeeded"
+		} else if len(matched) == 0 {
+			parseStatus = "needs_confirmation"
 		}
 	}
-	items := []ClaimItem{{
-		ClaimID: "claim_1", Text: truncateRunes(text, 400), ClaimType: "fact",
-	}}
-	if strings.Contains(text, "股价") {
-		items = append(items, ClaimItem{ClaimID: "claim_2", Text: "收入或基本面变化会推动未来股价。", ClaimType: "inference"})
-	}
-	if len(items) > 6 {
-		items = items[:6]
-	}
+
 	itemJSON, _ := json.Marshal(items)
 	cfg, _ := json.Marshal(map[string]string{
 		"model": modelVer, "source": SourcePolicyVersion, "prompt": "prompt_v1",
@@ -110,19 +155,36 @@ func (s *ResearchService) ParseClaim(ctx context.Context, in ParseInput) (ParseO
 	})
 	id := "draft_" + uuid.NewString()
 	origin := "parsed"
+	claimText := text
+	if claimText == "" {
+		parts := make([]string, 0, len(items))
+		for _, item := range items {
+			parts = append(parts, item.Text)
+		}
+		claimText = truncateRunes(strings.Join(parts, "\n"), 2000)
+	}
 	row := modelfinance.ClaimDraft{
-		ID: id, OwnerID: owner, Text: text, Horizon: &horizon, HorizonStart: &start, HorizonEnd: &end,
+		ID: id, OwnerID: owner, Text: claimText, Horizon: &horizon, HorizonStart: &start, HorizonEnd: &end,
 		InstrumentID: instrument, Items: datatypes.JSON(itemJSON), Revision: 1, AsOf: asOf, Mode: mode,
+		SourceMode: inputMode, DocumentID: stringPtr(documentID), FocusText: stringPtr(focusText),
 		ParseStatus: parseStatus, ModelConfigVersion: &modelVer, Protocol: &protocol, ScopeOrigin: &origin,
 		ConfigVersions: datatypes.JSON(cfg), CreatedAt: now, UpdatedAt: now,
 	}
 	if err := s.DB.WithContext(ctx).Create(&row).Error; err != nil {
 		return ParseOutput{}, err
 	}
+	if documentID != "" {
+		if err := s.DB.WithContext(ctx).Model(&modelfinance.ResearchDocument{}).
+			Where("id = ? AND owner_id = ?", documentID, owner).
+			Updates(map[string]any{"draft_id": id, "updated_at": now}).Error; err != nil {
+			return ParseOutput{}, err
+		}
+	}
 	return ParseOutput{
 		DraftID: id, Revision: 1, ParseStatus: parseStatus, Candidates: candidates, Items: items,
 		InstrumentID: instrument, HorizonStart: &start, HorizonEnd: &end, SuggestedHorizon: horizon,
 		ModelConfigVersion: modelVer, Protocol: protocol, Mode: mode,
+		InputMode: inputMode, DocumentID: documentID, FocusText: focusText, Document: document, Numbers: numbers,
 		NeedsConfirmation: true,
 	}, nil
 }
@@ -149,6 +211,11 @@ func (s *ResearchService) PatchClaim(ctx context.Context, draftID string, in Pat
 		}
 		if row.Revision != in.Revision {
 			return NewError(409, "conflict", "DRAFT_REVISION", "草稿版本不匹配")
+		}
+		if (in.Text != nil && strings.TrimSpace(*in.Text) != strings.TrimSpace(row.Text)) ||
+			(in.DocumentID != nil && strings.TrimSpace(*in.DocumentID) != strings.TrimSpace(pointerValue(row.DocumentID))) ||
+			(in.FocusText != nil && strings.TrimSpace(*in.FocusText) != strings.TrimSpace(pointerValue(row.FocusText))) {
+			return NewError(409, "conflict", "REPARSE_REQUIRED", "研究输入已修改，请重新解析")
 		}
 		if in.InstrumentID != nil {
 			norm := NormalizeInstrumentID(*in.InstrumentID)
@@ -232,8 +299,13 @@ func draftToParseOutput(row modelfinance.ClaimDraft) ParseOutput {
 	if row.ModelConfigVersion != nil {
 		modelVer = *row.ModelConfigVersion
 	}
+	numbers := extractNumberMentions(row.Text, "")
+	for _, item := range items {
+		numbers = append(numbers, extractNumberMentions(item.Text, item.SourceSpanID)...)
+	}
 	return ParseOutput{
 		DraftID: row.ID, Revision: row.Revision, ParseStatus: row.ParseStatus, Candidates: cand, Items: items,
+		InputMode: row.SourceMode, DocumentID: pointerValue(row.DocumentID), FocusText: pointerValue(row.FocusText), Numbers: numbers,
 		InstrumentID: row.InstrumentID, HorizonStart: row.HorizonStart, HorizonEnd: row.HorizonEnd,
 		SuggestedHorizon: horizon, ModelConfigVersion: modelVer, Protocol: proto, Mode: row.Mode,
 		NeedsConfirmation: row.ConfirmedRunID == nil,
@@ -378,6 +450,8 @@ func (s *ResearchService) CreateResearch(ctx context.Context, idempotencyKey str
 			DraftID:        draft.ID,
 			ParentRunID:    parent,
 			ClaimSnapshot:  datatypes.JSON(claimJSON),
+			DocumentID:     draft.DocumentID,
+			InputMode:      draft.SourceMode,
 			InstrumentID:   *draft.InstrumentID,
 			Horizon:        horizon,
 			AsOf:           asOf,
@@ -422,7 +496,14 @@ func (s *ResearchService) CreateResearch(ctx context.Context, idempotencyKey str
 				return err
 			}
 		}
-		if err := tx.Model(&draft).Updates(map[string]any{"confirmed_run_id": runID, "updated_at": now}).Error; err != nil {
+		if draft.DocumentID != nil && *draft.DocumentID != "" {
+				if err := tx.Model(&modelfinance.ResearchDocument{}).
+					Where("id = ? AND owner_id = ?", *draft.DocumentID, owner).
+					Updates(map[string]any{"run_id": runID, "updated_at": now}).Error; err != nil {
+					return err
+				}
+			}
+			if err := tx.Model(&draft).Updates(map[string]any{"confirmed_run_id": runID, "updated_at": now}).Error; err != nil {
 			return err
 		}
 		out = CreateResearchOutput{RunID: runID, Status: StatusQueued, PollURL: "/api/finance/research/" + runID, AsOf: asOf.Format(time.RFC3339), ModelConfigVersion: cfg["model"]}
@@ -444,7 +525,12 @@ func (s *ResearchService) GetResearch(ctx context.Context, runID string) (Resear
 	view := ResearchView{
 		RunID: run.ID, Status: run.Status, Stage: run.Stage, Mode: run.Mode, AsOf: run.AsOf.UTC(),
 		InstrumentID: run.InstrumentID, Horizon: run.Horizon, Warnings: []string{}, UpdatedAt: run.UpdatedAt.UTC(),
-		ClaimResults: nil,
+		ClaimResults: nil, InputMode: run.InputMode, DocumentID: pointerValue(run.DocumentID),
+	}
+	if run.DocumentID != nil && *run.DocumentID != "" {
+		if doc, err := s.Docs.Get(ctx, *run.DocumentID); err == nil {
+			view.Document = &doc
+		}
 	}
 	var claim Claim
 	if json.Unmarshal(run.ClaimSnapshot, &claim) == nil {
@@ -617,6 +703,8 @@ func (s *ResearchService) GetEvidence(ctx context.Context, evidenceID string) (m
 		"title":          ev.Title,
 		"source_url":     ev.SourceURL,
 		"source_kind":    ev.SourceKind,
+		"source_grade":   ev.SourceGrade,
+		"verification_status": ev.VerificationStatus,
 		"published_at":   ev.PublishedAt.UTC().Format(time.RFC3339),
 		"available_at":   ev.AvailableAt.UTC().Format(time.RFC3339),
 		"retrieved_at":   ev.RetrievedAt.UTC().Format(time.RFC3339),
@@ -650,13 +738,23 @@ func (s *ResearchService) Publish(ctx context.Context, runID string, expectedVer
 		if run.Version != expectedVersion {
 			return NewError(409, "conflict", "VERSION_MISMATCH", "版本不匹配")
 		}
-		structural := report.SchemaVersion == "1.0" && report.RunID == runID && report.Version >= 1 && report.Summary != ""
+		structural := (report.SchemaVersion == "1.0" || report.SchemaVersion == "research-report.v2") && report.RunID == runID && report.Version >= 1 && report.Summary != ""
 		if !structural {
 			return NewError(400, "validation", "STRUCTURAL_INVALID", "报告未通过结构校验，拒绝发布")
 		}
 		var allowed []modelfinance.Evidence
 		if err := tx.Where("run_id = ?", runID).Find(&allowed).Error; err != nil {
 			return err
+		}
+		if err := s.hydrateReportEvidence(tx, runID, &report); err != nil {
+			return err
+		}
+		if report.SchemaVersion == "research-report.v2" {
+			var claimForGate Claim
+			_ = json.Unmarshal(run.ClaimSnapshot, &claimForGate)
+			if err := ValidateReportV2(report, allowed, claimForGate); err != nil {
+				return err
+			}
 		}
 		okIDs := map[string]struct{}{}
 		for _, ev := range allowed {
@@ -692,8 +790,9 @@ func (s *ResearchService) Publish(ctx context.Context, runID string, expectedVer
 		var claim Claim
 		_ = json.Unmarshal(run.ClaimSnapshot, &claim)
 		results := JudgeClaims(claim.Items, report.Support, report.Challenge)
+		report.FactChecks = AdjudicateClaims(claim.Items, report.Support, report.Challenge)
 		if report.QualityStatus == "completed" {
-			v := JudgeReport(results)
+			v := verdictFromFactChecks(report.FactChecks)
 			report.Verdict = &v
 		}
 		now := s.Clock.Now()
@@ -834,4 +933,73 @@ func AsAppError(err error) *AppError {
 		return ae
 	}
 	return NewError(500, "unavailable", "INTERNAL", fmt.Sprintf("%v", err))
+}
+
+func pointerValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
+}
+
+func (s *ResearchService) ExportHTML(ctx context.Context, runID string) ([]byte, error) {
+	view, err := s.GetResearch(ctx, runID)
+	if err != nil {
+		return nil, err
+	}
+	if view.Report == nil || view.Claim == nil {
+		return nil, NewError(409, "conflict", "NO_REPORT", "当前研究没有已发布报告")
+	}
+	var evidence []modelfinance.Evidence
+	if err := s.DB.WithContext(ctx).Where("run_id = ?", runID).Find(&evidence).Error; err != nil {
+		return nil, err
+	}
+	return []byte(RenderReportHTML(*view.Report, *view.Claim, evidence, view.Document)), nil
+}
+
+func (s *ResearchService) hydrateReportEvidence(tx *gorm.DB, runID string, report *VerifiedReport) error {
+	var rows []modelfinance.Evidence
+	if err := tx.Where("run_id = ?", runID).Find(&rows).Error; err != nil {
+		return err
+	}
+	byID := make(map[string]modelfinance.Evidence, len(rows))
+	for _, row := range rows {
+		byID[row.ID] = row
+	}
+	supportIDs := map[string]struct{}{}
+	challengeIDs := map[string]struct{}{}
+	for _, arg := range report.Support {
+		for _, id := range arg.EvidenceIDs {
+			supportIDs[id] = struct{}{}
+		}
+	}
+	for _, arg := range report.Challenge {
+		for _, id := range arg.EvidenceIDs {
+			challengeIDs[id] = struct{}{}
+		}
+	}
+	refs := make([]EvidenceRef, 0, len(report.EvidenceIDs))
+	for _, id := range report.EvidenceIDs {
+		row, ok := byID[id]
+		if !ok {
+			continue
+		}
+		relation := "context"
+		if _, ok := supportIDs[id]; ok {
+			relation = "support"
+		}
+		if _, ok := challengeIDs[id]; ok {
+			if relation == "support" {
+				relation = "both"
+			} else {
+				relation = "challenge"
+			}
+		}
+		refs = append(refs, EvidenceRef{
+			EvidenceID: row.ID, SourceGrade: row.SourceGrade, VerificationStatus: row.VerificationStatus,
+			Relation: relation, Locator: row.Locator, Title: row.Title,
+		})
+	}
+	report.EvidenceIndex = refs
+	return nil
 }

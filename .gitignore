@@ -52,3 +52,15 @@ coverage/
 
 # Local design boards; product uses derived files under app/web/src/assets/brand/
 /前端素材/
+
+# Local review, research and duplicate delivery material stays out of the public tree.
+/.playwright-cli/
+/docs/reviews/
+/docs/research/
+/git-hub说明文档/
+/docs/superpowers/plans/2026-09-27-zhigu-product-video.md
+/docs/superpowers/plans/2026-10-05-futures-review-fixes.md
+/prd/PaiWork-Challenge*
+
+# Keep all local reference metadata out of publication.
+/references/
