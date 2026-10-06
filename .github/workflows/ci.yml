@@ -60,7 +60,7 @@ jobs:
       - name: Futures worker and contract checks
         run: |
           PYTHONPATH=app/futures-service/src app/futures-service/.venv/bin/python -m unittest discover -s app/futures-service/tests -p 'test_*.py'
-          app/futures-service/.venv/bin/python app/scripts/verify-futures-contracts.py
+          app/research-service/.venv/bin/python app/scripts/verify-futures-contracts.py
       - name: Public tree checks
         run: python3 scripts/check-public-tree.py
   web:

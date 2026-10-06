@@ -115,7 +115,8 @@ VALUES('obs','public',NULL,NULL,'src','natural',1,'content','series','SHFE.CU',N
 func TestReviewRegressionCalculationRoundTripPreservesUnit(t *testing.T) {
 	db := repoTestDB(t)
 	draft := reviewRegressionDraft(t, db)
-	now := time.Now().UTC()
+	// The tool contract transmits as_of at second precision.
+	now := time.Now().UTC().Truncate(time.Second)
 	run := model.Run{ID: "review_regression_calc_run", OwnerID: 1, Mode: "live", DraftID: draft.ID, DraftRevision: 1,
 		Status: "running", Stage: "evidence", AsOf: now, HorizonEnd: now.Add(time.Hour), IdempotencyKey: "calc", RequestHash: "calc",
 		ClaimsSnapshot: datatypes.JSON(`[]`), Versions: datatypes.JSON(`{"draft_revision":1}`), TaskSnapshot: datatypes.JSON(`{}`), CreatedAt: now, UpdatedAt: now}
