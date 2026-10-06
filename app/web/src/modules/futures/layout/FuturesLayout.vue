@@ -1,5 +1,6 @@
 <template>
   <main class="futures-shell">
+    <SideNav class="futures-main-nav" />
     <header class="futures-header">
       <div>
         <router-link class="back-link" to="/app/research/new">返回投研观点</router-link>
@@ -16,6 +17,7 @@
 
 <script setup>
 import FuturesNav from '../components/FuturesNav.vue'
+import SideNav from '../../../components/workspace/SideNav.vue'
 </script>
 
 <style scoped>

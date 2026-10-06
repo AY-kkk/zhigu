@@ -75,6 +75,7 @@ func TestReviewRegressionEvidenceUsesJoinedSeriesAndSourceRights(t *testing.T) {
 	draft := reviewRegressionDraft(t, db)
 	now := time.Now().UTC()
 	run := model.Run{ID: "review_regression_run", OwnerID: 1, Mode: "live", DraftID: draft.ID, DraftRevision: 1,
+		Report: datatypes.JSON(`{"question":"synthetic export","conclusion":"insufficient_evidence","coverage_summary":{}}`),
 		Status: "succeeded", Stage: "complete", AsOf: now, HorizonEnd: now.Add(time.Hour), IdempotencyKey: "evidence", RequestHash: "evidence",
 		ClaimsSnapshot: datatypes.JSON(`[]`), Versions: datatypes.JSON(`{"draft_revision":1}`), TaskSnapshot: datatypes.JSON(`{}`), CreatedAt: now, UpdatedAt: now}
 	if err := db.Create(&run).Error; err != nil {
@@ -136,7 +137,7 @@ func TestReviewRegressionCalculationRoundTripPreservesUnit(t *testing.T) {
 	if err := db.Exec(`INSERT INTO futures_contracts(id,product_id,kind,last_trading_at,price_precision,price_unit,multiplier,calendar_version,source_version,created_at) VALUES('contract-calc','SHFE.CU','actual',?,2,'CNY/tonne',1,'cal-v1','1',?)`, now.AddDate(1, 0, 0), now).Error; err != nil {
 		t.Fatal(err)
 	}
-	for _, row := range []struct {
+	for position, row := range []struct {
 		id, natural string
 		value       int64
 	}{{"spot", "spot", 500}, {"futures", "futures", 0}} {
@@ -149,7 +150,7 @@ VALUES(?,'public',NULL,NULL,'src-calc',?,1,?,'series-calc','SHFE.CU',NULL,'clust
 				t.Fatal(err)
 			}
 		}
-		if err := db.Exec(`INSERT INTO futures_manifest_records(manifest_id,record_id,position) VALUES('manifest-calc',?,?)`, row.id, row.id == "futures").Error; err != nil {
+		if err := db.Exec(`INSERT INTO futures_manifest_records(manifest_id,record_id,position) VALUES('manifest-calc',?,?)`, row.id, position).Error; err != nil {
 			t.Fatal(err)
 		}
 	}

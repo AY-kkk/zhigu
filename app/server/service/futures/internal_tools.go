@@ -27,10 +27,10 @@ func (d *Domain) ExecuteInternalTool(ctx context.Context, call InternalToolCall)
 	}
 	budget := NewDBBudget(d.DB)
 	day := beijingDay(time.Now().UTC())
-	if err := budget.SeedAccount(ctx, UserAccount, call.OwnerID, day, decimal.RequireFromString("5"), 0, 0, 0); err != nil {
+	if err := budget.SeedAccount(ctx, UserAccount, call.OwnerID, day, decimal.RequireFromString("5"), 8, 24, 48000); err != nil {
 		return nil, err
 	}
-	if err := budget.SeedAccount(ctx, ModuleAccount, 0, day, decimal.RequireFromString("50"), 0, 0, 0); err != nil {
+	if err := budget.SeedAccount(ctx, ModuleAccount, 0, day, decimal.RequireFromString("50"), 8, 24, 48000); err != nil {
 		return nil, err
 	}
 	attemptID := "tool_" + uuid.NewString()

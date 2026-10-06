@@ -30,6 +30,14 @@ var (
 	repoSeq    int64
 )
 
+func TestMain(m *testing.M) {
+	code := m.Run()
+	if repoPG != nil {
+		_ = repoPG.Stop()
+	}
+	os.Exit(code)
+}
+
 func repoTestDB(t *testing.T) *gorm.DB {
 	db := repoNewDB(t)
 	if err := Migrate(context.Background(), db); err != nil {
@@ -100,6 +108,15 @@ func repoNewDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() {
+		if sqlDB, err := db.DB(); err == nil {
+			_ = sqlDB.Close()
+		}
+		_ = admin.Exec("DROP DATABASE " + name + " WITH (FORCE)").Error
+		if sqlDB, err := admin.DB(); err == nil {
+			_ = sqlDB.Close()
+		}
+	})
 	return db
 }
 
