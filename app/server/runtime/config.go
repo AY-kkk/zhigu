@@ -3,6 +3,7 @@
 package runtime
 
 import (
+	"bufio"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -16,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"golang.org/x/sys/unix"
 )
 
@@ -69,6 +71,7 @@ type Config struct {
 	BuildTime             string            `json:"build_time"`
 	MigrationVersion      string            `json:"migration_version"`
 	PersistentDirectories []string          `json:"persistent_directories"`
+	PersistentMounts      []string          `json:"persistent_mounts"`
 	Providers             []string          `json:"providers"`
 	ModelVersions         map[string]string `json:"model_versions"`
 	resolvedSecrets       map[string]string
@@ -77,6 +80,10 @@ type Config struct {
 func LoadEnv() (Config, error) { return Load(os.Getenv) }
 
 func Load(getenv func(string) string) (Config, error) {
+	return load(getenv, func() ([]byte, error) { return os.ReadFile("/proc/self/mountinfo") })
+}
+
+func load(getenv func(string) string, readMountInfo func() ([]byte, error)) (Config, error) {
 	c := Config{HTTPAddr: getenv("ZHIGU_HTTP_ADDR"), PublicOrigin: getenv("ZHIGU_PUBLIC_ORIGIN"), BootstrapOwnerFile: getenv("ZHIGU_BOOTSTRAP_OWNER_FILE"), Revision: getenv("ZHIGU_VERSION_SHA"), BuildTime: getenv("ZHIGU_BUILD_TIME"), MigrationVersion: getenv("ZHIGU_MIGRATION_VERSION"), Providers: []string{}, PersistentDirectories: []string{}, ModelVersions: map[string]string{}, resolvedSecrets: map[string]string{}}
 	env, alias := getenv("ZHIGU_ENV"), getenv("ZHIGU_DEPLOYMENT_ENVIRONMENT")
 	if env != "" && alias != "" && env != alias {
@@ -175,6 +182,13 @@ func Load(getenv func(string) string) (Config, error) {
 		}
 	}
 	c.DatabaseDSN = c.resolvedSecrets["ZHIGU_POSTGRES_DSN"]
+	if production && c.DatabaseDSN != "" {
+		for _, name := range []string{"POSTGRES_USER", "POSTGRES_DB", "POSTGRES_HOST", "POSTGRES_PORT", "POSTGRES_SSLMODE", "POSTGRES_PASSWORD", "POSTGRES_PASSWORD_FILE"} {
+			if getenv(name) != "" {
+				return c, errors.New("ZHIGU_POSTGRES_DSN cannot be combined with independent PostgreSQL configuration")
+			}
+		}
+	}
 	if c.DatabaseDSN == "" && production {
 		user, database, password := getenv("POSTGRES_USER"), getenv("POSTGRES_DB"), c.resolvedSecrets["POSTGRES_PASSWORD"]
 		if user == "" || database == "" {
@@ -194,12 +208,15 @@ func Load(getenv func(string) string) (Config, error) {
 	for _, name := range []string{"ZHIGU_FUTURES_STORAGE_DIR", "ZHIGU_RESEARCH_STORAGE_DIR", "ZHIGU_RESEARCH_DOCUMENT_DIR"} {
 		if path := getenv(name); path != "" {
 			if production {
-				if err := persistentDirectory(path); err != nil {
+				if err := persistentDirectory(path, getenv("ZHIGU_PERSISTENT_MOUNTS"), readMountInfo); err != nil {
 					return c, fmt.Errorf("%s must be writable persistent storage", name)
 				}
 			}
 			c.PersistentDirectories = append(c.PersistentDirectories, path)
 		}
+	}
+	if production && len(c.PersistentDirectories) > 0 {
+		c.PersistentMounts, _ = declaredMounts(getenv("ZHIGU_PERSISTENT_MOUNTS"))
 	}
 	if providers := getenv("ZHIGU_INTEL_PROVIDERS"); providers != "" {
 		c.Providers = strings.Split(providers, ",")
@@ -244,9 +261,9 @@ func Load(getenv func(string) string) (Config, error) {
 		if c.SessionKeys[0] == c.SessionKeys[1] || c.InternalToken == c.FuturesToken {
 			return c, errors.New("credentials must be distinct")
 		}
-		password := c.resolvedSecrets["POSTGRES_PASSWORD"]
-		if password == "" {
-			password = dsnPassword(c.DatabaseDSN)
+		password, err := dsnPassword(c.DatabaseDSN)
+		if err != nil {
+			return c, err
 		}
 		if err := validSecret("database password", password, 16); err != nil {
 			return c, err
@@ -344,9 +361,13 @@ func validateLive(getenv func(string) string, module string) error {
 	if module == "FUTURES" {
 		prefix = "FUTURES_"
 	}
-	for _, suffix := range []string{"MODEL_URL", "MODEL_NAME", "MODEL_VERSION", "MODEL_PRICE_CNY_PER_1K", "PROVIDER_URL"} {
-		if getenv(prefix+suffix) == "" {
-			return fmt.Errorf("%s live requires %s%s", module, prefix, suffix)
+	required := []string{prefix + "MODEL_URL", prefix + "MODEL_NAME", prefix + "MODEL_VERSION", prefix + "MODEL_PRICE_CNY_PER_1K", prefix + "PROVIDER_URL"}
+	if module == "INTEL" {
+		required = []string{"ZHIGU_INTEL_MODEL_BASE_URL", "ZHIGU_INTEL_MODEL", "ZHIGU_INTEL_MODEL_CONFIG_ID", "ZHIGU_INTEL_MODEL_CONFIG_DIGEST", "ZHIGU_INTEL_MODEL_VERSION", "ZHIGU_INTEL_MODEL_PRICE_CNY_PER_1K"}
+	}
+	for _, name := range required {
+		if strings.TrimSpace(getenv(name)) == "" {
+			return fmt.Errorf("%s live requires %s", module, name)
 		}
 	}
 	price, err := strconv.ParseFloat(getenv(prefix+"MODEL_PRICE_CNY_PER_1K"), 64)
@@ -357,23 +378,78 @@ func validateLive(getenv func(string) string, module string) error {
 	if err != nil {
 		return err
 	}
-	return validSecret(prefix+"MODEL_API_KEY", key, 16)
+	if err := validSecret(prefix+"MODEL_API_KEY", key, 16); err != nil {
+		return err
+	}
+	if module == "INTEL" {
+		return validateIntelLiveProviders(getenv)
+	}
+	return nil
 }
 
-func dsnPassword(dsn string) string {
-	if u, err := url.Parse(dsn); err == nil && u.User != nil {
-		value, _ := u.User.Password()
-		return value
+func validateIntelLiveProviders(getenv func(string) string) error {
+	protocol := defaultValue(strings.TrimSpace(getenv("ZHIGU_INTEL_MODEL_PROTOCOL")), "openai_chat_completions")
+	if protocol != "openai_chat_completions" && protocol != "openai_responses" {
+		return errors.New("INTEL live requires a supported model protocol")
 	}
-	for _, part := range strings.Fields(dsn) {
-		if strings.HasPrefix(part, "password=") {
-			return strings.Trim(strings.TrimPrefix(part, "password="), "'")
+	if err := publicHTTPSURL(getenv("ZHIGU_INTEL_MODEL_BASE_URL")); err != nil {
+		return errors.New("INTEL live requires a public HTTPS model base URL")
+	}
+	providers := strings.Split(getenv("ZHIGU_INTEL_PROVIDERS"), ",")
+	for _, raw := range providers {
+		provider := strings.TrimSpace(raw)
+		switch provider {
+		case "ifind":
+			if err := publicHTTPSURL(getenv("IFIND_MCP_URL")); err != nil {
+				return errors.New("INTEL ifind requires a public HTTPS IFIND_MCP_URL")
+			}
+			key, err := secret(getenv, "IFIND_AUTHORIZATION")
+			if err != nil {
+				return err
+			}
+			if err := validSecret("IFIND_AUTHORIZATION", key, 16); err != nil {
+				return err
+			}
+		case "fuyao":
+			key, err := secret(getenv, "FUYAO_API_KEY")
+			if err != nil {
+				return err
+			}
+			if err := validSecret("FUYAO_API_KEY", key, 16); err != nil {
+				return err
+			}
+		case "cninfo":
+			if getenv("ZHIGU_CNINFO_LIVE_VERIFIED") != "1" {
+				return errors.New("INTEL cninfo requires explicit live verification")
+			}
+		default:
+			return errors.New("INTEL live requires configured real providers; fixtures and unknown providers are forbidden")
 		}
 	}
-	return ""
+	return nil
 }
 
-func persistentDirectory(path string) error {
+func publicHTTPSURL(raw string) error {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return err
+	}
+	u.Path = ""
+	u.RawPath = ""
+	u.RawQuery = ""
+	u.Fragment = ""
+	return validateOrigin(u.String())
+}
+
+func dsnPassword(dsn string) (string, error) {
+	config, err := pgx.ParseConfig(dsn)
+	if err != nil {
+		return "", errors.New("invalid production database DSN")
+	}
+	return config.Password, nil
+}
+
+func persistentDirectory(path, declarations string, readMountInfo func() ([]byte, error)) error {
 	resolved, err := filepath.EvalSymlinks(path)
 	if err != nil {
 		return err
@@ -388,7 +464,103 @@ func persistentDirectory(path string) error {
 	if err != nil || !info.IsDir() {
 		return errors.New("missing directory")
 	}
-	return unix.Access(resolved, unix.W_OK)
+	if err := unix.Access(resolved, unix.W_OK); err != nil {
+		return err
+	}
+	declared, err := declaredMounts(declarations)
+	if err != nil {
+		return err
+	}
+	body, err := readMountInfo()
+	if err != nil {
+		return errors.New("cannot prove persistent mount")
+	}
+	actual, err := coveringMount(resolved, string(body))
+	if err != nil {
+		return err
+	}
+	for _, mount := range declared {
+		if actual.path == mount && actual.writable && persistentFilesystem(actual.filesystem) {
+			return nil
+		}
+	}
+	return errors.New("storage must be on a declared writable persistent mount")
+}
+
+func declaredMounts(raw string) ([]string, error) {
+	var paths []string
+	if err := json.Unmarshal([]byte(raw), &paths); err != nil || len(paths) == 0 {
+		return nil, errors.New("ZHIGU_PERSISTENT_MOUNTS must be a nonempty JSON array")
+	}
+	for i, path := range paths {
+		if !filepath.IsAbs(path) {
+			return nil, errors.New("persistent mount declaration must be absolute")
+		}
+		canonical, err := filepath.EvalSymlinks(path)
+		if err != nil || canonical == "/" {
+			return nil, errors.New("persistent mount declaration is invalid")
+		}
+		paths[i] = canonical
+	}
+	return paths, nil
+}
+
+type mountRecord struct {
+	path, filesystem string
+	writable         bool
+}
+
+func coveringMount(path, body string) (mountRecord, error) {
+	var chosen mountRecord
+	scanner := bufio.NewScanner(strings.NewReader(body))
+	scanner.Buffer(make([]byte, 4096), 1<<20)
+	for scanner.Scan() {
+		fields := strings.Fields(scanner.Text())
+		separator := -1
+		for i, field := range fields {
+			if field == "-" {
+				separator = i
+				break
+			}
+		}
+		if separator < 6 || separator+3 >= len(fields) {
+			return chosen, errors.New("invalid mount information")
+		}
+		mountpoint := strings.NewReplacer("\\040", " ", "\\011", "\t", "\\012", "\n", "\\134", "\\").Replace(fields[4])
+		if !filepath.IsAbs(mountpoint) {
+			return chosen, errors.New("invalid mount information")
+		}
+		if path != mountpoint && !strings.HasPrefix(path, strings.TrimSuffix(mountpoint, "/")+"/") {
+			continue
+		}
+		if mountpoint == chosen.path {
+			return chosen, errors.New("ambiguous storage mount information")
+		}
+		if len(mountpoint) > len(chosen.path) {
+			chosen = mountRecord{path: mountpoint, filesystem: fields[separator+1], writable: mountOption(fields[5], "rw") && mountOption(fields[separator+3], "rw")}
+		}
+	}
+	if scanner.Err() != nil || chosen.path == "" {
+		return chosen, errors.New("cannot prove persistent mount")
+	}
+	return chosen, nil
+}
+
+func mountOption(options, wanted string) bool {
+	for _, value := range strings.Split(options, ",") {
+		if value == wanted {
+			return true
+		}
+	}
+	return false
+}
+
+func persistentFilesystem(filesystem string) bool {
+	switch filesystem {
+	case "ext2", "ext3", "ext4", "xfs", "btrfs", "zfs", "nfs", "nfs4", "cifs", "smb3", "ceph", "fuse.ceph", "fuse.glusterfs", "virtiofs", "9p":
+		return true
+	}
+	return false
 }
 
 func defaultValue(value, fallback string) string {

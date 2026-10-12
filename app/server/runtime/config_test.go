@@ -20,7 +20,23 @@ func productionEnv() map[string]string {
 }
 
 func loadMap(env map[string]string) (Config, error) {
-	return Load(func(k string) string { return env[k] })
+	var declared []string
+	_ = json.Unmarshal([]byte(env["ZHIGU_PERSISTENT_MOUNTS"]), &declared)
+	mountinfo := "1 0 0:1 / / rw - overlay overlay rw\n"
+	for _, dir := range declared {
+		mountinfo += mountLine(dir, "ext4", "rw")
+	}
+	return load(func(k string) string { return env[k] }, func() ([]byte, error) { return []byte(mountinfo), nil })
+}
+
+func mountLine(path, filesystem, options string) string {
+	escaped := strings.NewReplacer("\\", "\\134", " ", "\\040", "\t", "\\011", "\n", "\\012").Replace(path)
+	return "2 1 8:1 / " + escaped + " " + options + " - " + filesystem + " /dev/sda1 " + options + "\n"
+}
+
+func declareStorage(env map[string]string, key, dir string) {
+	env[key] = dir
+	env["ZHIGU_PERSISTENT_MOUNTS"] = stringMustJSON([]string{dir})
 }
 
 func persistentTestDir(t *testing.T) string {
@@ -61,6 +77,173 @@ func TestSecretFilePrecedesEnvironment(t *testing.T) {
 		t.Fatalf("missing secret file must fail safely: %v", err)
 	}
 }
+
+func TestProductionValidatesEffectiveDSNPassword(t *testing.T) {
+	for _, dsn := range []string{"postgres://owner:zhigu@postgres/research", "host=postgres user=owner password=zhigu dbname=research"} {
+		env := productionEnv()
+		env["ZHIGU_POSTGRES_DSN"] = dsn
+		if _, err := loadMap(env); err == nil {
+			t.Fatal("weak DSN masked by strong independent password")
+		}
+	}
+	env := productionEnv()
+	env["ZHIGU_POSTGRES_DSN"] = "postgres://owner:secure-dsn-password-2026-unique@postgres/research"
+	if _, err := loadMap(env); err == nil {
+		t.Fatal("ambiguous DSN and independent PostgreSQL configuration accepted")
+	}
+	for _, name := range []string{"POSTGRES_USER", "POSTGRES_DB", "POSTGRES_PASSWORD"} {
+		delete(env, name)
+	}
+	if _, err := loadMap(env); err != nil {
+		t.Fatalf("unambiguous strong DSN rejected: %v", err)
+	}
+	env["ZHIGU_POSTGRES_DSN"] = "postgres://owner:secure-dsn-password-2026-unique@postgres/research?password=zhigu"
+	if _, err := loadMap(env); err == nil {
+		t.Fatal("effective query password ignored")
+	}
+}
+
+func intelLiveEnv() map[string]string {
+	return map[string]string{
+		"ZHIGU_INTEL_MODEL_BASE_URL": "https://model.example.org/v1", "ZHIGU_INTEL_MODEL": "research-model",
+		"ZHIGU_INTEL_MODEL_CONFIG_ID": "model-config-v1", "ZHIGU_INTEL_MODEL_CONFIG_DIGEST": "model-config-digest-v1",
+		"ZHIGU_INTEL_MODEL_VERSION": "v1", "ZHIGU_INTEL_MODEL_PRICE_CNY_PER_1K": "0.1", "ZHIGU_INTEL_MODEL_API_KEY": "unique-intel-model-key-long-enough-2026",
+		"ZHIGU_INTEL_PROVIDERS": "ifind", "IFIND_MCP_URL": "https://ifind.example.org/mcp", "IFIND_AUTHORIZATION": "Bearer unique-ifind-authorization-2026",
+	}
+}
+
+func TestIntelLiveUsesConsumedConfiguration(t *testing.T) {
+	t.Run("consumed configuration", func(t *testing.T) {
+		env := intelLiveEnv()
+		if err := validateLive(func(k string) string { return env[k] }, "INTEL"); err != nil {
+			t.Fatalf("actual Intel configuration rejected: %v", err)
+		}
+	})
+	for _, missing := range []string{"ZHIGU_INTEL_MODEL_BASE_URL", "ZHIGU_INTEL_MODEL", "ZHIGU_INTEL_MODEL_CONFIG_ID", "ZHIGU_INTEL_MODEL_CONFIG_DIGEST", "ZHIGU_INTEL_PROVIDERS", "IFIND_MCP_URL", "IFIND_AUTHORIZATION"} {
+		t.Run(missing, func(t *testing.T) {
+			env := intelLiveEnv()
+			delete(env, missing)
+			env["ZHIGU_INTEL_MODEL_URL"] = "https://unused.example.org"
+			env["ZHIGU_INTEL_MODEL_NAME"] = "unused-model"
+			env["ZHIGU_INTEL_PROVIDER_URL"] = "https://unused-provider.example.org"
+			if err := validateLive(func(k string) string { return env[k] }, "INTEL"); err == nil {
+				t.Fatalf("unused variables masked missing %s", missing)
+			}
+		})
+	}
+}
+
+func TestProductionRequiresDeclaredPersistentMount(t *testing.T) {
+	dir := persistentTestDir(t)
+	for _, declarations := range []string{"", `["/"]`, stringMustJSON([]string{dir})} {
+		env := productionEnv()
+		env["ZHIGU_FUTURES_ENABLED"] = "true"
+		env["ZHIGU_FUTURES_STORAGE_DIR"] = dir
+		env["ZHIGU_PERSISTENT_MOUNTS"] = declarations
+		if _, err := Load(func(k string) string { return env[k] }); err == nil {
+			t.Fatal("writable container directory accepted without a proven persistent mount")
+		}
+	}
+}
+
+func TestPersistentMountEvidence(t *testing.T) {
+	dir := persistentTestDir(t)
+	root := "1 0 0:1 / / rw - overlay overlay rw\n"
+	for _, tc := range []struct {
+		name, declared, mountinfo string
+		allowed                   bool
+	}{
+		{"declared disk mount", stringMustJSON([]string{dir}), root + mountLine(dir, "ext4", "rw"), true},
+		{"undeclared disk mount", "", root + mountLine(dir, "ext4", "rw"), false},
+		{"declaration without mount", stringMustJSON([]string{dir}), root, false},
+		{"ephemeral overlay", stringMustJSON([]string{dir}), root + mountLine(dir, "overlay", "rw"), false},
+		{"ephemeral tmpfs", stringMustJSON([]string{dir}), root + mountLine(dir, "tmpfs", "rw"), false},
+		{"ambiguous overmount", stringMustJSON([]string{dir}), root + mountLine(dir, "ext4", "rw") + mountLine(dir, "tmpfs", "rw"), false},
+		{"read-only disk mount", stringMustJSON([]string{dir}), root + mountLine(dir, "ext4", "ro"), false},
+		{"malformed declaration", dir, root + mountLine(dir, "ext4", "rw"), false},
+		{"malformed mountinfo", stringMustJSON([]string{dir}), "not mount information", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			env := productionEnv()
+			env["ZHIGU_FUTURES_ENABLED"] = "true"
+			env["ZHIGU_FUTURES_STORAGE_DIR"] = dir
+			env["ZHIGU_PERSISTENT_MOUNTS"] = tc.declared
+			_, err := load(func(k string) string { return env[k] }, func() ([]byte, error) { return []byte(tc.mountinfo), nil })
+			if (err == nil) != tc.allowed {
+				t.Fatalf("mount evidence validation allowed=%v: %v", tc.allowed, err)
+			}
+		})
+	}
+}
+
+func TestPersistentMountCanonicalPathsAndChildVolumes(t *testing.T) {
+	root := persistentTestDir(t)
+	child := filepath.Join(root, "nested storage")
+	alias := filepath.Join(root, "declared-link")
+	if err := os.Mkdir(child, 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Remove(child) })
+	if err := os.Symlink(root, alias); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Remove(alias) })
+	env := productionEnv()
+	env["ZHIGU_FUTURES_ENABLED"] = "true"
+	env["ZHIGU_FUTURES_STORAGE_DIR"] = child
+	env["ZHIGU_PERSISTENT_MOUNTS"] = stringMustJSON([]string{alias})
+	loadEvidence := func(body string) (Config, error) {
+		return load(func(k string) string { return env[k] }, func() ([]byte, error) { return []byte(body), nil })
+	}
+	cfg, err := loadEvidence(mountLine(root, "ext4", "rw"))
+	if err != nil || len(cfg.PersistentMounts) != 1 || cfg.PersistentMounts[0] != root {
+		t.Fatalf("canonical declared parent volume rejected: %v", err)
+	}
+	if _, err := loadEvidence(mountLine(root, "ext4", "rw") + mountLine(child, "tmpfs", "rw")); err == nil {
+		t.Fatal("nested tmpfs bypassed persistent parent check")
+	}
+	env["ZHIGU_PERSISTENT_MOUNTS"] = stringMustJSON([]string{child})
+	if _, err := loadEvidence(mountLine(child, "ext4", "rw")); err != nil {
+		t.Fatalf("escaped mount path rejected: %v", err)
+	}
+	_, err = load(func(k string) string { return env[k] }, func() ([]byte, error) { return nil, os.ErrPermission })
+	if err == nil || strings.Contains(err.Error(), child) {
+		t.Fatalf("missing mount evidence did not fail safely: %v", err)
+	}
+}
+
+func TestIntelLiveAcceptsConfiguredRealProviders(t *testing.T) {
+	for _, providers := range []string{"ifind", "fuyao", "cninfo", "ifind,fuyao"} {
+		t.Run(providers, func(t *testing.T) {
+			env := productionEnv()
+			for k, v := range intelLiveEnv() {
+				env[k] = v
+			}
+			env["ZHIGU_INTEL_ENABLED"] = "true"
+			env["ZHIGU_INTEL_MODE"] = "live"
+			env["ZHIGU_INTEL_COOKIE_SECRET"] = "unique-intel-cookie-key-2026-long-enough"
+			env["ZHIGU_INTEL_PROVIDERS"] = providers
+			env["FUYAO_API_KEY"] = "unique-fuyao-api-key-long-enough-2026"
+			env["ZHIGU_CNINFO_LIVE_VERIFIED"] = "1"
+			cfg, err := loadMap(env)
+			if err != nil {
+				t.Fatalf("actual production provider config rejected: %v", err)
+			}
+			if cfg.Intel.OperationMode != Live {
+				t.Fatal("live configuration not retained")
+			}
+		})
+	}
+	for _, providers := range []string{"fixture", "unknown", "ifind,fixture"} {
+		env := intelLiveEnv()
+		env["ZHIGU_INTEL_PROVIDERS"] = providers
+		if err := validateLive(func(k string) string { return env[k] }, "INTEL"); err == nil {
+			t.Fatalf("non-real provider accepted: %s", providers)
+		}
+	}
+}
+
+func stringMustJSON(value any) string { body, _ := json.Marshal(value); return string(body) }
 
 func TestProductionNegativeStartup(t *testing.T) {
 	cases := []struct{ key, value string }{
@@ -119,7 +302,7 @@ func TestProductionRequestBoundary(t *testing.T) {
 	env := productionEnv()
 	env["ZHIGU_RESEARCH_ENABLED"] = "true"
 	env["ZHIGU_RESEARCH_MODE"] = "read_only"
-	env["ZHIGU_RESEARCH_DOCUMENT_DIR"] = persistentTestDir(t)
+	declareStorage(env, "ZHIGU_RESEARCH_DOCUMENT_DIR", persistentTestDir(t))
 	cfg, err = loadMap(env)
 	if err != nil {
 		t.Fatal(err)
@@ -133,7 +316,7 @@ func TestIndependentStateAndRedactedSummary(t *testing.T) {
 	env := productionEnv()
 	env["ZHIGU_FUTURES_ENABLED"] = "true"
 	env["ZHIGU_FUTURES_MODE"] = "read_only"
-	env["ZHIGU_FUTURES_STORAGE_DIR"] = persistentTestDir(t)
+	declareStorage(env, "ZHIGU_FUTURES_STORAGE_DIR", persistentTestDir(t))
 	cfg, err := loadMap(env)
 	if err != nil {
 		t.Fatal(err)
