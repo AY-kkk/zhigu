@@ -1,6 +1,7 @@
 package initialize
 
 import (
+	"errors"
 	"os"
 
 	"golang.org/x/crypto/bcrypt"
@@ -14,12 +15,25 @@ import (
 func OpenDB() (*gorm.DB, error) {
 	dsn := os.Getenv("ZHIGU_POSTGRES_DSN")
 	if dsn == "" {
+		if os.Getenv("ZHIGU_ENV") == "production" || os.Getenv("ZHIGU_DEPLOYMENT_ENVIRONMENT") == "production" {
+			return nil, errors.New("production database configuration is required")
+		}
 		dsn = "host=127.0.0.1 user=zhigu password=zhigu dbname=zhigu port=5432 sslmode=disable TimeZone=UTC"
+	}
+	return OpenDBWithDSN(dsn)
+}
+
+func OpenDBWithDSN(dsn string) (*gorm.DB, error) {
+	if dsn == "" {
+		return OpenDB()
 	}
 	return gorm.Open(postgres.Open(dsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Warn)})
 }
 
 func Seed(db *gorm.DB) error {
+	if os.Getenv("ZHIGU_ENV") == "production" || os.Getenv("ZHIGU_DEPLOYMENT_ENVIRONMENT") == "production" {
+		return errors.New("demo accounts are forbidden in production")
+	}
 	hash, err := bcrypt.GenerateFromPassword([]byte("Passw0rd!"), bcrypt.DefaultCost)
 	if err != nil {
 		return err

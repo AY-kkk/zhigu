@@ -14,6 +14,7 @@ import (
 	intelapi "zhigu/server/api/v1/intel"
 	"zhigu/server/httpx"
 	"zhigu/server/initialize"
+	"zhigu/server/runtime"
 	"zhigu/server/service/finance"
 	futuressvc "zhigu/server/service/futures"
 	intelsvc "zhigu/server/service/intel"
@@ -26,22 +27,35 @@ func main() {
 	if len(os.Args) == 2 && os.Args[1] == "--futures-extract-v1" {
 		os.Exit(futuressvc.RunFuturesExtractionCLI())
 	}
-	addr := os.Getenv("ZHIGU_HTTP_ADDR")
-	if addr == "" {
-		addr = ":8080"
+	runtimeConfig, err := runtime.LoadEnv()
+	if err != nil {
+		log.Fatalf("runtime configuration: %v", err)
 	}
-	db, err := initialize.OpenDB()
+	if err := runtimeConfig.ApplyEnvironment(); err != nil {
+		log.Fatalf("runtime configuration: %v", err)
+	}
+	log.Printf("runtime configuration: %s", runtimeConfig.SummaryJSON())
+	addr := runtimeConfig.HTTPAddr
+	db, err := initialize.OpenDBWithDSN(runtimeConfig.DatabaseDSN)
 	if err != nil {
 		log.Fatalf("db: %v", err)
 	}
 	if err := initialize.Migrate(db); err != nil {
 		log.Fatalf("migrate: %v", err)
 	}
-	futuresDB, futuresDBErr := initialize.OpenDB()
+	if err := initialize.EnsureOwner(db, runtimeConfig); err != nil {
+		log.Fatalf("owner: %v", err)
+	}
+	if runtimeConfig.SeedDemoUsers {
+		if err := initialize.Seed(db); err != nil {
+			log.Fatalf("seed: %v", err)
+		}
+	}
+	futuresDB, futuresDBErr := initialize.OpenDBWithDSN(runtimeConfig.DatabaseDSN)
 	if futuresDBErr != nil {
 		log.Printf("futures database unavailable: %v", futuresDBErr)
 	}
-	futuresEnabled := os.Getenv("ZHIGU_FUTURES_ENABLED") == "true"
+	futuresEnabled := runtimeConfig.Futures.Enabled
 	futuresState := futuressvc.RuntimeState{Enabled: futuresEnabled, Ready: false, Mode: "off", Reason: "FUTURES_NOT_IMPLEMENTED"}
 	var futuresDomain *futuressvc.Domain
 	if futuresDBErr == nil {
@@ -49,7 +63,7 @@ func main() {
 			sqlDB.SetMaxOpenConns(4)
 			sqlDB.SetMaxIdleConns(2)
 		}
-		state, err := futuressvc.Bootstrap(context.Background(), futuresDB, futuressvc.Config{Enabled: futuresEnabled, Mode: os.Getenv("ZHIGU_FUTURES_MODE")})
+		state, err := futuressvc.Bootstrap(context.Background(), futuresDB, futuressvc.Config{Enabled: futuresEnabled, Mode: string(runtimeConfig.Futures.OperationMode)})
 		if err != nil {
 			log.Printf("futures bootstrap failed; module remains isolated: %v", err)
 		}
@@ -59,21 +73,38 @@ func main() {
 			go futuressvc.StartFuturesMaintenance(context.Background(), futuresDB, futuresDomain)
 		}
 	}
-	if err := initialize.Seed(db); err != nil {
-		log.Fatalf("seed: %v", err)
-	}
 	budget := finance.NewDBBudget(db)
-	client, err := finance.NewHTTPResearchClient()
-	if err != nil {
-		log.Fatalf("research client: %v", err)
+	var client finance.ResearchClient
+	var fixtureConfig *finance.FixtureConfig
+	if runtimeConfig.DeploymentEnvironment == runtime.Production {
+		client = &finance.HTTPResearchClient{Base: os.Getenv("ZHIGU_RESEARCH_URL"), Token: runtimeConfig.InternalToken, Client: &http.Client{Timeout: 10 * time.Second}}
+	} else {
+		client, err = finance.NewHTTPResearchClient()
+		if err != nil {
+			log.Fatalf("research client: %v", err)
+		}
+		fixtureConfig = finance.NewFixtureConfig()
 	}
-	svc := finance.NewService(db, client, budget, finance.NewFixtureConfig())
+	svc := finance.NewService(db, client, budget, fixtureConfig)
 	cfg := finance.NewConfigService(db)
 	proxy := finance.NewModelProxy(db, budget)
 	ctx := context.Background()
-	svc.StartWorker(ctx)
+	if runtimeConfig.DeploymentEnvironment != runtime.Production || (runtimeConfig.Research.Enabled && runtimeConfig.Research.OperationMode == runtime.Live) {
+		svc.StartWorker(ctx)
+	}
 	engine := gin.New()
 	engine.Use(gin.Recovery())
+	engine.Use(func(c *gin.Context) {
+		if !runtimeConfig.RequestAllowed(c.Request.Method, c.Request.URL.Path, c.GetHeader("X-Intel-Mode")) {
+			httpx.Fail(c, http.StatusServiceUnavailable, "RUNTIME_UNAVAILABLE", "当前模块暂不可用")
+			c.Abort()
+			return
+		}
+		if runtimeConfig.DeploymentEnvironment == runtime.Production && runtimeConfig.Intel.Enabled {
+			c.Request.Header.Set("X-Intel-Mode", "live")
+		}
+		c.Next()
+	})
 	engine.GET("/healthz", func(c *gin.Context) {
 		mode := "http"
 		if os.Getenv("ZHIGU_RESEARCH_MODE") == "unit-test" {
@@ -99,8 +130,8 @@ func main() {
 	hub := workbench.NewHub(db, mkt).UseConfig(cfg)
 	financeapi.RegisterStrategy(engine, hub)
 	financeapi.RegisterStrategyMarket(engine, strategymarket.New(db, mkt))
-	if os.Getenv("ZHIGU_INTEL_ENABLED") == "true" {
-		cookieSecret := os.Getenv("ZHIGU_INTEL_COOKIE_SECRET")
+	if runtimeConfig.Intel.Enabled {
+		cookieSecret := runtimeConfig.IntelCookieSecret
 		if cookieSecret == "" {
 			log.Fatal("ZHIGU_INTEL_COOKIE_SECRET is required when ZHIGU_INTEL_ENABLED=true")
 		}
@@ -113,12 +144,14 @@ func main() {
 			}
 		}
 		fixtureDir := os.Getenv("ZHIGU_INTEL_FIXTURE_DIR")
-		if fixtureDir == "" {
+		if fixtureDir == "" && runtimeConfig.DeploymentEnvironment != runtime.Production {
 			fixtureDir = "../../contracts/intel/fixtures/events-v1"
 		}
 		intelSvc := intelsvc.NewService(db, []byte(cookieSecret), fixtureDir).WithConfigService(cfg)
 		intelapi.Register(engine, intelSvc)
-		intelSvc.StartWorker(ctx)
+		if runtimeConfig.DeploymentEnvironment != runtime.Production || runtimeConfig.Intel.OperationMode == runtime.Live {
+			intelSvc.StartWorker(ctx)
+		}
 		log.Printf("intel module enabled (mode=%s providers=%s)", os.Getenv("ZHIGU_INTEL_MODE"), os.Getenv("ZHIGU_INTEL_PROVIDERS"))
 	}
 	if mkt.Mode() == "live" {
