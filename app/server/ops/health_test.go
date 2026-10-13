@@ -30,7 +30,7 @@ func TestSQLMetricsProviderReadsActualQueueRunsPoolAndLedger(t *testing.T) {
 	}
 	pool.SetMaxOpenConns(1)
 	for _, statement := range []string{
-		"CREATE TEMP TABLE finance_research_runs(status text,created_at timestamptz,deleted_at timestamptz)",
+		"CREATE TEMP TABLE finance_research_runs(status text,created_at timestamptz,deleted_at timestamptz,claim_snapshot jsonb DEFAULT '[{\"text\":\"private\"}]'::jsonb)",
 		"CREATE TEMP TABLE futures_runs(status text,created_at timestamptz,deleted_at timestamptz)",
 		"CREATE TEMP TABLE finance_intel_jobs(status text,created_at timestamptz)",
 		"CREATE TEMP TABLE finance_usage_ledger(status text,reserved_tokens bigint,actual_tokens bigint)",
@@ -41,7 +41,8 @@ func TestSQLMetricsProviderReadsActualQueueRunsPoolAndLedger(t *testing.T) {
 		"CREATE TEMP TABLE futures_deletion_jobs(state text)",
 		"CREATE TEMP TABLE futures_documents(purge_at timestamptz,deleted_at timestamptz)",
 		"CREATE TEMP TABLE finance_intel_namespaces(expires_at timestamptz)",
-		"INSERT INTO finance_research_runs VALUES('queued',now()-interval '20 seconds',NULL),('queued',now()-interval '10 seconds',NULL),('completed',now(),NULL),('queued',now()-interval '60 seconds',now())",
+		"INSERT INTO finance_research_runs(status,created_at,deleted_at) VALUES('queued',now()-interval '20 seconds',NULL),('queued',now()-interval '10 seconds',NULL),('completed',now(),NULL),('queued',now()-interval '60 seconds',now()-interval '25 hours'),('queued',now(),now()-interval '1 hour')",
+		"INSERT INTO finance_research_runs VALUES('queued',now(),now()-interval '25 hours','[ ]'::jsonb),('queued',now(),now()-interval '25 hours',NULL),('queued',now(),now()-interval '25 hours','null'::jsonb)",
 		"INSERT INTO futures_runs VALUES('queued',now()-interval '5 seconds',NULL),('succeeded',now(),NULL)",
 		"INSERT INTO finance_intel_jobs VALUES('queued',now()-interval '10 seconds'),('partial',now())",
 		"INSERT INTO finance_usage_ledger VALUES('reserved',10,NULL),('succeeded',20,7),('unknown',30,NULL)",

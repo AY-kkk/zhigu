@@ -448,7 +448,7 @@ func NewSQLMetricsProvider(primary, futures *sql.DB, backupStateFile, backupTime
 			snapshot.Queues["intel"], snapshot.Runs["intel"] = readRunMetrics(ctx, primary, "finance_intel_jobs")
 			snapshot.Budgets["finance"] = readTokenBudget(ctx, primary, "finance_usage_ledger")
 			snapshot.Budgets["intel"] = readTokenBudget(ctx, primary, "finance_intel_usage")
-			snapshot.Cleanup["finance"] = readSQLGauge(ctx, primary, "SELECT count(*)::double precision FROM finance_research_runs WHERE deleted_at IS NOT NULL")
+			snapshot.Cleanup["finance"] = readSQLGauge(ctx, primary, `SELECT count(*)::double precision FROM finance_research_runs WHERE deleted_at < CURRENT_TIMESTAMP - interval '24 hours' AND claim_snapshot IS NOT NULL AND claim_snapshot NOT IN ('[]'::jsonb,'null'::jsonb)`)
 			snapshot.Cleanup["intel"] = readSQLGauge(ctx, primary, "SELECT count(*)::double precision FROM finance_intel_namespaces WHERE expires_at <= CURRENT_TIMESTAMP")
 			var version string
 			if primary.QueryRowContext(ctx, "SELECT version FROM finance_schema_migrations ORDER BY version DESC LIMIT 1").Scan(&version) == nil {

@@ -14,6 +14,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"zhigu/server/httpx"
 	"zhigu/server/service/finance"
 )
 
@@ -38,10 +39,11 @@ type FrozenModelConfig struct {
 type ModelCall func(ctx context.Context, cfg FrozenModelConfig, body []byte) ([]byte, error)
 
 type ModelExtractorV2 struct {
-	Frozen  FrozenModelConfig
-	Client  *http.Client
-	Call    ModelCall
-	Enabled bool
+	Frozen   FrozenModelConfig
+	Client   *http.Client
+	Call     ModelCall
+	Enabled  bool
+	Observer httpx.OperationalObserver
 }
 
 func FreezeActiveModel(ctx context.Context, configs *finance.ConfigService) (FrozenModelConfig, error) {
@@ -242,7 +244,7 @@ func validateExtractionOutput(req ExtractionRequest, sourceText string, output m
 	return nil
 }
 
-func (m *ModelExtractorV2) Extract(ctx context.Context, req ExtractionRequest) (ExtractionResult, error) {
+func (m *ModelExtractorV2) Extract(ctx context.Context, req ExtractionRequest) (result ExtractionResult, extractErr error) {
 	if !m.Enabled {
 		return ExtractionResult{}, newError(503, "MODEL_UNAVAILABLE", "模型配置未启用")
 	}
@@ -254,10 +256,18 @@ func (m *ModelExtractorV2) Extract(ctx context.Context, req ExtractionRequest) (
 		return ExtractionResult{}, err
 	}
 	var raw []byte
+	var started time.Time
+	startCall := func() { started = time.Now() }
+	defer func() {
+		if m.Observer != nil && !started.IsZero() {
+			m.Observer.ObserveProvider("model", time.Since(started), extractErr != nil)
+		}
+	}()
 	if m.Call != nil {
+		startCall()
 		raw, err = m.Call(ctx, m.Frozen, body)
 	} else {
-		raw, err = m.doHTTP(ctx, body)
+		raw, err = m.doHTTP(ctx, body, startCall)
 	}
 	if err != nil {
 		return ExtractionResult{}, err
@@ -280,7 +290,7 @@ func (m *ModelExtractorV2) Extract(ctx context.Context, req ExtractionRequest) (
 	}, nil
 }
 
-func (m *ModelExtractorV2) doHTTP(ctx context.Context, body []byte) ([]byte, error) {
+func (m *ModelExtractorV2) doHTTP(ctx context.Context, body []byte, startCall func()) ([]byte, error) {
 	path := "/chat/completions"
 	if m.Frozen.Protocol == "openai_responses" {
 		path = "/responses"
@@ -301,6 +311,9 @@ func (m *ModelExtractorV2) doHTTP(ctx context.Context, body []byte) ([]byte, err
 	if client == nil {
 		client = &http.Client{Timeout: 90 * time.Second}
 	}
+	// Start only after URL/request validation, so rejected inputs are not
+	// reported as provider calls. Extract records the final parsing/validation result.
+	startCall()
 	response, err := client.Do(request)
 	if err != nil {
 		return nil, newError(503, "MODEL_UNAVAILABLE", "模型上游不可用")

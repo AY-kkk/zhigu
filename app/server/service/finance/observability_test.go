@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
+	modelfinance "zhigu/server/model/finance"
 	"zhigu/server/ops"
 )
 
@@ -22,6 +24,33 @@ func operationalMetrics(t *testing.T, monitor *ops.Monitor) string {
 		t.Fatal(w.Code)
 	}
 	return w.Body.String()
+}
+
+func TestCleanupMetricsDueBacklogClearsAfterPurgeRetention(t *testing.T) {
+	svc := setup(t)
+	due := createMinimalRun(t, svc, 1001, "cleanup-due")
+	if err := svc.DB.Model(&modelfinance.ResearchRun{}).Where("id=?", due.RunID).Updates(map[string]any{"status": StatusCanceled, "deleted_at": time.Now().Add(-25 * time.Hour)}).Error; err != nil {
+		t.Fatal(err)
+	}
+	recent := createMinimalRun(t, svc, 1001, "cleanup-recent")
+	if err := svc.DB.Model(&modelfinance.ResearchRun{}).Where("id=?", recent.RunID).Updates(map[string]any{"status": StatusCanceled, "deleted_at": time.Now().Add(-time.Hour)}).Error; err != nil {
+		t.Fatal(err)
+	}
+	pool, err := svc.DB.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	monitor := ops.New(nil, nil, "metrics-test")
+	monitor.SetMetricsProvider(ops.NewSQLMetricsProvider(pool, nil, "", ""))
+	if body := operationalMetrics(t, monitor); !strings.Contains(body, `zhigu_cleanup_backlog{module="finance"} 1`) {
+		t.Fatalf("only due, uncleared record should count: %s", body)
+	}
+	if err := svc.PurgeRetention(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if body := operationalMetrics(t, monitor); !strings.Contains(body, `zhigu_cleanup_backlog{module="finance"} 0`) {
+		t.Fatalf("completed purge must clear backlog: %s", body)
+	}
 }
 
 func TestResearchActualHTTPCallsUpdateWorkerMetrics(t *testing.T) {

@@ -163,6 +163,7 @@ func (s *Service) ProcessJob(ctx context.Context, lease JobLease) (jobError erro
 	}
 	extractor := NewModelExtractorV2(frozen)
 	extractor.Call = s.ModelCall
+	extractor.Observer = s.Observer
 	text, _ := sourceRow["allowed_excerpt"].(string)
 	usageID, reserveErr := s.ReserveModelUsage(ctx, scope, lease.ID, lease.Attempts, intelInputTokenLimit+intelOutputTokenLimit)
 	if reserveErr != nil {

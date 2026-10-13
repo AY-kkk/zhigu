@@ -3,12 +3,77 @@ package intel
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"github.com/gin-gonic/gin"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
+	"zhigu/server/ops"
 
 	"zhigu/server/service/finance"
 	"zhigu/server/testdb"
 )
+
+func TestModelExtractorActualHTTPObservesSuccessAndFailures(t *testing.T) {
+	text := "公司正在推进收购B。"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.Contains(r.URL.Path, "http500"):
+			w.WriteHeader(500)
+			w.Write([]byte(`{"error":"private"}`))
+		case strings.Contains(r.URL.Path, "malformed"):
+			w.Write([]byte(`{`))
+		default:
+			revision := "rev_1"
+			if strings.Contains(r.URL.Path, "invalid") {
+				revision = "rev_other"
+			}
+			output, _ := json.Marshal(extractionFixtureOutput(revision, text))
+			raw, _ := json.Marshal(map[string]any{"choices": []any{map[string]any{"message": map[string]any{"content": string(output)}}}})
+			w.Write(raw)
+		}
+	}))
+	defer server.Close()
+	monitor := ops.New(nil, nil, "metrics-test")
+	extractor := NewModelExtractorV2(FrozenModelConfig{ConfigID: "config", ConfigDigest: "digest", Protocol: "openai_chat_completions", Model: "model-x", BaseURL: "https://8.8.8.8/v1", PromptVersion: intelPromptVersion})
+	extractor.Observer = monitor
+	extractor.Client = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if strings.Contains(req.URL.Path, "transport") {
+			return nil, errors.New("private transport failure")
+		}
+		clone := req.Clone(req.Context())
+		target, _ := url.Parse(server.URL + req.URL.Path)
+		clone.URL = target
+		return server.Client().Do(clone)
+	})}
+	for _, path := range []string{"success", "http500", "malformed", "invalid", "transport"} {
+		extractor.Frozen.BaseURL = "https://8.8.8.8/" + path
+		_, err := extractor.Extract(context.Background(), ExtractionRequest{SourceRevisionID: "rev_1", Text: text})
+		if (err == nil) != (path == "success") {
+			t.Errorf("%s: %v", path, err)
+		}
+	}
+	// Rejected input/configuration does not make a model call.
+	_, _ = extractor.Extract(context.Background(), ExtractionRequest{})
+	extractor.Frozen.BaseURL = "http://127.0.0.1:80"
+	_, _ = extractor.Extract(context.Background(), ExtractionRequest{SourceRevisionID: "rev_1", Text: text})
+	r := gin.New()
+	monitor.Register(r)
+	req := httptest.NewRequest("GET", "/metrics", nil)
+	req.Header.Set("Authorization", "Bearer metrics-test")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	for _, want := range []string{`zhigu_provider_calls_total{name="model"} 5`, `zhigu_provider_errors_total{name="model"} 4`, `zhigu_provider_call_duration_seconds_count{name="model"} 5`, `zhigu_worker_observations_available{name="intel"} 0`} {
+		if !strings.Contains(w.Body.String(), want) {
+			t.Errorf("missing %s", want)
+		}
+	}
+	if strings.Contains(w.Body.String(), "private") || strings.Contains(w.Body.String(), "8.8.8.8") {
+		t.Fatal("sensitive/high-cardinality model metric")
+	}
+}
 
 func extractionFixtureOutput(sourceRevision, text string) map[string]any {
 	return map[string]any{

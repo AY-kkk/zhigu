@@ -155,5 +155,8 @@ func TestWorkerExecutesFrozenModelExtraction(t *testing.T) {
 	if !strings.Contains(w.Body.String(), `zhigu_worker_calls_total{name="intel"} 1`) {
 		t.Fatal("actual job not observed")
 	}
+	if !strings.Contains(w.Body.String(), `zhigu_provider_calls_total{name="model"} 1`) || !strings.Contains(w.Body.String(), `zhigu_provider_errors_total{name="model"} 0`) {
+		t.Fatal("model observation missing/double counted by worker")
+	}
 	_ = created
 }
