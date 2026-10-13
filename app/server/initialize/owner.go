@@ -1,7 +1,6 @@
 package initialize
 
 import (
-	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -11,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/crypto/argon2"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
+	"zhigu/server/httpx"
 	modelfinance "zhigu/server/model/finance"
 	"zhigu/server/runtime"
 )
@@ -35,8 +34,14 @@ func EnsureOwner(db *gorm.DB, cfg runtime.Config) error {
 		}
 		owners := 0
 		for _, user := range users {
-			if cfg.DeploymentEnvironment == runtime.Production && (defaultUsername(user.Username) || bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte("Passw0rd!")) == nil) {
-				return errors.New("production database contains a default account or password")
+			if cfg.DeploymentEnvironment == runtime.Production {
+				if defaultUsername(user.Username) {
+					return errors.New("production database contains a default account or password")
+				}
+				defaultPassword, _ := httpx.VerifyPassword(user.PasswordHash, "Passw0rd!")
+				if defaultPassword {
+					return errors.New("production database contains a default account or password")
+				}
 			}
 			if user.Role == "admin" {
 				if cfg.DeploymentEnvironment == runtime.Production && !validOwnerHash(user.PasswordHash) {
@@ -116,30 +121,38 @@ func defaultUsername(name string) bool {
 
 func validOwnerHash(hash string) bool {
 	if strings.HasPrefix(hash, "$2") {
+		if len(hash) != 60 || hash[6] != '$' || (!strings.HasPrefix(hash, "$2a$") && !strings.HasPrefix(hash, "$2b$") && !strings.HasPrefix(hash, "$2y$")) {
+			return false
+		}
+		for _, character := range hash[7:] {
+			if !strings.ContainsRune("./ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789", character) {
+				return false
+			}
+		}
 		cost, err := bcrypt.Cost([]byte(hash))
-		return err == nil && cost >= 12
+		// Production accepts only cost >= 12 legacy credentials for upgrade.
+		// Bootstrap always creates Argon2id credentials.
+		return err == nil && cost >= 12 && cost <= 16
 	}
 	parts := strings.Split(hash, "$")
 	if len(parts) != 6 || parts[1] != "argon2id" || parts[2] != "v=19" {
 		return false
 	}
 	var memory, iterations, parallelism uint32
-	if _, err := fmt.Sscanf(parts[3], "m=%d,t=%d,p=%d", &memory, &iterations, &parallelism); err != nil || memory < 19*1024 || iterations < 2 || parallelism < 1 {
+	if _, err := fmt.Sscanf(parts[3], "m=%d,t=%d,p=%d", &memory, &iterations, &parallelism); err != nil || memory < 19*1024 || memory > 64*1024 || iterations < 2 || iterations > 4 || parallelism < 1 || parallelism > 4 {
 		return false
 	}
-	salt, err := base64.RawStdEncoding.DecodeString(parts[4])
-	if err != nil || len(salt) < 16 {
+	if parts[3] != fmt.Sprintf("m=%d,t=%d,p=%d", memory, iterations, parallelism) {
 		return false
 	}
-	key, err := base64.RawStdEncoding.DecodeString(parts[5])
-	return err == nil && len(key) >= 32
+	salt, err := base64.RawStdEncoding.Strict().DecodeString(parts[4])
+	if err != nil || len(salt) < 16 || len(salt) > 64 {
+		return false
+	}
+	key, err := base64.RawStdEncoding.Strict().DecodeString(parts[5])
+	return err == nil && len(key) == 32
 }
 
 func hashOwnerPassword(password string) (string, error) {
-	salt := make([]byte, 16)
-	if _, err := rand.Read(salt); err != nil {
-		return "", errors.New("owner password hashing failed")
-	}
-	key := argon2.IDKey([]byte(password), salt, 2, 19*1024, 1, 32)
-	return "$argon2id$v=19$m=19456,t=2,p=1$" + base64.RawStdEncoding.EncodeToString(salt) + "$" + base64.RawStdEncoding.EncodeToString(key), nil
+	return httpx.HashPassword(password)
 }

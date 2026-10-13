@@ -1,10 +1,12 @@
 package initialize
 
 import (
+	"golang.org/x/crypto/bcrypt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"zhigu/server/httpx"
 
 	modelfinance "zhigu/server/model/finance"
 	"zhigu/server/runtime"
@@ -97,5 +99,81 @@ func TestProductionRejectsOwnerWithInvalidPasswordHash(t *testing.T) {
 	}
 	if err := EnsureOwner(db, runtime.Config{State: runtime.State{DeploymentEnvironment: runtime.Production}}); err == nil {
 		t.Fatal("owner with invalid password hash accepted")
+	}
+}
+
+func TestOwnerExistingLegacyBcryptCanReachLoginUpgrade(t *testing.T) {
+	db := testDB(t)
+	if err := Migrate(db); err != nil {
+		t.Fatal(err)
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte("legacy-owner-credential"), 12)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&modelfinance.User{Username: "research-owner", PasswordHash: string(hash), Role: "admin"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := EnsureOwner(db, runtime.Config{State: runtime.State{DeploymentEnvironment: runtime.Production}}); err != nil {
+		t.Fatalf("legacy owner cannot reach rehash login: %v", err)
+	}
+	newHash, err := hashOwnerPassword("my-unique-owner-password-2026!")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok, rehash := httpx.VerifyPassword(newHash, "my-unique-owner-password-2026!"); !ok || rehash {
+		t.Fatalf("bootstrap password incompatible: %v %v", ok, rehash)
+	}
+}
+
+func TestProductionRejectsWeakLegacyBcryptOwner(t *testing.T) {
+	db := testDB(t)
+	if err := Migrate(db); err != nil {
+		t.Fatal(err)
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte("legacy-owner-credential"), 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&modelfinance.User{Username: "research-owner", PasswordHash: string(hash), Role: "admin"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := EnsureOwner(db, runtime.Config{State: runtime.State{DeploymentEnvironment: runtime.Production}}); err == nil {
+		t.Fatal("weak bcrypt owner accepted in production")
+	}
+}
+
+func TestProductionRejectsDefaultPasswordRehashedToArgon2id(t *testing.T) {
+	db := testDB(t)
+	if err := Migrate(db); err != nil {
+		t.Fatal(err)
+	}
+	hash, err := httpx.RehashPassword("Passw0rd!")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&modelfinance.User{Username: "research-owner", PasswordHash: hash, Role: "admin"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := EnsureOwner(db, runtime.Config{State: runtime.State{DeploymentEnvironment: runtime.Production}}); err == nil {
+		t.Fatal("Argon2id default password accepted in production")
+	}
+}
+
+func TestProductionRejectsMalformedArgon2idOwnerHash(t *testing.T) {
+	db := testDB(t)
+	if err := Migrate(db); err != nil {
+		t.Fatal(err)
+	}
+	hash, err := httpx.HashPassword("actual-valid-owner-password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	hash = strings.Replace(hash, "p=1$", "p=1,trailing=1$", 1)
+	if err := db.Create(&modelfinance.User{Username: "research-owner", PasswordHash: hash, Role: "admin"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := EnsureOwner(db, runtime.Config{State: runtime.State{DeploymentEnvironment: runtime.Production}}); err == nil {
+		t.Fatal("malformed Argon2id owner accepted")
 	}
 }

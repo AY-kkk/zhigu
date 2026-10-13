@@ -52,6 +52,7 @@ func main() {
 		}
 	}
 	futuresDB, futuresDBErr := initialize.OpenDBWithDSN(runtimeConfig.DatabaseDSN)
+	httpx.ConfigureAuth(httpx.AuthConfig{DB: db, Production: runtimeConfig.DeploymentEnvironment == runtime.Production, PublicOrigin: runtimeConfig.PublicOrigin})
 	if futuresDBErr != nil {
 		log.Printf("futures database unavailable: %v", futuresDBErr)
 	}
@@ -93,6 +94,13 @@ func main() {
 		svc.StartWorker(ctx)
 	}
 	engine := gin.New()
+	if runtimeConfig.DeploymentEnvironment == runtime.Production {
+		// Only the private Compose proxy may supply the source IP. The public
+		// proxy overwrites X-Forwarded-For with its directly connected client.
+		if err := engine.SetTrustedProxies([]string{"127.0.0.1", "::1", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"}); err != nil {
+			log.Fatal("invalid trusted proxy configuration")
+		}
+	}
 	engine.Use(gin.Recovery())
 	engine.Use(func(c *gin.Context) {
 		if !runtimeConfig.RequestAllowed(c.Request.Method, c.Request.URL.Path, c.GetHeader("X-Intel-Mode")) {

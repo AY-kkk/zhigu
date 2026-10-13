@@ -183,6 +183,70 @@ func TestSplitStatements(t *testing.T) {
 	}
 }
 
+func TestSessionMigrationExpandsPreviousSchemaAndSurvivesRollback(t *testing.T) {
+	db := testDB(t)
+	files := realFiles(t)
+	var previous []Migration
+	for _, file := range files {
+		if file.Version != "010_sessions" {
+			previous = append(previous, file)
+		}
+	}
+	if err := MigrateMigrations(db, previous); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("INSERT INTO finance_users (id,username,password_hash,role) VALUES (97,'research-owner','old-hash','admin')").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := Migrate(db); err != nil {
+		t.Fatal(err)
+	}
+	if !columnExists(t, db, "finance_users", "disabled_at") || !tableExists(t, db, "finance_browser_sessions") {
+		t.Fatal("session expansion missing")
+	}
+	if err := db.Exec(`INSERT INTO finance_browser_sessions (jti,user_id,token_digest,password_digest,expires_at) VALUES ('jti-test',97,repeat('a',64),repeat('b',64),now()+interval '12 hours')`).Error; err != nil {
+		t.Fatal(err)
+	}
+	// N-1 application migration and user queries remain valid; session data is
+	// never dropped when rolling back the application to the previous release.
+	if err := MigrateMigrations(db, previous); err != nil {
+		t.Fatal(err)
+	}
+	var count int64
+	db.Table("finance_browser_sessions").Count(&count)
+	if count != 1 {
+		t.Fatal("application rollback lost session data")
+	}
+	var username string
+	if err := db.Raw("SELECT username FROM finance_users WHERE id=97").Scan(&username).Error; err != nil || username != "research-owner" {
+		t.Fatal("old user query incompatible")
+	}
+}
+
+func TestSessionMigrationRevokesOnHostPasswordAndOwnerDisableChanges(t *testing.T) {
+	db := testDB(t)
+	if err := Migrate(db); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("INSERT INTO finance_users (id,username,password_hash,role) VALUES (97,'research-owner','old-hash','admin')").Error; err != nil {
+		t.Fatal(err)
+	}
+	for i, update := range []string{"UPDATE finance_users SET password_hash='changed-hash' WHERE id=97", "UPDATE finance_users SET disabled_at=now() WHERE id=97"} {
+		id := fmt.Sprintf("jti-%d", i)
+		if err := db.Exec(`INSERT INTO finance_browser_sessions (jti,user_id,token_digest,password_digest,expires_at) VALUES (?,97,?,repeat('b',64),now()+interval '12 hours')`, id, strings.Repeat(fmt.Sprintf("%d", i), 64)).Error; err != nil {
+			t.Fatal(err)
+		}
+		if err := db.Exec(update).Error; err != nil {
+			t.Fatal(err)
+		}
+		var count int64
+		db.Table("finance_browser_sessions").Where("jti = ? AND revoked_at IS NOT NULL", id).Count(&count)
+		if count != 1 {
+			t.Fatalf("host credential update did not permanently revoke session: %s", update)
+		}
+	}
+}
+
 func TestParseSchemaObjects(t *testing.T) {
 	exp, err := parseSchemaObjects(`
 CREATE TABLE sample_a (
