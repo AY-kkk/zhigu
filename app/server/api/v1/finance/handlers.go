@@ -135,11 +135,13 @@ func (a *API) Login(c *gin.Context) {
 		httpx.Fail(c, http.StatusUnauthorized, "UNAUTHENTICATED", "用户名或密码错误")
 		return
 	}
-	primaryTransition := (user.PasswordHashV2 == nil || *user.PasswordHashV2 == "") && httpx.CanonicalProductionArgon2id(user.PasswordHash)
-	if rehash || primaryTransition {
+	// Long parent-version Argon2id credentials remain valid in the transition
+	// layout. Normalize only when bcrypt can represent the complete password.
+	normalizePrimary := len(req.Password) <= 72 && (user.PasswordHashV2 == nil || *user.PasswordHashV2 == "") && httpx.CanonicalProductionArgon2id(user.PasswordHash)
+	if rehash || normalizePrimary {
 		legacyHash, v2Hash := user.PasswordHash, ""
 		updates := make(map[string]any)
-		if primaryTransition {
+		if normalizePrimary {
 			// Preserve the already verified parent Argon2id exactly. bcrypt's
 			// 72-byte limit is enforced without truncation during normalization.
 			legacy, err := bcrypt.GenerateFromPassword([]byte(req.Password), 12)

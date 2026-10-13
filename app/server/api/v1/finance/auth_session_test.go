@@ -172,6 +172,86 @@ func TestParentVersionPrimaryArgonOwnerStartsAndNormalizesOnLogin(t *testing.T) 
 	}
 }
 
+func TestPrimaryArgonPasswordByteBoundariesPreserveLogin(t *testing.T) {
+	for _, tc := range []struct {
+		name, password string
+		wantDual       bool
+	}{
+		{"73 ASCII bytes", strings.Repeat("x", 73), false},
+		{"75 UTF8 bytes", strings.Repeat("密", 25), false},
+		{"1024 bytes", strings.Repeat("x", 1024), false},
+		{"72 UTF8 bytes", strings.Repeat("密", 24), true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db := testdb.Start(t)
+			primary, err := httpx.HashPassword(tc.password)
+			if err != nil {
+				t.Fatal(err)
+			}
+			user := model.User{Username: "research-owner", PasswordHash: primary, Role: "admin"}
+			if err := db.Create(&user).Error; err != nil {
+				t.Fatal(err)
+			}
+			if err := initialize.EnsureOwner(db, runtime.Config{State: runtime.State{DeploymentEnvironment: runtime.Production}}); err != nil {
+				t.Fatal(err)
+			}
+			httpx.ConfigureAuth(httpx.AuthConfig{DB: db, Production: true, PublicOrigin: "https://zhigu.example"})
+			t.Cleanup(func() { httpx.ConfigureAuth(httpx.AuthConfig{}) })
+			engine := gin.New()
+			a := &API{Svc: service.NewService(db, service.NewFakeResearchClient(), service.NewMemoryBudget(), service.NewFixtureConfig()), LoginLimiter: httpx.NewLoginLimiter()}
+			engine.POST("/login", a.Login)
+			engine.GET("/private", httpx.AuthRequired(), func(c *gin.Context) { c.Status(204) })
+			login := func(password string) *httptest.ResponseRecorder {
+				body, _ := json.Marshal(map[string]string{"username": user.Username, "password": password})
+				r := httptest.NewRequest("POST", "/login", bytes.NewReader(body))
+				r.Header.Set("Origin", "https://zhigu.example")
+				w := httptest.NewRecorder()
+				engine.ServeHTTP(w, r)
+				return w
+			}
+			w := login(tc.password)
+			if w.Code != 200 || len(w.Result().Cookies()) != 1 {
+				t.Fatalf("valid primary Argon2id %d-byte password rejected: %d %s", len(tc.password), w.Code, w.Body)
+			}
+			r := httptest.NewRequest("GET", "/private", nil)
+			r.AddCookie(w.Result().Cookies()[0])
+			private := httptest.NewRecorder()
+			engine.ServeHTTP(private, r)
+			if private.Code != 204 {
+				t.Fatalf("issued session cannot authenticate: %d", private.Code)
+			}
+			var current model.User
+			if err := db.First(&current, user.ID).Error; err != nil {
+				t.Fatal(err)
+			}
+			if tc.wantDual {
+				if !httpx.CanonicalProductionBcrypt(current.PasswordHash) || current.PasswordHashV2 == nil || *current.PasswordHashV2 != primary || bcrypt.CompareHashAndPassword([]byte(current.PasswordHash), []byte(tc.password)) != nil {
+					t.Fatal("72-byte password not normalized to dual hashes")
+				}
+			} else if current.PasswordHash != primary || current.PasswordHashV2 != nil {
+				t.Fatal("long primary Argon2id credential was changed or truncated")
+			}
+			legacyAfterLogin := current.PasswordHash
+			for _, oversized := range []string{strings.Repeat("x", 1025), strings.Repeat("密", 342)} {
+				w = login(oversized)
+				if w.Code != 401 || len(w.Result().Cookies()) != 0 {
+					t.Fatalf("%d-byte input crossed safe password ceiling: %d", len(oversized), w.Code)
+				}
+			}
+			if err := db.First(&current, user.ID).Error; err != nil {
+				t.Fatal(err)
+			}
+			var sessions int64
+			if err := db.Model(&model.Session{}).Count(&sessions).Error; err != nil || sessions != 1 || current.PasswordHash != legacyAfterLogin {
+				t.Fatalf("oversized input changed credentials or issued session: count=%d err=%v", sessions, err)
+			}
+			if (tc.wantDual && (current.PasswordHashV2 == nil || *current.PasswordHashV2 != primary)) || (!tc.wantDual && current.PasswordHashV2 != nil) {
+				t.Fatal("oversized input changed v2 credentials")
+			}
+		})
+	}
+}
+
 func TestProductionLoginUsesCommonFloorAndRejectsCost13(t *testing.T) {
 	db := testdb.Start(t)
 	password := "legacy-valid-owner-password"
