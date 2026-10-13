@@ -218,7 +218,7 @@ func TestSessionSurvivesProcessConfigResetButNotIdleDisableOrPasswordChange(t *t
 		engine.ServeHTTP(w, r)
 		return w.Code
 	}
-	for _, mutation := range []string{"restart", "idle", "disable", "password"} {
+	for _, mutation := range []string{"restart", "idle", "disable", "password", "password-v2"} {
 		token, err := httpx.CreateSession(db, user)
 		if err != nil {
 			t.Fatal(err)
@@ -238,11 +238,13 @@ func TestSessionSurvivesProcessConfigResetButNotIdleDisableOrPasswordChange(t *t
 			db.Model(&model.User{}).Where("id = ?", user.ID).Update("disabled_at", time.Now())
 		case "password":
 			db.Model(&model.User{}).Where("id = ?", user.ID).Update("password_hash", "changed")
+		case "password-v2":
+			db.Model(&model.User{}).Where("id = ?", user.ID).Update("password_hash_v2", "changed-v2")
 		}
 		if code := request(token); code != 401 {
 			t.Fatalf("%s session accepted: %d", mutation, code)
 		}
-		db.Model(&model.User{}).Where("id = ?", user.ID).Updates(map[string]any{"disabled_at": nil, "password_hash": "hash"})
+		db.Model(&model.User{}).Where("id = ?", user.ID).Updates(map[string]any{"disabled_at": nil, "password_hash": "hash", "password_hash_v2": nil})
 		if mutation == "disable" && request(token) != 401 {
 			t.Fatal("re-enabling owner revived previously disabled session")
 		}

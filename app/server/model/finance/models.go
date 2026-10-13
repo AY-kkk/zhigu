@@ -7,13 +7,14 @@ import (
 )
 
 type User struct {
-	ID           uint       `gorm:"column:id;primaryKey"`
-	Username     string     `gorm:"column:username"`
-	PasswordHash string     `gorm:"column:password_hash"`
-	Role         string     `gorm:"column:role"`
-	CreatedAt    time.Time  `gorm:"column:created_at"`
-	UpdatedAt    time.Time  `gorm:"column:updated_at"`
-	DisabledAt   *time.Time `gorm:"column:disabled_at"`
+	ID             uint       `gorm:"column:id;primaryKey"`
+	Username       string     `gorm:"column:username"`
+	PasswordHash   string     `gorm:"column:password_hash"`
+	PasswordHashV2 *string    `gorm:"column:password_hash_v2"`
+	Role           string     `gorm:"column:role"`
+	CreatedAt      time.Time  `gorm:"column:created_at"`
+	UpdatedAt      time.Time  `gorm:"column:updated_at"`
+	DisabledAt     *time.Time `gorm:"column:disabled_at"`
 }
 
 func (User) TableName() string { return "finance_users" }

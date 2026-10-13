@@ -38,14 +38,23 @@ func EnsureOwner(db *gorm.DB, cfg runtime.Config) error {
 				if defaultUsername(user.Username) {
 					return errors.New("production database contains a default account or password")
 				}
-				defaultPassword, _ := httpx.VerifyPassword(user.PasswordHash, "Passw0rd!")
+				defaultPassword := false
+				if httpx.CanonicalProductionBcrypt(user.PasswordHash) {
+					defaultPassword, _ = httpx.VerifyPassword(user.PasswordHash, "Passw0rd!")
+				}
+				if user.PasswordHashV2 != nil && strings.HasPrefix(*user.PasswordHashV2, "$argon2id$") && validOwnerHash(*user.PasswordHashV2) {
+					v2Default, _ := httpx.VerifyPassword(*user.PasswordHashV2, "Passw0rd!")
+					defaultPassword = defaultPassword || v2Default
+				}
 				if defaultPassword {
 					return errors.New("production database contains a default account or password")
 				}
 			}
 			if user.Role == "admin" {
-				if cfg.DeploymentEnvironment == runtime.Production && !validOwnerHash(user.PasswordHash) {
-					return errors.New("owner password hash does not meet production policy")
+				if cfg.DeploymentEnvironment == runtime.Production {
+					if !httpx.CanonicalProductionBcrypt(user.PasswordHash) || (user.PasswordHashV2 != nil && (!strings.HasPrefix(*user.PasswordHashV2, "$argon2id$") || !validOwnerHash(*user.PasswordHashV2))) {
+						return errors.New("owner password hash does not meet production policy")
+					}
 				}
 				owners++
 			}
@@ -70,8 +79,12 @@ func EnsureOwner(db *gorm.DB, cfg runtime.Config) error {
 		if err != nil {
 			return err
 		}
+		legacy, err := bcrypt.GenerateFromPassword([]byte(credentials.Password), 12)
+		if err != nil {
+			return errors.New("owner compatibility password hashing failed")
+		}
 		now := time.Now().UTC()
-		owner := modelfinance.User{Username: credentials.Username, PasswordHash: hash, Role: "admin", CreatedAt: now, UpdatedAt: now}
+		owner := modelfinance.User{Username: credentials.Username, PasswordHash: string(legacy), PasswordHashV2: &hash, Role: "admin", CreatedAt: now, UpdatedAt: now}
 		if err := tx.Create(&owner).Error; err != nil {
 			return errors.New("owner bootstrap could not be persisted")
 		}
@@ -105,7 +118,7 @@ func readOwnerCredential(path string) (ownerCredential, error) {
 		return credential, errors.New("invalid owner bootstrap credential")
 	}
 	credential.Username = strings.TrimSpace(credential.Username)
-	if len(credential.Username) < 3 || len(credential.Username) > 128 || defaultUsername(credential.Username) || len(credential.Password) < 16 || len(credential.Password) > 1024 || strings.Contains(strings.ToLower(credential.Password), "passw0rd") || strings.Contains(strings.ToLower(credential.Password), "change-me") {
+	if len(credential.Username) < 3 || len(credential.Username) > 128 || defaultUsername(credential.Username) || len(credential.Password) < 16 || len(credential.Password) > 72 || strings.Contains(strings.ToLower(credential.Password), "passw0rd") || strings.Contains(strings.ToLower(credential.Password), "change-me") {
 		return credential, errors.New("owner bootstrap requires a non-default account and strong password")
 	}
 	return credential, nil
@@ -121,18 +134,7 @@ func defaultUsername(name string) bool {
 
 func validOwnerHash(hash string) bool {
 	if strings.HasPrefix(hash, "$2") {
-		if len(hash) != 60 || hash[6] != '$' || (!strings.HasPrefix(hash, "$2a$") && !strings.HasPrefix(hash, "$2b$") && !strings.HasPrefix(hash, "$2y$")) {
-			return false
-		}
-		for _, character := range hash[7:] {
-			if !strings.ContainsRune("./ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789", character) {
-				return false
-			}
-		}
-		cost, err := bcrypt.Cost([]byte(hash))
-		// Production accepts only cost >= 12 legacy credentials for upgrade.
-		// Bootstrap always creates Argon2id credentials.
-		return err == nil && cost >= 12 && cost <= 16
+		return httpx.CanonicalProductionBcrypt(hash)
 	}
 	parts := strings.Split(hash, "$")
 	if len(parts) != 6 || parts[1] != "argon2id" || parts[2] != "v=19" {

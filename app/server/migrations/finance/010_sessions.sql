@@ -1,4 +1,6 @@
 ALTER TABLE finance_users ADD COLUMN disabled_at TIMESTAMPTZ;
+-- Expand only: keep the bcrypt column readable by the previous application.
+ALTER TABLE finance_users ADD COLUMN password_hash_v2 TEXT;
 
 CREATE TABLE finance_browser_sessions (
     jti TEXT PRIMARY KEY,
@@ -19,7 +21,9 @@ CREATE INDEX idx_finance_browser_sessions_expiry ON finance_browser_sessions(exp
 -- request observes the change. Keep this invariant for N-1 application writes.
 CREATE FUNCTION finance_revoke_browser_sessions() RETURNS trigger AS $$
 BEGIN
-    IF OLD.password_hash IS DISTINCT FROM NEW.password_hash OR NEW.disabled_at IS NOT NULL THEN
+    IF OLD.password_hash IS DISTINCT FROM NEW.password_hash
+       OR OLD.password_hash_v2 IS DISTINCT FROM NEW.password_hash_v2
+       OR NEW.disabled_at IS NOT NULL THEN
         UPDATE finance_browser_sessions SET revoked_at = now()
         WHERE user_id = NEW.id AND revoked_at IS NULL;
     END IF;
@@ -28,5 +32,5 @@ END;
 $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER finance_revoke_browser_sessions
-    AFTER UPDATE OF password_hash, disabled_at ON finance_users
+    AFTER UPDATE OF password_hash, password_hash_v2, disabled_at ON finance_users
     FOR EACH ROW EXECUTE FUNCTION finance_revoke_browser_sessions();

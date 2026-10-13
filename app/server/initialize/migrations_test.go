@@ -201,7 +201,7 @@ func TestSessionMigrationExpandsPreviousSchemaAndSurvivesRollback(t *testing.T) 
 	if err := Migrate(db); err != nil {
 		t.Fatal(err)
 	}
-	if !columnExists(t, db, "finance_users", "disabled_at") || !tableExists(t, db, "finance_browser_sessions") {
+	if !columnExists(t, db, "finance_users", "disabled_at") || !columnExists(t, db, "finance_users", "password_hash_v2") || !tableExists(t, db, "finance_browser_sessions") {
 		t.Fatal("session expansion missing")
 	}
 	if err := db.Exec(`INSERT INTO finance_browser_sessions (jti,user_id,token_digest,password_digest,expires_at) VALUES ('jti-test',97,repeat('a',64),repeat('b',64),now()+interval '12 hours')`).Error; err != nil {
@@ -231,7 +231,7 @@ func TestSessionMigrationRevokesOnHostPasswordAndOwnerDisableChanges(t *testing.
 	if err := db.Exec("INSERT INTO finance_users (id,username,password_hash,role) VALUES (97,'research-owner','old-hash','admin')").Error; err != nil {
 		t.Fatal(err)
 	}
-	for i, update := range []string{"UPDATE finance_users SET password_hash='changed-hash' WHERE id=97", "UPDATE finance_users SET disabled_at=now() WHERE id=97"} {
+	for i, update := range []string{"UPDATE finance_users SET password_hash='changed-hash' WHERE id=97", "UPDATE finance_users SET password_hash_v2='changed-v2-hash' WHERE id=97", "UPDATE finance_users SET disabled_at=now() WHERE id=97"} {
 		id := fmt.Sprintf("jti-%d", i)
 		if err := db.Exec(`INSERT INTO finance_browser_sessions (jti,user_id,token_digest,password_digest,expires_at) VALUES (?,97,?,repeat('b',64),now()+interval '12 hours')`, id, strings.Repeat(fmt.Sprintf("%d", i), 64)).Error; err != nil {
 			t.Fatal(err)

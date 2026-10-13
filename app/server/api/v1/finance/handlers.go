@@ -1,6 +1,7 @@
 package finance
 
 import (
+	"context"
 	"crypto/sha256"
 	"fmt"
 	"io"
@@ -12,7 +13,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 
 	"zhigu/server/httpx"
@@ -25,6 +25,9 @@ type API struct {
 	Proxy        *finance.ModelProxy
 	LoginLimiter *httpx.LoginLimiter
 }
+
+const loginResponseFloor = 500 * time.Millisecond
+const loginWorkBudget = 2 * time.Second
 
 func Register(engine *gin.Engine, svc *finance.ResearchService, proxy *finance.ModelProxy) {
 	a := &API{Svc: svc, Proxy: proxy, LoginLimiter: httpx.NewLoginLimiter()}
@@ -96,26 +99,35 @@ func (a *API) Login(c *gin.Context) {
 		httpx.LoginRetryAfter(c, delay)
 		return
 	}
-	// Keep existing, missing, and disabled accounts on a common response floor.
-	// Actual password verification still runs; the delay carries no DB details.
+	// Bound DB work and reject late successes. Password work is synchronous but
+	// bounded by the accepted parameters/cost class; it cannot be interrupted.
+	ctx, cancel := context.WithTimeout(c.Request.Context(), loginWorkBudget)
+	defer cancel()
 	started := time.Now()
 	defer func() {
-		if remaining := 300*time.Millisecond - time.Since(started); remaining > 0 {
-			time.Sleep(remaining)
+		if remaining := loginResponseFloor - time.Since(started); remaining > 0 {
+			timer := time.NewTimer(remaining)
+			defer timer.Stop()
+			select {
+			case <-timer.C:
+			case <-ctx.Done():
+			}
 		}
 	}()
 	var user modelfinance.User
-	if err := a.Svc.DB.WithContext(c.Request.Context()).Where("lower(username) = ?", account).Take(&user).Error; err != nil {
+	if err := a.Svc.DB.WithContext(ctx).Where("lower(username) = ?", account).Take(&user).Error; err != nil {
+		if ctx.Err() != nil {
+			httpx.Fail(c, 503, "RUNTIME_UNAVAILABLE", "登录暂不可用")
+			return
+		}
 		httpx.BurnPasswordVerification(req.Password)
 		httpx.Fail(c, http.StatusUnauthorized, "UNAUTHENTICATED", "用户名或密码错误")
 		return
 	}
-	valid, rehash := httpx.VerifyPassword(user.PasswordHash, req.Password)
-	if httpx.ProductionAuth() && strings.HasPrefix(user.PasswordHash, "$2") {
-		cost, err := bcrypt.Cost([]byte(user.PasswordHash))
-		if err != nil || cost < 12 {
-			valid = false
-		}
+	valid, rehash := httpx.VerifyLoginPassword(&user, req.Password, httpx.ProductionAuth())
+	if ctx.Err() != nil {
+		httpx.Fail(c, 503, "RUNTIME_UNAVAILABLE", "登录暂不可用")
+		return
 	}
 	if !valid || user.DisabledAt != nil {
 		httpx.Fail(c, http.StatusUnauthorized, "UNAUTHENTICATED", "用户名或密码错误")
@@ -127,9 +139,14 @@ func (a *API) Login(c *gin.Context) {
 			httpx.Fail(c, 500, "INTERNAL", "登录暂不可用")
 			return
 		}
-		oldHash := user.PasswordHash
-		if err := a.Svc.DB.Transaction(func(tx *gorm.DB) error {
-			result := tx.Model(&modelfinance.User{}).Where("id = ? AND password_hash = ? AND disabled_at IS NULL", user.ID, oldHash).Update("password_hash", hash)
+		if err := a.Svc.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+			query := tx.Model(&modelfinance.User{}).Where("id = ? AND password_hash = ? AND disabled_at IS NULL", user.ID, user.PasswordHash)
+			if user.PasswordHashV2 == nil {
+				query = query.Where("password_hash_v2 IS NULL")
+			} else {
+				query = query.Where("password_hash_v2 = ?", *user.PasswordHashV2)
+			}
+			result := query.Update("password_hash_v2", hash)
 			if result.Error != nil {
 				return result.Error
 			}
@@ -141,10 +158,10 @@ func (a *API) Login(c *gin.Context) {
 			httpx.Fail(c, 500, "INTERNAL", "登录暂不可用")
 			return
 		}
-		user.PasswordHash = hash
+		user.PasswordHashV2 = &hash
 	}
 	if httpx.ProductionAuth() {
-		token, err := httpx.CreateSession(a.Svc.DB.WithContext(c.Request.Context()), user)
+		token, err := httpx.CreateSession(a.Svc.DB.WithContext(ctx), user)
 		if err != nil {
 			httpx.Fail(c, 500, "INTERNAL", "登录暂不可用")
 			return

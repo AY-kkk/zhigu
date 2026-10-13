@@ -34,8 +34,15 @@ func TestOwnerStartupChecks(t *testing.T) {
 	if err := db.First(&owner).Error; err != nil {
 		t.Fatal(err)
 	}
-	if owner.Username != "research-owner" || owner.Role != "admin" || !strings.HasPrefix(owner.PasswordHash, "$argon2id$v=19$m=19456,t=2,p=1$") || strings.Contains(owner.PasswordHash, password) {
+	if owner.Username != "research-owner" || owner.Role != "admin" || bcrypt.CompareHashAndPassword([]byte(owner.PasswordHash), []byte(password)) != nil || strings.Contains(owner.PasswordHash, password) {
 		t.Fatal("owner credentials not safely stored")
+	}
+	var v2 string
+	if err := db.Raw("SELECT password_hash_v2 FROM finance_users WHERE id = ?", owner.ID).Scan(&v2).Error; err != nil {
+		t.Fatal(err)
+	}
+	if ok, rehash := httpx.VerifyPassword(v2, password); !ok || rehash {
+		t.Fatal("new owner lacks compatible Argon2id v2 credentials")
 	}
 	if err := EnsureOwner(db, cfg); err == nil {
 		t.Fatal("repeated bootstrap accepted")
@@ -52,7 +59,7 @@ func TestOwnerStartupChecks(t *testing.T) {
 }
 
 func TestOwnerInvalidBootstrapFailsClosed(t *testing.T) {
-	for _, body := range []string{`{}`, `{"username":"admin","password":"long-enough-owner-password"}`, `{"username":"owner","password":"Passw0rd!"}`, `{"username":"owner","password":"long-enough-owner-password","extra":true}`, `{"username":"owner","password":"long-enough-owner-password"} {}`} {
+	for _, body := range []string{`{}`, `{"username":"admin","password":"long-enough-owner-password"}`, `{"username":"owner","password":"Passw0rd!"}`, `{"username":"owner","password":"long-enough-owner-password","extra":true}`, `{"username":"owner","password":"long-enough-owner-password"} {}`, `{"username":"owner","password":"` + strings.Repeat("x", 73) + `"}`} {
 		db := testDB(t)
 		if err := Migrate(db); err != nil {
 			t.Fatal(err)
@@ -152,7 +159,11 @@ func TestProductionRejectsDefaultPasswordRehashedToArgon2id(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Create(&modelfinance.User{Username: "research-owner", PasswordHash: hash, Role: "admin"}).Error; err != nil {
+	legacy, err := bcrypt.GenerateFromPassword([]byte("valid-owner-password"), 12)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&modelfinance.User{Username: "research-owner", PasswordHash: string(legacy), PasswordHashV2: &hash, Role: "admin"}).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := EnsureOwner(db, runtime.Config{State: runtime.State{DeploymentEnvironment: runtime.Production}}); err == nil {
@@ -170,10 +181,49 @@ func TestProductionRejectsMalformedArgon2idOwnerHash(t *testing.T) {
 		t.Fatal(err)
 	}
 	hash = strings.Replace(hash, "p=1$", "p=1,trailing=1$", 1)
-	if err := db.Create(&modelfinance.User{Username: "research-owner", PasswordHash: hash, Role: "admin"}).Error; err != nil {
+	legacy, err := bcrypt.GenerateFromPassword([]byte("actual-valid-owner-password"), 12)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&modelfinance.User{Username: "research-owner", PasswordHash: string(legacy), PasswordHashV2: &hash, Role: "admin"}).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := EnsureOwner(db, runtime.Config{State: runtime.State{DeploymentEnvironment: runtime.Production}}); err == nil {
 		t.Fatal("malformed Argon2id owner accepted")
+	}
+}
+
+func TestProductionRejectsLegacyDefaultPasswordEvenWithValidV2(t *testing.T) {
+	db := testDB(t)
+	if err := Migrate(db); err != nil {
+		t.Fatal(err)
+	}
+	legacy, err := bcrypt.GenerateFromPassword([]byte("Passw0rd!"), 12)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v2, err := httpx.HashPassword("actual-valid-owner-password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&modelfinance.User{Username: "research-owner", PasswordHash: string(legacy), PasswordHashV2: &v2, Role: "admin"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := EnsureOwner(db, runtime.Config{State: runtime.State{DeploymentEnvironment: runtime.Production}}); err == nil {
+		t.Fatal("default legacy credential accepted despite valid v2")
+	}
+}
+
+func TestProductionRejectsCost13LegacyOwnerBeforeExpensiveVerification(t *testing.T) {
+	db := testDB(t)
+	if err := Migrate(db); err != nil {
+		t.Fatal(err)
+	}
+	legacy := "$2a$13$XajjQvNhvvRt5GSeFk1xFeyqRrsxkhBkUiQeg0dt.wU1qD4aFDcga"
+	if err := db.Create(&modelfinance.User{Username: "research-owner", PasswordHash: legacy, Role: "admin"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := EnsureOwner(db, runtime.Config{State: runtime.State{DeploymentEnvironment: runtime.Production}}); err == nil {
+		t.Fatal("cost13 legacy owner accepted in production")
 	}
 }

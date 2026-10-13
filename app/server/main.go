@@ -95,9 +95,8 @@ func main() {
 	}
 	engine := gin.New()
 	if runtimeConfig.DeploymentEnvironment == runtime.Production {
-		// Only the private Compose proxy may supply the source IP. The public
-		// proxy overwrites X-Forwarded-For with its directly connected client.
-		if err := engine.SetTrustedProxies([]string{"127.0.0.1", "::1", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"}); err != nil {
+		// Only the private Compose proxy may supply the overwritten X-Real-IP.
+		if err := httpx.ConfigureProductionProxy(engine); err != nil {
 			log.Fatal("invalid trusted proxy configuration")
 		}
 	}

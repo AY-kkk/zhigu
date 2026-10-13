@@ -66,6 +66,14 @@ func secretToken() (string, error) {
 }
 func digest(raw string) string { sum := sha256.Sum256([]byte(raw)); return hex.EncodeToString(sum[:]) }
 
+func credentialDigest(user model.User) string {
+	v2 := ""
+	if user.PasswordHashV2 != nil {
+		v2 = *user.PasswordHashV2
+	}
+	return digest(user.PasswordHash + "\x00" + v2)
+}
+
 func CreateSession(db *gorm.DB, user model.User) (string, error) {
 	if db == nil || user.DisabledAt != nil {
 		return "", errors.New("session unavailable")
@@ -75,7 +83,7 @@ func CreateSession(db *gorm.DB, user model.User) (string, error) {
 		return "", err
 	}
 	now := time.Now().UTC()
-	session := model.Session{JTI: uuid.NewString(), UserID: user.ID, TokenDigest: digest(token), PasswordDigest: digest(user.PasswordHash), CreatedAt: now, LastSeenAt: now, ExpiresAt: now.Add(SessionAbsoluteTTL)}
+	session := model.Session{JTI: uuid.NewString(), UserID: user.ID, TokenDigest: digest(token), PasswordDigest: credentialDigest(user), CreatedAt: now, LastSeenAt: now, ExpiresAt: now.Add(SessionAbsoluteTTL)}
 	// Serialize issuance with host password/disable updates, whose trigger
 	// revokes sessions. Credentials verified before the transaction may be stale.
 	if err := db.Transaction(func(tx *gorm.DB) error {
@@ -83,7 +91,7 @@ func CreateSession(db *gorm.DB, user model.User) (string, error) {
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", user.ID).Take(&current).Error; err != nil {
 			return err
 		}
-		if current.DisabledAt != nil || subtle.ConstantTimeCompare([]byte(digest(current.PasswordHash)), []byte(session.PasswordDigest)) != 1 {
+		if current.DisabledAt != nil || subtle.ConstantTimeCompare([]byte(credentialDigest(current)), []byte(session.PasswordDigest)) != 1 {
 			return errors.New("credentials changed")
 		}
 		return tx.Create(&session).Error
@@ -120,7 +128,7 @@ func authenticateSession(c *gin.Context) bool {
 		_ = RevokeUserSessions(config.DB, user.ID)
 		return false
 	}
-	if subtle.ConstantTimeCompare([]byte(session.PasswordDigest), []byte(digest(user.PasswordHash))) != 1 {
+	if subtle.ConstantTimeCompare([]byte(session.PasswordDigest), []byte(credentialDigest(user))) != 1 {
 		_ = RevokeUserSessions(config.DB, user.ID)
 		return false
 	}
@@ -238,7 +246,7 @@ func RehashPassword(password string) (string, error) {
 
 // VerifyPassword accepts legacy bcrypt for development compatibility and asks
 // the caller to replace it before issuing a session. Production callers must
-// additionally reject bcrypt costs below 12.
+// additionally require canonical bcrypt cost 12.
 func VerifyPassword(hash, password string) (bool, bool) {
 	if len(password) == 0 || len(password) > maxPasswordBytes {
 		return false, false
@@ -273,15 +281,56 @@ func VerifyPassword(hash, password string) (bool, bool) {
 	return subtle.ConstantTimeCompare(key, expected) == 1, memory < 19*1024 || iterations < 2
 }
 
-var dummyPasswordHash string
-var dummyOnce sync.Once
+// Fixed dummy avoids a first-request hash-generation penalty. It is not a
+// credential: verification against it can never authenticate an account.
+const dummyPasswordHash = "$2a$12$XajjQvNhvvRt5GSeFk1xFeyqRrsxkhBkUiQeg0dt.wU1qD4aFDcga"
+
+// CanonicalProductionBcrypt bounds production legacy work to one cost class.
+// Other costs require an offline reset/migration before production login.
+func CanonicalProductionBcrypt(hash string) bool {
+	if len(hash) != 60 || (!strings.HasPrefix(hash, "$2a$12$") && !strings.HasPrefix(hash, "$2b$12$") && !strings.HasPrefix(hash, "$2y$12$")) {
+		return false
+	}
+	for _, character := range hash[7:] {
+		if !strings.ContainsRune("./ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789", character) {
+			return false
+		}
+	}
+	// bcrypt's unpadded base64 has unused low bits in the last salt/hash
+	// characters. Reject aliases with nonzero padding bits.
+	return strings.ContainsRune(".Oeu", rune(hash[28])) && strings.ContainsRune(".CGKOSWaeimquy26", rune(hash[59]))
+}
+
+func VerifyLoginPassword(user *model.User, password string, production bool) (bool, bool) {
+	return verifyLoginPassword(user, password, production, VerifyPassword)
+}
+
+func verifyLoginPassword(user *model.User, password string, production bool, verify func(string, string) (bool, bool)) (bool, bool) {
+	hash, eligible := dummyPasswordHash, user != nil
+	if user != nil {
+		if user.PasswordHashV2 != nil && *user.PasswordHashV2 != "" {
+			hash = *user.PasswordHashV2
+			if !strings.HasPrefix(hash, "$argon2id$") {
+				hash, eligible = dummyPasswordHash, false
+			}
+		} else {
+			hash = user.PasswordHash
+			if production && !CanonicalProductionBcrypt(hash) {
+				hash, eligible = dummyPasswordHash, false
+			}
+		}
+	}
+	// bcrypt accepts at most 72 bytes. Overlong legacy input must still pay
+	// the dummy cost, while never authenticating via truncation.
+	if strings.HasPrefix(hash, "$2") && len(password) > 72 {
+		hash, password, eligible = dummyPasswordHash, password[:72], false
+	}
+	valid, rehash := verify(hash, password)
+	return eligible && valid, eligible && rehash
+}
 
 func BurnPasswordVerification(password string) {
-	dummyOnce.Do(func() { dummyPasswordHash, _ = HashPassword("anonymous-account-dummy-password") })
-	if len(password) > maxPasswordBytes {
-		password = password[:maxPasswordBytes]
-	}
-	_, _ = VerifyPassword(dummyPasswordHash, password)
+	_, _ = VerifyLoginPassword(nil, password, true)
 }
 
 func NormalizeAccount(account string) string { return strings.ToLower(strings.TrimSpace(account)) }

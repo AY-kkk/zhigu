@@ -2,6 +2,7 @@ package finance
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -62,8 +63,63 @@ func TestProductionLoginUsesCookieAndRehashesLegacyPassword(t *testing.T) {
 	if err := db.First(&user, user.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(user.PasswordHash, "$argon2id$v=19$m=19456,t=2,p=1$") {
-		t.Fatalf("legacy password not rehashed: %s", user.PasswordHash)
+	if user.PasswordHash != string(hash) || bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte("a-valid-long-password")) != nil {
+		t.Fatal("login upgrade broke N-1 bcrypt authentication")
+	}
+	var v2 string
+	if err := db.Raw("SELECT password_hash_v2 FROM finance_users WHERE id = ?", user.ID).Scan(&v2).Error; err != nil || !strings.HasPrefix(v2, "$argon2id$v=19$m=19456,t=2,p=1$") {
+		t.Fatalf("login did not populate Argon2id v2: %v", err)
+	}
+}
+
+func TestProductionLoginUsesCommonFloorAndRejectsCost13(t *testing.T) {
+	db := testdb.Start(t)
+	password := "legacy-valid-owner-password"
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), 12)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.User{Username: "owner", PasswordHash: string(hash), Role: "admin"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	// Changing only the cost parameter still creates a canonical, expensive
+	// bcrypt hash. Production must reject before comparing that cost class.
+	if err := db.Create(&model.User{Username: "expensive-owner", PasswordHash: strings.Replace(string(hash), "$12$", "$13$", 1), Role: "admin"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	httpx.ConfigureAuth(httpx.AuthConfig{DB: db, Production: true, PublicOrigin: "https://zhigu.example"})
+	t.Cleanup(func() { httpx.ConfigureAuth(httpx.AuthConfig{}) })
+	engine := gin.New()
+	a := &API{Svc: service.NewService(db, service.NewFakeResearchClient(), service.NewMemoryBudget(), service.NewFixtureConfig()), LoginLimiter: httpx.NewLoginLimiter()}
+	engine.POST("/login", a.Login)
+	for _, account := range []string{"missing", "owner", "expensive-owner"} {
+		body, _ := json.Marshal(map[string]string{"username": account, "password": "wrong-password"})
+		r := httptest.NewRequest("POST", "/login", bytes.NewReader(body))
+		r.Header.Set("Origin", "https://zhigu.example")
+		w := httptest.NewRecorder()
+		started := time.Now()
+		engine.ServeHTTP(w, r)
+		if elapsed := time.Since(started); w.Code != 401 || elapsed < 500*time.Millisecond {
+			t.Errorf("%s did not use common 500ms rejection floor: %d %v", account, w.Code, elapsed)
+		}
+	}
+}
+
+func TestProductionLoginCancelledBudgetCannotIssueSession(t *testing.T) {
+	db := testdb.Start(t)
+	httpx.ConfigureAuth(httpx.AuthConfig{DB: db, Production: true, PublicOrigin: "https://zhigu.example"})
+	t.Cleanup(func() { httpx.ConfigureAuth(httpx.AuthConfig{}) })
+	engine := gin.New()
+	a := &API{Svc: service.NewService(db, service.NewFakeResearchClient(), service.NewMemoryBudget(), service.NewFixtureConfig()), LoginLimiter: httpx.NewLoginLimiter()}
+	engine.POST("/login", a.Login)
+	r := httptest.NewRequest("POST", "/login", bytes.NewBufferString(`{"username":"owner","password":"owner-password"}`))
+	r.Header.Set("Origin", "https://zhigu.example")
+	ctx, cancel := context.WithCancel(r.Context())
+	cancel()
+	w := httptest.NewRecorder()
+	engine.ServeHTTP(w, r.WithContext(ctx))
+	if w.Code != 503 || len(w.Result().Cookies()) != 0 {
+		t.Fatalf("expired login work budget not closed: %d %s", w.Code, w.Body)
 	}
 }
 
@@ -99,7 +155,7 @@ func TestWeakLegacyBcryptRejectedOnlyInProduction(t *testing.T) {
 				if w.Code != 401 || sessions != 0 || user.PasswordHash != string(hash) || len(w.Result().Cookies()) != 0 {
 					t.Fatalf("weak production credential accepted: status=%d sessions=%d", w.Code, sessions)
 				}
-			} else if w.Code != 200 || !strings.HasPrefix(user.PasswordHash, "$argon2id$") {
+			} else if w.Code != 200 || user.PasswordHashV2 == nil || !strings.HasPrefix(*user.PasswordHashV2, "$argon2id$") || user.PasswordHash != string(hash) {
 				t.Fatalf("development legacy upgrade rejected: %d %s", w.Code, w.Body)
 			}
 		})
@@ -196,7 +252,11 @@ func TestProductionLoginDatabaseFailureIsRedacted(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Create(&model.User{Username: "owner", PasswordHash: hash, Role: "admin"}).Error; err != nil {
+	legacy, err := bcrypt.GenerateFromPassword([]byte("actual-valid-owner-password"), 12)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.User{Username: "owner", PasswordHash: string(legacy), PasswordHashV2: &hash, Role: "admin"}).Error; err != nil {
 		t.Fatal(err)
 	}
 	httpx.ConfigureAuth(httpx.AuthConfig{DB: db, Production: true, PublicOrigin: "https://zhigu.example"})
