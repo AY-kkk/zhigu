@@ -77,7 +77,6 @@ func main() {
 		futuresState = state
 		if err == nil && futuressvc.MaintenanceAvailable(futuresDB) {
 			futuresDomain = futuressvc.NewDomain(futuresDB, os.Getenv("ZHIGU_FUTURES_STORAGE_DIR")).WithMode(futuresState.Mode).WithEnabled(futuresEnabled)
-			go futuressvc.StartFuturesMaintenance(context.Background(), futuresDB, futuresDomain)
 		}
 	}
 	budget := finance.NewDBBudget(db)
@@ -96,9 +95,6 @@ func main() {
 	cfg := finance.NewConfigService(db)
 	proxy := finance.NewModelProxy(db, budget)
 	ctx := context.Background()
-	if runtimeConfig.DeploymentEnvironment != runtime.Production || (runtimeConfig.Research.Enabled && runtimeConfig.Research.OperationMode == runtime.Live) {
-		svc.StartWorker(ctx)
-	}
 	engine := gin.New()
 	httpx.InstallTrace(engine)
 	if runtimeConfig.DeploymentEnvironment == runtime.Production {
@@ -180,6 +176,18 @@ func main() {
 		{Name: "futures", State: futuresModule, Version: runtimeConfig.Revision, ConfigDigest: configDigest, Worker: ops.HTTPProbe(os.Getenv("FUTURES_WORKER_URL"), runtimeConfig.FuturesToken, nil)},
 		{Name: "intel", State: runtimeConfig.Intel, Version: runtimeConfig.Revision, ConfigDigest: configDigest, Worker: intelWorker},
 	}, runtimeConfig.InternalToken)
+	// Install immutable per-instance observers before any background worker starts.
+	if httpClient, ok := client.(*finance.HTTPResearchClient); ok {
+		httpClient.Observer = monitor
+	}
+	proxy.Observer = monitor
+	if futuresDomain != nil {
+		futuresDomain.WithObserver(monitor)
+		go futuressvc.StartFuturesMaintenance(ctx, futuresDB, futuresDomain)
+	}
+	if runtimeConfig.DeploymentEnvironment != runtime.Production || (runtimeConfig.Research.Enabled && runtimeConfig.Research.OperationMode == runtime.Live) {
+		svc.StartWorker(ctx)
+	}
 	var futuresMetricsPool *sql.DB
 	if runtimeConfig.Futures.Enabled && futuresDBErr == nil {
 		futuresMetricsPool, _ = futuresDB.DB()
@@ -232,7 +240,7 @@ func main() {
 		if fixtureDir == "" && runtimeConfig.DeploymentEnvironment != runtime.Production {
 			fixtureDir = "../../contracts/intel/fixtures/events-v1"
 		}
-		intelSvc := intelsvc.NewService(db, []byte(cookieSecret), fixtureDir).WithConfigService(cfg)
+		intelSvc := intelsvc.NewService(db, []byte(cookieSecret), fixtureDir).WithConfigService(cfg).WithObserver(monitor)
 		intelapi.Register(engine, intelSvc)
 		if runtimeConfig.DeploymentEnvironment != runtime.Production || runtimeConfig.Intel.OperationMode == runtime.Live {
 			intelSvc.StartWorker(ctx)

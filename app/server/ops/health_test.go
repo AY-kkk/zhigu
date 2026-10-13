@@ -32,14 +32,32 @@ func TestSQLMetricsProviderReadsActualQueueRunsPoolAndLedger(t *testing.T) {
 	for _, statement := range []string{
 		"CREATE TEMP TABLE finance_research_runs(status text,created_at timestamptz,deleted_at timestamptz)",
 		"CREATE TEMP TABLE futures_runs(status text,created_at timestamptz,deleted_at timestamptz)",
+		"CREATE TEMP TABLE finance_intel_jobs(status text,created_at timestamptz)",
+		"CREATE TEMP TABLE finance_usage_ledger(status text,reserved_tokens bigint,actual_tokens bigint)",
+		"CREATE TEMP TABLE finance_intel_usage(status text,reserved_tokens bigint,actual_tokens bigint)",
+		"CREATE TEMP TABLE futures_budget_accounts(scope text,budget_date date,limit_cny numeric,reserved_cny numeric,spent_cny numeric)",
+		"CREATE TEMP TABLE futures_budget_reservations(state text,amount_cny numeric)",
+		"CREATE TEMP TABLE futures_usage(usage_state text)",
+		"CREATE TEMP TABLE futures_deletion_jobs(state text)",
+		"CREATE TEMP TABLE futures_documents(purge_at timestamptz,deleted_at timestamptz)",
+		"CREATE TEMP TABLE finance_intel_namespaces(expires_at timestamptz)",
 		"INSERT INTO finance_research_runs VALUES('queued',now()-interval '20 seconds',NULL),('queued',now()-interval '10 seconds',NULL),('completed',now(),NULL),('queued',now()-interval '60 seconds',now())",
 		"INSERT INTO futures_runs VALUES('queued',now()-interval '5 seconds',NULL),('succeeded',now(),NULL)",
+		"INSERT INTO finance_intel_jobs VALUES('queued',now()-interval '10 seconds'),('partial',now())",
+		"INSERT INTO finance_usage_ledger VALUES('reserved',10,NULL),('succeeded',20,7),('unknown',30,NULL)",
+		"INSERT INTO finance_intel_usage VALUES('reserved',11,NULL),('settled',20,8),('usage_unknown',31,NULL)",
+		"INSERT INTO futures_budget_accounts VALUES('module',(date_trunc('day',now() AT TIME ZONE 'Asia/Shanghai') AT TIME ZONE 'Asia/Shanghai' AT TIME ZONE 'UTC')::date,50,2,3),('user',(date_trunc('day',now() AT TIME ZONE 'Asia/Shanghai') AT TIME ZONE 'Asia/Shanghai' AT TIME ZONE 'UTC')::date,5,2,3)",
+		"INSERT INTO futures_budget_reservations VALUES('reserved',2),('unknown',4)",
+		"INSERT INTO futures_usage VALUES('unknown')",
+		"INSERT INTO futures_deletion_jobs VALUES('scheduled'),('retry'),('purged')",
+		"INSERT INTO futures_documents VALUES(now()-interval '1 day',NULL)",
+		"INSERT INTO finance_intel_namespaces VALUES(now()-interval '1 day'),(NULL)",
 	} {
 		if err := db.Exec(statement).Error; err != nil {
 			t.Fatal(err)
 		}
 	}
-	defer db.Exec("DROP TABLE pg_temp.finance_research_runs, pg_temp.futures_runs")
+	defer db.Exec("DROP TABLE pg_temp.finance_research_runs, pg_temp.futures_runs, pg_temp.finance_intel_jobs, pg_temp.finance_usage_ledger, pg_temp.finance_intel_usage, pg_temp.futures_budget_accounts, pg_temp.futures_budget_reservations, pg_temp.futures_usage, pg_temp.futures_deletion_jobs, pg_temp.futures_documents, pg_temp.finance_intel_namespaces")
 	provider := NewSQLMetricsProvider(pool, pool, "", "")
 	snapshot, err := provider.Snapshot(context.Background())
 	if err != nil {
@@ -50,6 +68,37 @@ func TestSQLMetricsProviderReadsActualQueueRunsPoolAndLedger(t *testing.T) {
 	}
 	if snapshot.Runs["finance"].Counts["completed"] != 1 || snapshot.Queues["futures"].Length != 1 || snapshot.Runs["futures"].Counts["succeeded"] != 1 || snapshot.MigrationVersion == "" {
 		t.Fatalf("actual futures/ledger snapshot missing: %+v", snapshot)
+	}
+	r, monitor := routerFor(ProbeFunc(func(context.Context) error { return nil }), nil)
+	monitor.SetMetricsProvider(provider)
+	body := request(r, "/metrics", "private-metrics-secret").Body.String()
+	for _, want := range []string{
+		`zhigu_queue_length{module="intel"} 1`, `zhigu_runs{module="intel",status="partial"} 1`,
+		`zhigu_budget_usage{module="finance",state="reservation",unit="tokens"} 10`,
+		`zhigu_budget_usage{module="finance",state="spent",unit="tokens"} 7`,
+		`zhigu_budget_usage{module="finance",state="unknown",unit="tokens"} 30`,
+		`zhigu_budget_usage{module="intel",state="unknown",unit="tokens"} 31`,
+		`zhigu_budget_usage{module="futures",state="spent",unit="cny"} 3`,
+		`zhigu_budget_usage{module="futures",state="unknown",unit="cny"} 4`,
+		`zhigu_budget_unknown_calls{module="futures"} 1`,
+		`zhigu_budget_remaining{module="futures"} 45`,
+		`zhigu_cleanup_backlog{module="finance"} 1`, `zhigu_cleanup_backlog{module="futures"} 3`, `zhigu_cleanup_backlog{module="intel"} 1`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("missing SQL-backed metric: %s", want)
+		}
+	}
+	if err := db.Exec("UPDATE finance_intel_jobs SET status='running' WHERE status='queued'").Error; err != nil {
+		t.Fatal(err)
+	}
+	if body := request(r, "/metrics", "private-metrics-secret").Body.String(); !strings.Contains(body, `zhigu_queue_length{module="intel"} 0`) || !strings.Contains(body, `zhigu_runs{module="intel",status="running"} 1`) {
+		t.Fatal("job status change not reflected by SQL snapshot")
+	}
+	if err := db.Exec("DELETE FROM futures_budget_accounts WHERE scope='module'").Error; err != nil {
+		t.Fatal(err)
+	}
+	if body := request(r, "/metrics", "private-metrics-secret").Body.String(); !strings.Contains(body, `zhigu_budget_available{module="futures"} 0`) || strings.Contains(body, `zhigu_budget_remaining{module="futures"}`) {
+		t.Fatal("missing module account invents remaining budget")
 	}
 	snapshot, err = NewSQLMetricsProvider(pool, nil, "", "").Snapshot(context.Background())
 	if err != nil || snapshot.Queues["futures"].Available {
@@ -157,11 +206,13 @@ func TestExternalMetricSnapshotsCannotIntroduceSensitiveLabels(t *testing.T) {
 		return MetricSnapshot{
 			Queues:           map[string]QueueMetric{"owner-secret": {Available: true, Length: 99}},
 			Runs:             map[string]RunMetric{"finance": {Available: true, Counts: map[string]uint64{"queued": 2, "status-secret": 9}}},
+			Budgets:          map[string]BudgetMetric{"finance": {Available: true, Unit: "unit-secret"}, "owner-secret": {Available: true, Unit: "tokens"}},
+			Cleanup:          map[string]MetricValue{"finance": {Available: true, Value: math.NaN()}, "owner-secret": {Available: true, Value: 9}},
 			MigrationVersion: "/token-secret/path",
 		}, nil
 	}))
 	w := request(r, "/metrics", "private-metrics-secret")
-	if strings.Contains(w.Body.String(), "secret") {
+	if strings.Contains(w.Body.String(), "secret") || strings.Contains(w.Body.String(), "NaN") {
 		t.Fatalf("snapshot introduced secret label: %s", w.Body.String())
 	}
 	m.SetMetricsProvider(MetricsProviderFunc(func(context.Context) (MetricSnapshot, error) { return MetricSnapshot{}, errors.New("dsn=secret") }))
@@ -309,7 +360,7 @@ func TestReadinessBlocksInternalPaidCallsBeforeReservation(t *testing.T) {
 	r, m := routerFor(ProbeFunc(func(context.Context) error { return errors.New("unavailable") }), nil)
 	r.Use(m.RequireReady())
 	reservations := 0
-	for _, path := range []string{"/internal/llm/v1/chat/completions", "/internal/llm/v1/responses", "/internal/futures/v1/model", "/internal/futures/v1/tools"} {
+	for _, path := range []string{"/internal/llm/v1/chat/completions", "/internal/llm/v1/responses", "/internal/futures/v1/model", "/internal/futures/v1/tools", "/internal/finance/tool-grants", "/internal/finance/data-query"} {
 		r.POST(path, func(c *gin.Context) { reservations++; httpx.OK(c, 200, nil) })
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, httptest.NewRequest("POST", path, nil))

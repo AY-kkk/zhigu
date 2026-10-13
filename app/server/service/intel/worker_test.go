@@ -3,7 +3,11 @@ package intel
 import (
 	"context"
 	"encoding/json"
+	"github.com/gin-gonic/gin"
+	"net/http/httptest"
+	"strings"
 	"testing"
+	"zhigu/server/ops"
 
 	"zhigu/server/service/finance"
 
@@ -85,6 +89,8 @@ func TestWorkerExecutesFrozenModelExtraction(t *testing.T) {
 	db := testdb.Start(t)
 	configs := finance.NewConfigService(db)
 	svc := NewService(db, []byte("intel-test-cookie-secret"), testFixtureDir(t)).WithConfigService(configs)
+	monitor := ops.New(nil, nil, "metrics-test")
+	svc.WithObserver(monitor)
 	ctx := context.Background()
 	saved, err := configs.SaveModel(ctx, map[string]any{
 		"base_url": "https://example.com/v1", "protocol": "openai_chat_completions", "model": "model-x",
@@ -139,6 +145,15 @@ func TestWorkerExecutesFrozenModelExtraction(t *testing.T) {
 	}
 	if runs != 1 {
 		t.Fatalf("extraction runs=%d", runs)
+	}
+	r := gin.New()
+	monitor.Register(r)
+	req := httptest.NewRequest("GET", "/metrics", nil)
+	req.Header.Set("Authorization", "Bearer metrics-test")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if !strings.Contains(w.Body.String(), `zhigu_worker_calls_total{name="intel"} 1`) {
+		t.Fatal("actual job not observed")
 	}
 	_ = created
 }

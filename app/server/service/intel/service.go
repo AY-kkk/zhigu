@@ -26,6 +26,7 @@ type Service struct {
 	Now        func() time.Time
 	Configs    *svcfinance.ConfigService
 	ModelCall  ModelCall
+	Observer   httpx.OperationalObserver
 }
 
 func NewService(db *gorm.DB, cookieKey []byte, fixtureDir string) *Service {
@@ -34,6 +35,11 @@ func NewService(db *gorm.DB, cookieKey []byte, fixtureDir string) *Service {
 
 func (s *Service) WithConfigService(configs *svcfinance.ConfigService) *Service {
 	s.Configs = configs
+	return s
+}
+
+func (s *Service) WithObserver(observer httpx.OperationalObserver) *Service {
+	s.Observer = observer
 	return s
 }
 

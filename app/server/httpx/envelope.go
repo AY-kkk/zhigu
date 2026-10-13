@@ -6,10 +6,19 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
+
+// OperationalObserver is installed before serving requests or starting workers.
+// Implementations must be safe for concurrent calls and bound all label values.
+type OperationalObserver interface {
+	ObserveWorker(string, time.Duration, bool)
+	ObserveProvider(string, time.Duration, bool)
+	SetCleanupBacklog(string, float64, bool)
+}
 
 type Envelope struct {
 	Data    any     `json:"data"`

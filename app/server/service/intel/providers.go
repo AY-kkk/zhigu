@@ -11,6 +11,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	"zhigu/server/httpx"
 )
 
 const maxProviderResponseBytes = 8 << 20
@@ -24,6 +25,7 @@ type ProviderConfig struct {
 	APIKey       string
 	Enabled      bool
 	Reason       string
+	Observer     httpx.OperationalObserver
 }
 
 func providerConfigs() map[string]ProviderConfig {
@@ -158,7 +160,7 @@ func providerURLAllowed(u *url.URL, allow map[string]struct{}) bool {
 	return true
 }
 
-func (p *ProviderClient) Do(ctx context.Context, req ProviderRequest) ([]byte, http.Header, error) {
+func (p *ProviderClient) Do(ctx context.Context, req ProviderRequest) (bodyOut []byte, headersOut http.Header, callErr error) {
 	if !p.Config.Enabled {
 		return nil, nil, newError(422, "PROVIDER_DISABLED", "provider 未启用或未授权")
 	}
@@ -183,6 +185,12 @@ func (p *ProviderClient) Do(ctx context.Context, req ProviderRequest) ([]byte, h
 	if p.Config.APIKeyHeader != "" && p.Config.APIKey != "" {
 		request.Header.Set(p.Config.APIKeyHeader, p.Config.APIKey)
 	}
+	started := time.Now()
+	defer func() {
+		if p.Config.Observer != nil {
+			p.Config.Observer.ObserveProvider(p.Config.Name, time.Since(started), callErr != nil)
+		}
+	}()
 	response, err := p.Client.Do(request)
 	if err != nil {
 		return nil, nil, err

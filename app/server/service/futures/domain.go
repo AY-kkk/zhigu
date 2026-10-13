@@ -18,6 +18,7 @@ import (
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
 
+	"zhigu/server/httpx"
 	model "zhigu/server/model/futures"
 )
 
@@ -27,6 +28,7 @@ type Domain struct {
 	Now        func() time.Time
 	Mode       string
 	Enabled    bool
+	Observer   httpx.OperationalObserver
 }
 
 type RuntimePolicy struct {
@@ -133,6 +135,10 @@ func NewDomain(db *gorm.DB, storageDir string) *Domain {
 
 func (d *Domain) WithMode(mode string) *Domain     { d.Mode = mode; return d }
 func (d *Domain) WithEnabled(enabled bool) *Domain { d.Enabled = enabled; return d }
+func (d *Domain) WithObserver(observer httpx.OperationalObserver) *Domain {
+	d.Observer = observer
+	return d
+}
 
 func (d *Domain) Products(ctx context.Context, id Identity, limit int) ([]model.Product, error) {
 	if limit <= 0 || limit > 100 {

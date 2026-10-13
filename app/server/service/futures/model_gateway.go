@@ -60,6 +60,13 @@ func (d *Domain) ExecuteInternalModel(ctx context.Context, spec GrantSpec, argum
 		request.Header.Set("Authorization", "Bearer "+apiKey)
 	}
 	client := &http.Client{Timeout: 30 * time.Second}
+	started := time.Now()
+	providerFailed := true
+	defer func() {
+		if d.Observer != nil {
+			d.Observer.ObserveProvider("model", time.Since(started), providerFailed)
+		}
+	}()
 	response, err := client.Do(request)
 	if err != nil {
 		_ = budget.SettleUnknown(ctx, spec.OwnerID, attemptID, reservation.AmountCNY, reservation.Tokens)
@@ -91,6 +98,7 @@ func (d *Domain) ExecuteInternalModel(ctx context.Context, spec GrantSpec, argum
 		_ = budget.SettleUnknown(ctx, spec.OwnerID, attemptID, reservation.AmountCNY, reservation.Tokens)
 		return nil, ErrUnavailable
 	}
+	providerFailed = false
 	if inputTokens, outputTokens, ok := modelUsage(payload); ok {
 		actualTokens := inputTokens + outputTokens
 		actualCost := price.Mul(decimal.NewFromInt(int64(actualTokens))).Div(decimal.NewFromInt(1000))

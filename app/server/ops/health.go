@@ -216,6 +216,13 @@ type RunMetric struct {
 	Available bool
 	Counts    map[string]uint64
 }
+type BudgetMetric struct {
+	Available                   bool
+	Unit                        string
+	Reservation, Spent, Unknown float64
+	UnknownCalls                MetricValue
+	Remaining                   MetricValue
+}
 type MetricSnapshot struct {
 	DBPool            *sql.DBStats
 	Queues            map[string]QueueMetric
@@ -223,6 +230,8 @@ type MetricSnapshot struct {
 	MigrationVersion  string
 	BackupLastSuccess MetricValue
 	BackupObserved    bool
+	Budgets           map[string]BudgetMetric
+	Cleanup           map[string]MetricValue
 }
 type callMetric struct {
 	Count, Errors uint64
@@ -232,7 +241,7 @@ type callMetric struct {
 var metricDomains = []string{"finance", "futures", "intel"}
 var workerNames = []string{"research", "futures", "intel"}
 var providerNames = []string{"ifind", "cninfo", "fuyao", "model", "research", "futures"}
-var runStatuses = []string{"queued", "researching", "running", "verifying", "completed", "incomplete", "succeeded", "failed", "canceling", "canceled"}
+var runStatuses = []string{"queued", "researching", "running", "verifying", "completed", "incomplete", "succeeded", "failed", "canceling", "canceled", "partial", "cancelled"}
 var migrationMetricVersion = regexp.MustCompile(`^[0-9]{3,4}_[a-z0-9_]{1,48}$`)
 
 func listed(value string, allowed []string) bool {
@@ -326,7 +335,7 @@ func (m *Monitor) writeOperationalMetrics(ctx context.Context, out *strings.Buil
 	defer m.mu.Unlock()
 	// All names and states come from fixed vocabularies. Provider supplied names,
 	// URLs, owner IDs, run IDs, error messages, and unknown status strings are ignored.
-	for _, name := range []string{"db_pool_available", "db_pool_open_connections", "db_pool_in_use_connections", "db_pool_idle_connections", "db_pool_wait_total", "db_pool_wait_seconds_total", "queue_available", "queue_length", "queue_oldest_age_seconds", "runs_available", "runs", "budget_available", "budget_remaining", "cleanup_available", "cleanup_backlog", "backup_available", "backup_last_success_timestamp_seconds", "migration_available", "migration_info"} {
+	for _, name := range []string{"db_pool_available", "db_pool_open_connections", "db_pool_in_use_connections", "db_pool_idle_connections", "db_pool_wait_total", "db_pool_wait_seconds_total", "queue_available", "queue_length", "queue_oldest_age_seconds", "runs_available", "runs", "budget_available", "budget_remaining", "budget_usage_available", "budget_usage", "budget_unknown_calls_available", "budget_unknown_calls", "cleanup_available", "cleanup_backlog", "backup_available", "backup_last_success_timestamp_seconds", "migration_available", "migration_info"} {
 		kind := "gauge"
 		if strings.HasSuffix(name, "_total") {
 			kind = "counter"
@@ -357,12 +366,35 @@ func (m *Monitor) writeOperationalMetrics(ctx context.Context, out *strings.Buil
 				writeGauge(out, "zhigu_runs", labels+fmt.Sprintf(`,status=%q`, status), float64(runs.Counts[status]))
 			}
 		}
+		budgetRemaining, cleanup := m.budgets[module], m.cleanup[module]
+		budget, observed := snapshot.Budgets[module]
+		if observed {
+			budgetRemaining = budget.Remaining
+		}
+		if source, observed := snapshot.Cleanup[module]; observed {
+			cleanup = source
+		}
+		usageAvailable := budget.Available && listed(budget.Unit, []string{"tokens", "cny"}) && validMetric(budget.Reservation) && validMetric(budget.Spent) && validMetric(budget.Unknown)
+		writeGauge(out, "zhigu_budget_usage_available", labels, float64(bit(usageAvailable)))
+		if usageAvailable {
+			for _, state := range []struct {
+				name  string
+				value float64
+			}{{"reservation", budget.Reservation}, {"spent", budget.Spent}, {"unknown", budget.Unknown}} {
+				writeGauge(out, "zhigu_budget_usage", labels+fmt.Sprintf(`,state=%q,unit=%q`, state.name, budget.Unit), state.value)
+			}
+		}
+		writeGauge(out, "zhigu_budget_unknown_calls_available", labels, float64(bit(budget.UnknownCalls.Available && validMetric(budget.UnknownCalls.Value))))
+		if budget.UnknownCalls.Available && validMetric(budget.UnknownCalls.Value) {
+			writeGauge(out, "zhigu_budget_unknown_calls", labels, budget.UnknownCalls.Value)
+		}
 		for _, entry := range []struct {
 			available, value string
 			sample           MetricValue
-		}{{"zhigu_budget_available", "zhigu_budget_remaining", m.budgets[module]}, {"zhigu_cleanup_available", "zhigu_cleanup_backlog", m.cleanup[module]}} {
-			writeGauge(out, entry.available, labels, float64(bit(entry.sample.Available)))
-			if entry.sample.Available {
+		}{{"zhigu_budget_available", "zhigu_budget_remaining", budgetRemaining}, {"zhigu_cleanup_available", "zhigu_cleanup_backlog", cleanup}} {
+			available := entry.sample.Available && validMetric(entry.sample.Value)
+			writeGauge(out, entry.available, labels, float64(bit(available)))
+			if available {
 				writeGauge(out, entry.value, labels, entry.sample.Value)
 			}
 		}
@@ -408,11 +440,16 @@ func NewSQLMetricsProvider(primary, futures *sql.DB, backupStateFile, backupTime
 	return MetricsProviderFunc(func(ctx context.Context) (MetricSnapshot, error) {
 		ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 		defer cancel()
-		snapshot := MetricSnapshot{Queues: map[string]QueueMetric{}, Runs: map[string]RunMetric{}, BackupObserved: backupStateFile != "" || backupTimestamp != "", BackupLastSuccess: ReadBackupLastSuccess(backupStateFile, backupTimestamp)}
+		snapshot := MetricSnapshot{Queues: map[string]QueueMetric{}, Runs: map[string]RunMetric{}, Budgets: map[string]BudgetMetric{}, Cleanup: map[string]MetricValue{}, BackupObserved: backupStateFile != "" || backupTimestamp != "", BackupLastSuccess: ReadBackupLastSuccess(backupStateFile, backupTimestamp)}
 		if primary != nil {
 			stats := primary.Stats()
 			snapshot.DBPool = &stats
 			snapshot.Queues["finance"], snapshot.Runs["finance"] = readRunMetrics(ctx, primary, "finance_research_runs")
+			snapshot.Queues["intel"], snapshot.Runs["intel"] = readRunMetrics(ctx, primary, "finance_intel_jobs")
+			snapshot.Budgets["finance"] = readTokenBudget(ctx, primary, "finance_usage_ledger")
+			snapshot.Budgets["intel"] = readTokenBudget(ctx, primary, "finance_intel_usage")
+			snapshot.Cleanup["finance"] = readSQLGauge(ctx, primary, "SELECT count(*)::double precision FROM finance_research_runs WHERE deleted_at IS NOT NULL")
+			snapshot.Cleanup["intel"] = readSQLGauge(ctx, primary, "SELECT count(*)::double precision FROM finance_intel_namespaces WHERE expires_at <= CURRENT_TIMESTAMP")
 			var version string
 			if primary.QueryRowContext(ctx, "SELECT version FROM finance_schema_migrations ORDER BY version DESC LIMIT 1").Scan(&version) == nil {
 				snapshot.MigrationVersion = version
@@ -420,17 +457,68 @@ func NewSQLMetricsProvider(primary, futures *sql.DB, backupStateFile, backupTime
 		}
 		if futures != nil {
 			snapshot.Queues["futures"], snapshot.Runs["futures"] = readRunMetrics(ctx, futures, "futures_runs")
+			snapshot.Budgets["futures"] = readFuturesBudget(ctx, futures)
+			snapshot.Cleanup["futures"] = readSQLGauge(ctx, futures, `SELECT ((SELECT count(*) FROM futures_deletion_jobs WHERE state IN ('scheduled','retry')) + (SELECT count(*) FROM futures_documents WHERE deleted_at IS NOT NULL OR purge_at <= CURRENT_TIMESTAMP))::double precision`)
 		}
 		return snapshot, nil
 	})
 }
 
+func readSQLGauge(ctx context.Context, pool *sql.DB, query string) MetricValue {
+	var value float64
+	if pool.QueryRowContext(ctx, query).Scan(&value) != nil || !validMetric(value) {
+		return MetricValue{}
+	}
+	return MetricValue{Available: true, Value: value}
+}
+
+func readTokenBudget(ctx context.Context, pool *sql.DB, table string) BudgetMetric {
+	if table != "finance_usage_ledger" && table != "finance_intel_usage" {
+		return BudgetMetric{}
+	}
+	spent, unknown := "succeeded", "unknown"
+	if table == "finance_intel_usage" {
+		spent, unknown = "settled", "usage_unknown"
+	}
+	metric := BudgetMetric{Unit: "tokens"}
+	var unknownCalls float64
+	err := pool.QueryRowContext(ctx, `SELECT
+ COALESCE(sum(reserved_tokens) FILTER (WHERE status='reserved'),0)::double precision,
+ COALESCE(sum(actual_tokens) FILTER (WHERE status=$1),0)::double precision,
+ COALESCE(sum(reserved_tokens) FILTER (WHERE status=$2),0)::double precision,
+ count(*) FILTER (WHERE status=$2)::double precision FROM `+table, spent, unknown).Scan(&metric.Reservation, &metric.Spent, &metric.Unknown, &unknownCalls)
+	metric.Available = err == nil
+	metric.UnknownCalls = MetricValue{Available: err == nil, Value: unknownCalls}
+	// These modules enforce per-run/per-namespace limits, not a global account.
+	// An aggregate remaining limit would invent capacity; keep it unavailable.
+	return metric
+}
+
+func readFuturesBudget(ctx context.Context, pool *sql.DB) BudgetMetric {
+	metric := BudgetMetric{Unit: "cny"}
+	err := pool.QueryRowContext(ctx, `SELECT COALESCE(sum(amount_cny) FILTER (WHERE state='reserved'),0)::double precision,COALESCE(sum(amount_cny) FILTER (WHERE state='unknown'),0)::double precision FROM futures_budget_reservations`).Scan(&metric.Reservation, &metric.Unknown)
+	if err != nil {
+		return metric
+	}
+	spent := readSQLGauge(ctx, pool, `SELECT COALESCE(sum(spent_cny),0)::double precision FROM futures_budget_accounts WHERE scope='module'`)
+	metric.Spent, metric.Available = spent.Value, spent.Available
+	metric.UnknownCalls = readSQLGauge(ctx, pool, `SELECT count(*)::double precision FROM futures_usage WHERE usage_state='unknown'`)
+	// Match the existing beijingDay -> UTC time.Time -> SQL DATE encoding used
+	// by DBBudget. Using the nominal local calendar date would miss live accounts.
+	metric.Remaining = readSQLGauge(ctx, pool, `SELECT CASE WHEN count(*)>0 THEN GREATEST(sum(limit_cny-reserved_cny-spent_cny),0)::double precision ELSE NULL END FROM futures_budget_accounts WHERE scope='module' AND budget_date=(date_trunc('day', CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Shanghai') AT TIME ZONE 'Asia/Shanghai' AT TIME ZONE 'UTC')::date`)
+	return metric
+}
+
 func readRunMetrics(ctx context.Context, pool *sql.DB, table string) (QueueMetric, RunMetric) {
 	// table is selected only by NewSQLMetricsProvider's hard-coded call sites.
-	if table != "finance_research_runs" && table != "futures_runs" {
+	if table != "finance_research_runs" && table != "futures_runs" && table != "finance_intel_jobs" {
 		return QueueMetric{}, RunMetric{}
 	}
-	rows, err := pool.QueryContext(ctx, "SELECT status, count(*), COALESCE(GREATEST(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - min(created_at))), 0), 0)::double precision FROM "+table+" WHERE deleted_at IS NULL GROUP BY status")
+	filter := " WHERE deleted_at IS NULL"
+	if table == "finance_intel_jobs" {
+		filter = ""
+	}
+	rows, err := pool.QueryContext(ctx, "SELECT status, count(*), COALESCE(GREATEST(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - min(created_at))), 0), 0)::double precision FROM "+table+filter+" GROUP BY status")
 	if err != nil {
 		return QueueMetric{}, RunMetric{}
 	}
@@ -537,7 +625,7 @@ func (m *Monitor) RequireReady() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		path := c.Request.URL.Path
 		authRoute := strings.HasPrefix(path, "/api/finance/auth/") || strings.HasPrefix(path, "/api/v1/session/")
-		paidInternal := strings.HasPrefix(path, "/internal/llm/v1/") || path == "/internal/futures/v1/model" || path == "/internal/futures/v1/tools"
+		paidInternal := strings.HasPrefix(path, "/internal/llm/v1/") || path == "/internal/futures/v1/model" || path == "/internal/futures/v1/tools" || path == "/internal/finance/tool-grants" || path == "/internal/finance/data-query"
 		if (paidInternal || strings.HasPrefix(path, "/api/") && !authRoute) && c.Request.Method != "GET" && c.Request.Method != "HEAD" && c.Request.Method != "OPTIONS" {
 			if _, ready := m.snapshot(c.Request.Context()); !ready {
 				httpx.Fail(c, 503, "NOT_READY", "服务依赖暂不可用")

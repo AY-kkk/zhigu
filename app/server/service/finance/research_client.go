@@ -9,12 +9,14 @@ import (
 	"net/http"
 	"os"
 	"time"
+	"zhigu/server/httpx"
 )
 
 type HTTPResearchClient struct {
-	Base   string
-	Token  string
-	Client *http.Client
+	Base     string
+	Token    string
+	Client   *http.Client
+	Observer httpx.OperationalObserver
 }
 
 func NewHTTPResearchClient() (ResearchClient, error) {
@@ -57,7 +59,7 @@ func (c *HTTPResearchClient) Submit(ctx context.Context, task ResearchTask) (Tas
 	if task.TaskToken != "" {
 		req.Header.Set("X-Zhigu-Task-Token", task.TaskToken)
 	}
-	res, err := c.Client.Do(req)
+	res, err := c.request(c.Client, req)
 	if err != nil {
 		return TaskReceipt{}, NewError(503, "transport", "PYTHON_UNAVAILABLE", err.Error())
 	}
@@ -117,7 +119,7 @@ func (c *HTTPResearchClient) Purge(ctx context.Context, taskID string) error {
 	}
 	req.Header.Set("Authorization", "Bearer "+c.Token)
 	req.Header.Set(ContractVersionHeader, ContractVersion)
-	res, err := c.Client.Do(req)
+	res, err := c.request(c.Client, req)
 	if err != nil {
 		return NewError(503, "transport", "PYTHON_UNAVAILABLE", err.Error())
 	}
@@ -138,11 +140,20 @@ func (c *HTTPResearchClient) do(req *http.Request) (*http.Response, error) {
 	if cli == nil {
 		cli = http.DefaultClient
 	}
-	res, err := cli.Do(req)
+	res, err := c.request(cli, req)
 	if err != nil {
 		return nil, NewError(503, "transport", "PYTHON_UNAVAILABLE", err.Error())
 	}
 	return res, nil
+}
+
+func (c *HTTPResearchClient) request(client *http.Client, req *http.Request) (*http.Response, error) {
+	started := time.Now()
+	res, err := client.Do(req)
+	if c.Observer != nil {
+		c.Observer.ObserveWorker("research", time.Since(started), err != nil || res.StatusCode >= 300)
+	}
+	return res, err
 }
 
 func (c *HTTPResearchClient) ack(ctx context.Context, taskID string) error {

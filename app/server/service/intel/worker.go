@@ -104,7 +104,21 @@ type ingestionJobPayload struct {
 	To    string   `json:"to"`
 }
 
-func (s *Service) ProcessJob(ctx context.Context, lease JobLease) error {
+func (s *Service) ProcessJob(ctx context.Context, lease JobLease) (jobError error) {
+	started := time.Now()
+	defer func() {
+		if s.Observer == nil {
+			return
+		}
+		failed := jobError != nil
+		if !failed {
+			var status string
+			if err := s.DB.WithContext(ctx).Raw(`SELECT status FROM finance_intel_jobs WHERE id=?`, lease.ID).Scan(&status).Error; err != nil || status == "failed" || status == "partial" {
+				failed = true
+			}
+		}
+		s.Observer.ObserveWorker("intel", time.Since(started), failed)
+	}()
 	status, received, processed, quarantined, jobErr := "partial", 0, 0, 0, "fixture ingestion is synchronous through replay actions"
 	if lease.Kind == "ingest" {
 		return s.processIngestionJob(ctx, lease)
@@ -201,6 +215,7 @@ func (s *Service) processIngestionJob(ctx context.Context, lease JobLease) error
 	switch lease.Provider {
 	case "fuyao":
 		client := NewFuyaoClient()
+		client.Client.Config.Observer = s.Observer
 		processed := 0
 		for _, code := range payload.Codes {
 			out, err := client.SearchTickers(ctx, code, 5)
@@ -224,7 +239,9 @@ ON CONFLICT(namespace_id,code) DO UPDATE SET name=EXCLUDED.name,exchange=EXCLUDE
 		}
 		return s.CompleteJob(ctx, lease, "succeeded", len(payload.Codes), processed, 0, "")
 	case "ifind":
-		capability, err := NewIFindMCPClient().Discover(ctx)
+		client := NewIFindMCPClient()
+		client.Client.Config.Observer = s.Observer
+		capability, err := client.Discover(ctx)
 		if err != nil {
 			return s.CompleteJob(ctx, lease, "failed", len(payload.Codes), 0, 1, err.Error())
 		}

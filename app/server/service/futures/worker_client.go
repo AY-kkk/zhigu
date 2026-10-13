@@ -181,7 +181,11 @@ func ExecuteRun(ctx context.Context, db *gorm.DB, domain *Domain, grants *GrantM
 	request.Header.Set("X-Futures-Service-Token", os.Getenv("FUTURES_SERVICE_TOKEN"))
 	request.Header.Set("Authorization", "Bearer "+grantToken)
 	client := &http.Client{Timeout: futuresExecutionTimeout}
+	started := time.Now()
 	response, err := client.Do(request)
+	if domain.Observer != nil {
+		domain.Observer.ObserveWorker("futures", time.Since(started), err != nil || response.StatusCode != http.StatusOK)
+	}
 	if err != nil {
 		return err
 	}
