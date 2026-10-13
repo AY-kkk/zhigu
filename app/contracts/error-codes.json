@@ -1,0 +1,2426 @@
+{
+  "schema_version": "error-codes.v1",
+  "errors": [
+    {
+      "code": "ACTIVE_RUN_EXISTS",
+      "http_status": 409,
+      "http_statuses": [
+        409
+      ],
+      "retryable": false,
+      "message_key": "errors.active_run_exists",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "ARGS_HASH_MISMATCH",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.args_hash_mismatch",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "BOOTSTRAP_REQUIRED",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.bootstrap_required",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "BUDGET_EXCEEDED",
+      "http_status": 429,
+      "http_statuses": [
+        429
+      ],
+      "retryable": true,
+      "message_key": "errors.budget_exceeded",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "CANCEL_IN_PROGRESS",
+      "http_status": 409,
+      "http_statuses": [
+        409
+      ],
+      "retryable": false,
+      "message_key": "errors.cancel_in_progress",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "CANCEL_NOT_CONFIRMED",
+      "http_status": 502,
+      "http_statuses": [
+        502
+      ],
+      "retryable": true,
+      "message_key": "errors.cancel_not_confirmed",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "CONFIG_NOT_FOUND",
+      "http_status": 404,
+      "http_statuses": [
+        404
+      ],
+      "retryable": false,
+      "message_key": "errors.config_not_found",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "CONTRACT_VERSION_MISMATCH",
+      "http_status": 409,
+      "http_statuses": [
+        409
+      ],
+      "retryable": false,
+      "message_key": "errors.contract_version_mismatch",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "COPY_TARGET_GONE",
+      "http_status": 410,
+      "http_statuses": [
+        410
+      ],
+      "retryable": false,
+      "message_key": "errors.copy_target_gone",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "CSRF_INVALID",
+      "http_status": 403,
+      "http_statuses": [
+        403
+      ],
+      "retryable": false,
+      "message_key": "errors.csrf_invalid",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "CURSOR_EXPIRED",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.cursor_expired",
+      "interfaces": [
+        "/api/finance/intel/v1/*"
+      ]
+    },
+    {
+      "code": "DAILY_RESEARCH_LIMIT",
+      "http_status": 429,
+      "http_statuses": [
+        429
+      ],
+      "retryable": true,
+      "message_key": "errors.daily_research_limit",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "DATA_UNAVAILABLE",
+      "http_status": 503,
+      "http_statuses": [
+        503
+      ],
+      "retryable": true,
+      "message_key": "errors.data_unavailable",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "DEADLINE",
+      "http_status": 409,
+      "http_statuses": [
+        409
+      ],
+      "retryable": false,
+      "message_key": "errors.deadline",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "DEMO_SESSION_EXPIRED",
+      "http_status": 401,
+      "http_statuses": [
+        401
+      ],
+      "retryable": false,
+      "message_key": "errors.demo_session_expired",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "DOCUMENT_ATTACHMENT_MISSING",
+      "http_status": 404,
+      "http_statuses": [
+        404
+      ],
+      "retryable": false,
+      "message_key": "errors.document_attachment_missing",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "DOCUMENT_NOT_FOUND",
+      "http_status": 404,
+      "http_statuses": [
+        404
+      ],
+      "retryable": false,
+      "message_key": "errors.document_not_found",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "DOCUMENT_NOT_READY",
+      "http_status": 409,
+      "http_statuses": [
+        409
+      ],
+      "retryable": false,
+      "message_key": "errors.document_not_ready",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "DOCUMENT_RUN_MISMATCH",
+      "http_status": 404,
+      "http_statuses": [
+        404
+      ],
+      "retryable": false,
+      "message_key": "errors.document_run_mismatch",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "DOCUMENT_SPAN_NOT_FOUND",
+      "http_status": 404,
+      "http_statuses": [
+        404
+      ],
+      "retryable": false,
+      "message_key": "errors.document_span_not_found",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "DOCUMENT_TOO_LARGE",
+      "http_status": 413,
+      "http_statuses": [
+        413
+      ],
+      "retryable": false,
+      "message_key": "errors.document_too_large",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "DRAFT_ALREADY_CONFIRMED",
+      "http_status": 409,
+      "http_statuses": [
+        409
+      ],
+      "retryable": false,
+      "message_key": "errors.draft_already_confirmed",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "DRAFT_NOT_FOUND",
+      "http_status": 404,
+      "http_statuses": [
+        404
+      ],
+      "retryable": false,
+      "message_key": "errors.draft_not_found",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "DRAFT_REVISION",
+      "http_status": 409,
+      "http_statuses": [
+        409
+      ],
+      "retryable": false,
+      "message_key": "errors.draft_revision",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "EMPTY_DOCUMENT",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.empty_document",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "EMPTY_RESULT",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.empty_result",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "EVIDENCE_GRADE_MISMATCH",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.evidence_grade_mismatch",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "EVIDENCE_NOT_FOUND",
+      "http_status": 404,
+      "http_statuses": [
+        404
+      ],
+      "retryable": false,
+      "message_key": "errors.evidence_not_found",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "EVIDENCE_NOT_GRANTED",
+      "http_status": 403,
+      "http_statuses": [
+        403
+      ],
+      "retryable": false,
+      "message_key": "errors.evidence_not_granted",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "EVIDENCE_REJECTED",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.evidence_rejected",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "FEE_CAP_REQUIRED",
+      "http_status": 409,
+      "http_statuses": [
+        409
+      ],
+      "retryable": false,
+      "message_key": "errors.fee_cap_required",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "FORBIDDEN",
+      "http_status": 403,
+      "http_statuses": [
+        403
+      ],
+      "retryable": false,
+      "message_key": "errors.forbidden",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "FUTURE_EVIDENCE",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.future_evidence",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "FUTURES_DATA_PORT_NOT_CONNECTED",
+      "http_status": 503,
+      "http_statuses": [
+        503
+      ],
+      "retryable": true,
+      "message_key": "errors.futures_data_port_not_connected",
+      "interfaces": [
+        "/api/v1/futures/*",
+        "/api/v1/admin/futures/*",
+        "/internal/futures/*"
+      ]
+    },
+    {
+      "code": "FUTURES_DOCUMENT_EXTRACTION_TIMEOUT",
+      "http_status": 504,
+      "http_statuses": [
+        504
+      ],
+      "retryable": true,
+      "message_key": "errors.futures_document_extraction_timeout",
+      "interfaces": [
+        "/api/v1/futures/*",
+        "/api/v1/admin/futures/*",
+        "/internal/futures/*"
+      ]
+    },
+    {
+      "code": "FUTURES_DOCUMENT_LIMIT",
+      "http_status": 413,
+      "http_statuses": [
+        413
+      ],
+      "retryable": false,
+      "message_key": "errors.futures_document_limit",
+      "interfaces": [
+        "/api/v1/futures/*",
+        "/api/v1/admin/futures/*",
+        "/internal/futures/*"
+      ]
+    },
+    {
+      "code": "FUTURES_DOCUMENT_UNREADABLE",
+      "http_status": 422,
+      "http_statuses": [
+        422
+      ],
+      "retryable": false,
+      "message_key": "errors.futures_document_unreadable",
+      "interfaces": [
+        "/api/v1/futures/*",
+        "/api/v1/admin/futures/*",
+        "/internal/futures/*"
+      ]
+    },
+    {
+      "code": "FUTURES_EXECUTION_FAILED",
+      "http_status": 422,
+      "http_statuses": [
+        422
+      ],
+      "retryable": false,
+      "message_key": "errors.futures_execution_failed",
+      "interfaces": [
+        "/api/v1/futures/*",
+        "/api/v1/admin/futures/*",
+        "/internal/futures/*"
+      ]
+    },
+    {
+      "code": "FUTURES_GRANT_DENIED",
+      "http_status": 403,
+      "http_statuses": [
+        403
+      ],
+      "retryable": false,
+      "message_key": "errors.futures_grant_denied",
+      "interfaces": [
+        "/api/v1/futures/*",
+        "/api/v1/admin/futures/*",
+        "/internal/futures/*"
+      ]
+    },
+    {
+      "code": "FUTURES_IDEMPOTENCY_CONFLICT",
+      "http_status": 409,
+      "http_statuses": [
+        409
+      ],
+      "retryable": false,
+      "message_key": "errors.futures_idempotency_conflict",
+      "interfaces": [
+        "/api/v1/futures/*",
+        "/api/v1/admin/futures/*",
+        "/internal/futures/*"
+      ]
+    },
+    {
+      "code": "FUTURES_INVALID_INPUT",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.futures_invalid_input",
+      "interfaces": [
+        "/api/v1/futures/*",
+        "/api/v1/admin/futures/*",
+        "/internal/futures/*"
+      ]
+    },
+    {
+      "code": "FUTURES_MODEL_NOT_CONFIGURED",
+      "http_status": 503,
+      "http_statuses": [
+        503
+      ],
+      "retryable": true,
+      "message_key": "errors.futures_model_not_configured",
+      "interfaces": [
+        "/api/v1/futures/*",
+        "/api/v1/admin/futures/*",
+        "/internal/futures/*"
+      ]
+    },
+    {
+      "code": "FUTURES_NOT_ADMITTED",
+      "http_status": 403,
+      "http_statuses": [
+        403
+      ],
+      "retryable": false,
+      "message_key": "errors.futures_not_admitted",
+      "interfaces": [
+        "/api/v1/futures/*",
+        "/api/v1/admin/futures/*",
+        "/internal/futures/*"
+      ]
+    },
+    {
+      "code": "FUTURES_NOT_FOUND",
+      "http_status": 404,
+      "http_statuses": [
+        404
+      ],
+      "retryable": false,
+      "message_key": "errors.futures_not_found",
+      "interfaces": [
+        "/api/v1/futures/*",
+        "/api/v1/admin/futures/*",
+        "/internal/futures/*"
+      ]
+    },
+    {
+      "code": "FUTURES_NOT_READY",
+      "http_status": 503,
+      "http_statuses": [
+        503
+      ],
+      "retryable": true,
+      "message_key": "errors.futures_not_ready",
+      "interfaces": [
+        "/api/v1/futures/*",
+        "/api/v1/admin/futures/*",
+        "/internal/futures/*"
+      ]
+    },
+    {
+      "code": "FUTURES_OBSERVATION_REJECTED",
+      "http_status": 403,
+      "http_statuses": [
+        403
+      ],
+      "retryable": false,
+      "message_key": "errors.futures_observation_rejected",
+      "interfaces": [
+        "/api/v1/futures/*",
+        "/api/v1/admin/futures/*",
+        "/internal/futures/*"
+      ]
+    },
+    {
+      "code": "FUTURES_OFF",
+      "http_status": 503,
+      "http_statuses": [
+        503
+      ],
+      "retryable": true,
+      "message_key": "errors.futures_off",
+      "interfaces": [
+        "/api/v1/futures/*",
+        "/api/v1/admin/futures/*",
+        "/internal/futures/*"
+      ]
+    },
+    {
+      "code": "FUTURES_QUOTA_EXCEEDED",
+      "http_status": 429,
+      "http_statuses": [
+        429
+      ],
+      "retryable": true,
+      "message_key": "errors.futures_quota_exceeded",
+      "interfaces": [
+        "/api/v1/futures/*",
+        "/api/v1/admin/futures/*",
+        "/internal/futures/*"
+      ]
+    },
+    {
+      "code": "FUTURES_READ_ONLY",
+      "http_status": 403,
+      "http_statuses": [
+        403
+      ],
+      "retryable": false,
+      "message_key": "errors.futures_read_only",
+      "interfaces": [
+        "/api/v1/futures/*",
+        "/api/v1/admin/futures/*",
+        "/internal/futures/*"
+      ]
+    },
+    {
+      "code": "FUTURES_REFERENCED",
+      "http_status": 409,
+      "http_statuses": [
+        409
+      ],
+      "retryable": false,
+      "message_key": "errors.futures_referenced",
+      "interfaces": [
+        "/api/v1/futures/*",
+        "/api/v1/admin/futures/*",
+        "/internal/futures/*"
+      ]
+    },
+    {
+      "code": "FUTURES_REVISION_CONFLICT",
+      "http_status": 409,
+      "http_statuses": [
+        409
+      ],
+      "retryable": false,
+      "message_key": "errors.futures_revision_conflict",
+      "interfaces": [
+        "/api/v1/futures/*",
+        "/api/v1/admin/futures/*",
+        "/internal/futures/*"
+      ]
+    },
+    {
+      "code": "FUTURES_SERVICE_TOKEN_INVALID",
+      "http_status": 401,
+      "http_statuses": [
+        401
+      ],
+      "retryable": false,
+      "message_key": "errors.futures_service_token_invalid",
+      "interfaces": [
+        "/api/v1/futures/*",
+        "/api/v1/admin/futures/*",
+        "/internal/futures/*"
+      ]
+    },
+    {
+      "code": "FUTURES_SOURCE_UNAVAILABLE",
+      "http_status": 503,
+      "http_statuses": [
+        503
+      ],
+      "retryable": true,
+      "message_key": "errors.futures_source_unavailable",
+      "interfaces": [
+        "/api/v1/futures/*",
+        "/api/v1/admin/futures/*",
+        "/internal/futures/*"
+      ]
+    },
+    {
+      "code": "FUTURES_TASK_GRANT_MISSING",
+      "http_status": 401,
+      "http_statuses": [
+        401
+      ],
+      "retryable": false,
+      "message_key": "errors.futures_task_grant_missing",
+      "interfaces": [
+        "/api/v1/futures/*",
+        "/api/v1/admin/futures/*",
+        "/internal/futures/*"
+      ]
+    },
+    {
+      "code": "FUTURES_TOOL_DENIED",
+      "http_status": 403,
+      "http_statuses": [
+        403
+      ],
+      "retryable": false,
+      "message_key": "errors.futures_tool_denied",
+      "interfaces": [
+        "/api/v1/futures/*",
+        "/api/v1/admin/futures/*",
+        "/internal/futures/*"
+      ]
+    },
+    {
+      "code": "FUTURES_TOOL_NOT_CONNECTED",
+      "http_status": 503,
+      "http_statuses": [
+        503
+      ],
+      "retryable": true,
+      "message_key": "errors.futures_tool_not_connected",
+      "interfaces": [
+        "/api/v1/futures/*",
+        "/api/v1/admin/futures/*",
+        "/internal/futures/*"
+      ]
+    },
+    {
+      "code": "GLOBAL_CONCURRENCY",
+      "http_status": 429,
+      "http_statuses": [
+        429
+      ],
+      "retryable": true,
+      "message_key": "errors.global_concurrency",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "GRANT_CONSUMED",
+      "http_status": 409,
+      "http_statuses": [
+        409
+      ],
+      "retryable": false,
+      "message_key": "errors.grant_consumed",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "GRANT_EXPIRED",
+      "http_status": 409,
+      "http_statuses": [
+        409
+      ],
+      "retryable": false,
+      "message_key": "errors.grant_expired",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "GRANT_NOT_FOUND",
+      "http_status": 404,
+      "http_statuses": [
+        404
+      ],
+      "retryable": false,
+      "message_key": "errors.grant_not_found",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "GRANT_PAYLOAD_CONFLICT",
+      "http_status": 409,
+      "http_statuses": [
+        409
+      ],
+      "retryable": false,
+      "message_key": "errors.grant_payload_conflict",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "GRANT_REVOKED",
+      "http_status": 409,
+      "http_statuses": [
+        409
+      ],
+      "retryable": false,
+      "message_key": "errors.grant_revoked",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "GRANT_UNKNOWN",
+      "http_status": 409,
+      "http_statuses": [
+        409
+      ],
+      "retryable": false,
+      "message_key": "errors.grant_unknown",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "HARNESS_UNAVAILABLE",
+      "http_status": 503,
+      "http_statuses": [
+        503
+      ],
+      "retryable": true,
+      "message_key": "errors.harness_unavailable",
+      "interfaces": [
+        "/api/finance/*",
+        "/internal/finance/*"
+      ]
+    },
+    {
+      "code": "IDEMPOTENCY_CONFLICT",
+      "http_status": 409,
+      "http_statuses": [
+        409
+      ],
+      "retryable": false,
+      "message_key": "errors.idempotency_conflict",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "IN_FLIGHT",
+      "http_status": 409,
+      "http_statuses": [
+        409
+      ],
+      "retryable": false,
+      "message_key": "errors.in_flight",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "IN_PROGRESS",
+      "http_status": 409,
+      "http_statuses": [
+        409
+      ],
+      "retryable": false,
+      "message_key": "errors.in_progress",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "INCOMPARABLE_METRIC",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.incomparable_metric",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "INCOMPLETE_VERDICT",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.incomplete_verdict",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "INSTRUMENT_UNSUPPORTED",
+      "http_status": 422,
+      "http_statuses": [
+        422
+      ],
+      "retryable": false,
+      "message_key": "errors.instrument_unsupported",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "INSUFFICIENT_DENOMINATOR",
+      "http_status": 422,
+      "http_statuses": [
+        422
+      ],
+      "retryable": false,
+      "message_key": "errors.insufficient_denominator",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "INSUFFICIENT_HISTORY",
+      "http_status": 422,
+      "http_statuses": [
+        422
+      ],
+      "retryable": false,
+      "message_key": "errors.insufficient_history",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "INTERNAL",
+      "http_status": 500,
+      "http_statuses": [
+        500
+      ],
+      "retryable": false,
+      "message_key": "errors.internal",
+      "interfaces": [
+        "/api/*",
+        "/internal/*",
+        "/readyz",
+        "/metrics",
+        "/*"
+      ]
+    },
+    {
+      "code": "INVALID_CHRONOLOGY",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.invalid_chronology",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "INVALID_CITATION",
+      "http_status": 422,
+      "http_statuses": [
+        422
+      ],
+      "retryable": false,
+      "message_key": "errors.invalid_citation",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "INVALID_CLAIM_TYPE",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.invalid_claim_type",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "INVALID_DECIMAL",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.invalid_decimal",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "INVALID_FACT_STATUS",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.invalid_fact_status",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "INVALID_FILENAME",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.invalid_filename",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "INVALID_FOCUS_TEXT",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.invalid_focus_text",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "INVALID_HORIZON",
+      "http_status": 422,
+      "http_statuses": [
+        422
+      ],
+      "retryable": false,
+      "message_key": "errors.invalid_horizon",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "INVALID_INPUTS",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.invalid_inputs",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "INVALID_ITEMS",
+      "http_status": 422,
+      "http_statuses": [
+        422
+      ],
+      "retryable": false,
+      "message_key": "errors.invalid_items",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "INVALID_JSON",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.invalid_json",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "INVALID_METRICS",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.invalid_metrics",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "INVALID_MULTIPART",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.invalid_multipart",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "INVALID_OPERATION",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.invalid_operation",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "INVALID_PARAM",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.invalid_param",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "INVALID_PERIODS",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.invalid_periods",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "INVALID_QUERY",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.invalid_query",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "INVALID_SCHEMA",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.invalid_schema",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "INVALID_STATUS",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.invalid_status",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "INVALID_STORAGE_PATH",
+      "http_status": 500,
+      "http_statuses": [
+        500
+      ],
+      "retryable": false,
+      "message_key": "errors.invalid_storage_path",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "INVALID_TASK_TOKEN",
+      "http_status": 401,
+      "http_statuses": [
+        401
+      ],
+      "retryable": false,
+      "message_key": "errors.invalid_task_token",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "INVALID_TEXT",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.invalid_text",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "INVALID_URL",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.invalid_url",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "INVALID_URL_SCHEME",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.invalid_url_scheme",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "LEASE_LOST",
+      "http_status": 409,
+      "http_statuses": [
+        409
+      ],
+      "retryable": false,
+      "message_key": "errors.lease_lost",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "MARKET_ITEM_WITHDRAWN",
+      "http_status": 410,
+      "http_statuses": [
+        410
+      ],
+      "retryable": false,
+      "message_key": "errors.market_item_withdrawn",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "MARKET_NOT_COPYABLE",
+      "http_status": 422,
+      "http_statuses": [
+        422
+      ],
+      "retryable": false,
+      "message_key": "errors.market_not_copyable",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "MARKET_VERSION_CHANGED",
+      "http_status": 409,
+      "http_statuses": [
+        409
+      ],
+      "retryable": false,
+      "message_key": "errors.market_version_changed",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "METHOD_NOT_ALLOWED",
+      "http_status": 405,
+      "http_statuses": [
+        405
+      ],
+      "retryable": false,
+      "message_key": "errors.method_not_allowed",
+      "interfaces": [
+        "/api/*",
+        "/internal/*",
+        "/readyz",
+        "/metrics",
+        "/*"
+      ]
+    },
+    {
+      "code": "METRIC_NOT_FOUND",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.metric_not_found",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "MISSING_ARGS_HASH",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.missing_args_hash",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "MISSING_CITATION",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.missing_citation",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "MISSING_IDEMPOTENCY_KEY",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.missing_idempotency_key",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "MISSING_REQUEST_ID",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.missing_request_id",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "MISSING_RESEARCH_INPUT",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.missing_research_input",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "MISSING_TASK_TOKEN",
+      "http_status": 401,
+      "http_statuses": [
+        401
+      ],
+      "retryable": false,
+      "message_key": "errors.missing_task_token",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "MISSING_VERDICT",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.missing_verdict",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "MODE_CONFLICT",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.mode_conflict",
+      "interfaces": [
+        "/api/finance/intel/v1/*"
+      ]
+    },
+    {
+      "code": "MODE_MISMATCH",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.mode_mismatch",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "MODEL_BUDGET_EXCEEDED",
+      "http_status": 429,
+      "http_statuses": [
+        429
+      ],
+      "retryable": true,
+      "message_key": "errors.model_budget_exceeded",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "MODEL_NOT_CONFIGURED",
+      "http_status": 409,
+      "http_statuses": [
+        409
+      ],
+      "retryable": false,
+      "message_key": "errors.model_not_configured",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "MODEL_PROTOCOL_MISMATCH",
+      "http_status": 409,
+      "http_statuses": [
+        409
+      ],
+      "retryable": false,
+      "message_key": "errors.model_protocol_mismatch",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "MODEL_UNAVAILABLE",
+      "http_status": 429,
+      "http_statuses": [
+        429,
+        503
+      ],
+      "retryable": true,
+      "message_key": "errors.model_unavailable",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "NO_CLAIM_ITEMS",
+      "http_status": 422,
+      "http_statuses": [
+        422
+      ],
+      "retryable": false,
+      "message_key": "errors.no_claim_items",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "NO_REPORT",
+      "http_status": 409,
+      "http_statuses": [
+        409
+      ],
+      "retryable": false,
+      "message_key": "errors.no_report",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "NOT_FOUND",
+      "http_status": 404,
+      "http_statuses": [
+        404
+      ],
+      "retryable": false,
+      "message_key": "errors.not_found",
+      "interfaces": [
+        "/api/*",
+        "/internal/*",
+        "/readyz",
+        "/metrics",
+        "/*"
+      ]
+    },
+    {
+      "code": "NOT_READY",
+      "http_status": 503,
+      "http_statuses": [
+        503
+      ],
+      "retryable": true,
+      "message_key": "errors.not_ready",
+      "interfaces": [
+        "/api/*",
+        "/internal/*",
+        "/readyz",
+        "/metrics",
+        "/*"
+      ]
+    },
+    {
+      "code": "NOTIFICATION_STATE_CONFLICT",
+      "http_status": 409,
+      "http_statuses": [
+        409
+      ],
+      "retryable": false,
+      "message_key": "errors.notification_state_conflict",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "PARSE_RATE_LIMIT",
+      "http_status": 429,
+      "http_statuses": [
+        429
+      ],
+      "retryable": true,
+      "message_key": "errors.parse_rate_limit",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "PERIOD_MISMATCH",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.period_mismatch",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "PERIOD_NOT_ANNUAL",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.period_not_annual",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "PERIOD_REQUIRED",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.period_required",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "POLICY_INVALID",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.policy_invalid",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "POLICY_RAISE_FORBIDDEN",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.policy_raise_forbidden",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "PROVIDER_DISABLED",
+      "http_status": 422,
+      "http_statuses": [
+        422
+      ],
+      "retryable": false,
+      "message_key": "errors.provider_disabled",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "PYTHON_ERROR",
+      "http_status": 422,
+      "http_statuses": [
+        422
+      ],
+      "retryable": false,
+      "message_key": "errors.python_error",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "PYTHON_INVALID_RESPONSE",
+      "http_status": 502,
+      "http_statuses": [
+        502
+      ],
+      "retryable": true,
+      "message_key": "errors.python_invalid_response",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "PYTHON_UNAVAILABLE",
+      "http_status": 503,
+      "http_statuses": [
+        503
+      ],
+      "retryable": true,
+      "message_key": "errors.python_unavailable",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "QUESTION_LIMIT",
+      "http_status": 429,
+      "http_statuses": [
+        429
+      ],
+      "retryable": true,
+      "message_key": "errors.question_limit",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "RANGE_TOO_LARGE",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.range_too_large",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "RATE_LIMITED",
+      "http_status": 429,
+      "http_statuses": [
+        429
+      ],
+      "retryable": true,
+      "message_key": "errors.rate_limited",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "REPARSE_REQUIRED",
+      "http_status": 409,
+      "http_statuses": [
+        409
+      ],
+      "retryable": false,
+      "message_key": "errors.reparse_required",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "REPLAY_FORBIDDEN",
+      "http_status": 403,
+      "http_statuses": [
+        403
+      ],
+      "retryable": false,
+      "message_key": "errors.replay_forbidden",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "REPORT_SCHEMA",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.report_schema",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "REPORT_SECTION_MISSING",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.report_section_missing",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "REQUEST_ID_CONFLICT",
+      "http_status": 409,
+      "http_statuses": [
+        409
+      ],
+      "retryable": false,
+      "message_key": "errors.request_id_conflict",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "REQUEST_IN_PROGRESS",
+      "http_status": 409,
+      "http_statuses": [
+        409
+      ],
+      "retryable": false,
+      "message_key": "errors.request_in_progress",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "RESERVATION_NOT_FOUND",
+      "http_status": 404,
+      "http_statuses": [
+        404
+      ],
+      "retryable": false,
+      "message_key": "errors.reservation_not_found",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "RESULT_RUN_MISMATCH",
+      "http_status": 409,
+      "http_statuses": [
+        409
+      ],
+      "retryable": false,
+      "message_key": "errors.result_run_mismatch",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "RESULT_TASK_MISMATCH",
+      "http_status": 409,
+      "http_statuses": [
+        409
+      ],
+      "retryable": false,
+      "message_key": "errors.result_task_mismatch",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "REVIEW_REQUIRED",
+      "http_status": 422,
+      "http_statuses": [
+        422
+      ],
+      "retryable": false,
+      "message_key": "errors.review_required",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "REVISION_CONFLICT",
+      "http_status": 409,
+      "http_statuses": [
+        409
+      ],
+      "retryable": false,
+      "message_key": "errors.revision_conflict",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "ROLE_TIMEOUT",
+      "http_status": 504,
+      "http_statuses": [
+        504
+      ],
+      "retryable": true,
+      "message_key": "errors.role_timeout",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "RULE_DATA_INCOMPLETE",
+      "http_status": 422,
+      "http_statuses": [
+        422
+      ],
+      "retryable": false,
+      "message_key": "errors.rule_data_incomplete",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "RUN_CANCELED",
+      "http_status": 409,
+      "http_statuses": [
+        409
+      ],
+      "retryable": false,
+      "message_key": "errors.run_canceled",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "RUN_CLOSED",
+      "http_status": 409,
+      "http_statuses": [
+        409
+      ],
+      "retryable": false,
+      "message_key": "errors.run_closed",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "RUN_FAILED",
+      "http_status": 422,
+      "http_statuses": [
+        422
+      ],
+      "retryable": false,
+      "message_key": "errors.run_failed",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "RUN_NOT_FOUND",
+      "http_status": 404,
+      "http_statuses": [
+        404
+      ],
+      "retryable": false,
+      "message_key": "errors.run_not_found",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "RUN_NOT_SUCCEEDED",
+      "http_status": 409,
+      "http_statuses": [
+        409
+      ],
+      "retryable": false,
+      "message_key": "errors.run_not_succeeded",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "RUNTIME_UNAVAILABLE",
+      "http_status": 503,
+      "http_statuses": [
+        503
+      ],
+      "retryable": true,
+      "message_key": "errors.runtime_unavailable",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "SCOPE_REQUIRED",
+      "http_status": 422,
+      "http_statuses": [
+        422
+      ],
+      "retryable": false,
+      "message_key": "errors.scope_required",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "SSRF_BLOCKED",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.ssrf_blocked",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "STALE_TEST",
+      "http_status": 409,
+      "http_statuses": [
+        409
+      ],
+      "retryable": false,
+      "message_key": "errors.stale_test",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "STRATEGY_INVALID",
+      "http_status": 422,
+      "http_statuses": [
+        422
+      ],
+      "retryable": false,
+      "message_key": "errors.strategy_invalid",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "STRATEGY_UNSUPPORTED",
+      "http_status": 422,
+      "http_statuses": [
+        422
+      ],
+      "retryable": false,
+      "message_key": "errors.strategy_unsupported",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "STRUCTURAL_INVALID",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.structural_invalid",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "TASK_NOT_FOUND",
+      "http_status": 404,
+      "http_statuses": [
+        404
+      ],
+      "retryable": false,
+      "message_key": "errors.task_not_found",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "TASK_PAYLOAD_CONFLICT",
+      "http_status": 409,
+      "http_statuses": [
+        409
+      ],
+      "retryable": false,
+      "message_key": "errors.task_payload_conflict",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "TASK_RUN_MISMATCH",
+      "http_status": 403,
+      "http_statuses": [
+        403
+      ],
+      "retryable": false,
+      "message_key": "errors.task_run_mismatch",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "TASK_TOKEN_MISMATCH",
+      "http_status": 403,
+      "http_statuses": [
+        403
+      ],
+      "retryable": false,
+      "message_key": "errors.task_token_mismatch",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "TASK_TOKEN_PURPOSE",
+      "http_status": 403,
+      "http_statuses": [
+        403
+      ],
+      "retryable": false,
+      "message_key": "errors.task_token_purpose",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "TASK_TOKEN_REVOKED",
+      "http_status": 401,
+      "http_statuses": [
+        401
+      ],
+      "retryable": false,
+      "message_key": "errors.task_token_revoked",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "TIME_GATE",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.time_gate",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "TOKEN_REVOKED",
+      "http_status": 401,
+      "http_statuses": [
+        401
+      ],
+      "retryable": false,
+      "message_key": "errors.token_revoked",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "TOOL_FORBIDDEN",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.tool_forbidden",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "TOOL_MISMATCH",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.tool_mismatch",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "TOOL_PATH_FAILED",
+      "http_status": 503,
+      "http_statuses": [
+        503
+      ],
+      "retryable": true,
+      "message_key": "errors.tool_path_failed",
+      "interfaces": [
+        "/api/finance/*",
+        "/internal/finance/*"
+      ]
+    },
+    {
+      "code": "UNAUTHENTICATED",
+      "http_status": 401,
+      "http_statuses": [
+        401
+      ],
+      "retryable": false,
+      "message_key": "errors.unauthenticated",
+      "interfaces": [
+        "/api/*",
+        "/internal/*",
+        "/readyz",
+        "/metrics",
+        "/*"
+      ]
+    },
+    {
+      "code": "UNBOUND_NUMBER",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.unbound_number",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "UNIT_MISMATCH",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.unit_mismatch",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "UNKNOWN_CLAIM",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.unknown_claim",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "UNKNOWN_GATE",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.unknown_gate",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "UNREGISTERED_CITATION",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.unregistered_citation",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "UNSUPPORTED_DOCUMENT",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.unsupported_document",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "UNSUPPORTED_EVENT",
+      "http_status": 422,
+      "http_statuses": [
+        422
+      ],
+      "retryable": false,
+      "message_key": "errors.unsupported_event",
+      "interfaces": [
+        "/api/finance/intel/v1/*"
+      ]
+    },
+    {
+      "code": "UNSUPPORTED_EXPORT",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.unsupported_export",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "UNSUPPORTED_INSTRUMENT",
+      "http_status": 422,
+      "http_statuses": [
+        422
+      ],
+      "retryable": false,
+      "message_key": "errors.unsupported_instrument",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "UNSUPPORTED_METRIC",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.unsupported_metric",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "UNSUPPORTED_WEB_CONTENT",
+      "http_status": 415,
+      "http_statuses": [
+        415
+      ],
+      "retryable": false,
+      "message_key": "errors.unsupported_web_content",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "UNTRUSTED_RECORD",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.untrusted_record",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "UPSTREAM_ERROR",
+      "http_status": 503,
+      "http_statuses": [
+        503
+      ],
+      "retryable": true,
+      "message_key": "errors.upstream_error",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "UPSTREAM_UNAVAILABLE",
+      "http_status": 503,
+      "http_statuses": [
+        503
+      ],
+      "retryable": true,
+      "message_key": "errors.upstream_unavailable",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "URL_CREDENTIALS_FORBIDDEN",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.url_credentials_forbidden",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "URL_DNS_FAILED",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.url_dns_failed",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "URL_PORT_FORBIDDEN",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.url_port_forbidden",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "URL_REDIRECT_LIMIT",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.url_redirect_limit",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "VALUE_TYPE_MISMATCH",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.value_type_mismatch",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "VERSION_CONFLICT",
+      "http_status": 409,
+      "http_statuses": [
+        409
+      ],
+      "retryable": false,
+      "message_key": "errors.version_conflict",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "VERSION_MISMATCH",
+      "http_status": 409,
+      "http_statuses": [
+        409
+      ],
+      "retryable": false,
+      "message_key": "errors.version_mismatch",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "WATCHLIST_LIMIT",
+      "http_status": 422,
+      "http_statuses": [
+        422
+      ],
+      "retryable": false,
+      "message_key": "errors.watchlist_limit",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "WEB_ARTICLE_EMPTY",
+      "http_status": 422,
+      "http_statuses": [
+        422
+      ],
+      "retryable": false,
+      "message_key": "errors.web_article_empty",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "WEB_ARTICLE_TOO_LARGE",
+      "http_status": 413,
+      "http_statuses": [
+        413
+      ],
+      "retryable": false,
+      "message_key": "errors.web_article_too_large",
+      "interfaces": [
+        "/api/*"
+      ]
+    },
+    {
+      "code": "WEB_FETCH_FAILED",
+      "http_status": 502,
+      "http_statuses": [
+        502
+      ],
+      "retryable": true,
+      "message_key": "errors.web_fetch_failed",
+      "interfaces": [
+        "/api/*"
+      ]
+    }
+  ]
+}

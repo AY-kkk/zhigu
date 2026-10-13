@@ -40,9 +40,7 @@ type intelEnvelope struct {
 }
 
 type intelErr struct {
-	Code      string `json:"code"`
-	Message   string `json:"message"`
-	Retryable bool   `json:"retryable"`
+	httpx.APIErr
 	RequestID string `json:"request_id"`
 }
 
@@ -139,7 +137,11 @@ func (h *handler) fail(c *gin.Context, err error) {
 		status, code, message = app.status, app.code, app.message
 	}
 	id := requestID(c)
-	c.JSON(status, intelEnvelope{Data: nil, Error: &intelErr{Code: code, Message: message, Retryable: status == 429 || status >= 500, RequestID: id}, TraceID: httpx.TraceID(c), Meta: nil})
+	apiError := httpx.DefaultError(status, code, message)
+	if apiError.RetryAfterSeconds != nil {
+		c.Header("Retry-After", strconv.Itoa(*apiError.RetryAfterSeconds))
+	}
+	c.JSON(status, intelEnvelope{Data: nil, Error: &intelErr{APIErr: *apiError, RequestID: id}, TraceID: httpx.TraceID(c), Meta: nil})
 }
 
 type appError struct {

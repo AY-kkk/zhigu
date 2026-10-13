@@ -26,6 +26,45 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
+func TestIntelErrorRetryAndTraceContract(t *testing.T) {
+	for _, status := range []int{400, 429, 503} {
+		engine := gin.New()
+		httpx.InstallTrace(engine)
+		h := &handler{}
+		engine.GET("/", func(c *gin.Context) { h.fail(c, &appError{status: status, code: "NOT_READY", message: "safe"}) })
+		req := httptest.NewRequest("GET", "/", nil)
+		req.Header.Set("X-Trace-ID", "01ARZ3NDEKTSV4RRFFQ69G5FAV")
+		req.Header.Set("X-Request-ID", "business-id")
+		w := httptest.NewRecorder()
+		engine.ServeHTTP(w, req)
+		var body map[string]any
+		if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+			t.Fatal(err)
+		}
+		if body["trace_id"] != w.Header().Get("X-Trace-ID") {
+			t.Fatal("trace mismatch")
+		}
+		e := body["error"].(map[string]any)
+		if e["request_id"] != "business-id" {
+			t.Fatal("business request ID lost")
+		}
+		if _, ok := body["meta"]; !ok {
+			t.Fatal("meta compatibility field absent")
+		}
+		if _, ok := e["retryable"].(bool); !ok {
+			t.Fatal("retryable absent")
+		}
+		if status == 429 || status == 503 {
+			delay, ok := e["retry_after_seconds"].(float64)
+			if !ok || delay <= 0 || w.Header().Get("Retry-After") == "" {
+				t.Errorf("retry delay absent: %s", w.Body.String())
+			}
+		} else if _, ok := e["retry_after_seconds"]; ok {
+			t.Fatal("nonretryable error has retry delay")
+		}
+	}
+}
+
 func fixtureDir(t *testing.T) string {
 	t.Helper()
 	return filepath.Join("..", "..", "..", "..", "..", "contracts", "intel", "fixtures", "events-v1")

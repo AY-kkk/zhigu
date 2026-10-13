@@ -2,6 +2,10 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"os"
@@ -14,6 +18,7 @@ import (
 	intelapi "zhigu/server/api/v1/intel"
 	"zhigu/server/httpx"
 	"zhigu/server/initialize"
+	"zhigu/server/ops"
 	"zhigu/server/runtime"
 	"zhigu/server/service/finance"
 	futuressvc "zhigu/server/service/futures"
@@ -94,13 +99,82 @@ func main() {
 		svc.StartWorker(ctx)
 	}
 	engine := gin.New()
+	httpx.InstallTrace(engine)
 	if runtimeConfig.DeploymentEnvironment == runtime.Production {
 		// Only the private Compose proxy may supply the overwritten X-Real-IP.
 		if err := httpx.ConfigureProductionProxy(engine); err != nil {
 			log.Fatal("invalid trusted proxy configuration")
 		}
 	}
-	engine.Use(gin.Recovery())
+	sqlDB, err := db.DB()
+	if err != nil {
+		log.Fatal("database pool unavailable")
+	}
+	migrations, err := initialize.LoadEmbeddedMigrations()
+	if err != nil {
+		log.Fatal("migration catalog unavailable")
+	}
+	databaseProbe := ops.ProbeFunc(func(probeCtx context.Context) error {
+		if err := sqlDB.PingContext(probeCtx); err != nil {
+			return errors.New("database unavailable")
+		}
+		rows, err := sqlDB.QueryContext(probeCtx, "SELECT version, checksum FROM finance_schema_migrations")
+		if err != nil {
+			return errors.New("migration ledger unavailable")
+		}
+		defer rows.Close()
+		registered := map[string]string{}
+		for rows.Next() {
+			var version, checksum string
+			if err := rows.Scan(&version, &checksum); err != nil {
+				return errors.New("migration ledger unavailable")
+			}
+			registered[version] = checksum
+		}
+		if rows.Err() != nil {
+			return errors.New("migration ledger unavailable")
+		}
+		for _, migration := range migrations {
+			if registered[migration.Version] != migration.Checksum {
+				return errors.New("migration ledger inconsistent")
+			}
+		}
+		return nil
+	})
+	configRaw, _ := json.Marshal(runtimeConfig)
+	configSum := sha256.Sum256(configRaw)
+	configDigest := hex.EncodeToString(configSum[:])
+	futuresModule := runtimeConfig.Futures
+	if futuresModule.Enabled {
+		futuresModule.OperationMode = runtime.OperationMode(futuresState.Mode)
+		if futuresDBErr != nil || futuresDomain == nil {
+			futuresModule.Health = runtime.Unavailable
+		}
+	}
+	intelWorkerStarted := false
+	researchWorker := ops.HTTPProbe(os.Getenv("ZHIGU_RESEARCH_URL"), runtimeConfig.InternalToken, nil)
+	if runtimeConfig.DeploymentEnvironment != runtime.Production {
+		researchWorker = ops.ProbeFunc(func(probeCtx context.Context) error { return sqlDB.PingContext(probeCtx) })
+	}
+	intelWorker := ops.ProbeFunc(func(probeCtx context.Context) error {
+		if !intelWorkerStarted || ctx.Err() != nil {
+			return errors.New("intel worker unavailable")
+		}
+		rows, err := sqlDB.QueryContext(probeCtx, "SELECT id FROM finance_intel_jobs LIMIT 0")
+		if err != nil {
+			return errors.New("intel queue unavailable")
+		}
+		return rows.Close()
+	})
+	monitor := ops.New(databaseProbe, []ops.Module{
+		{Name: "research", State: runtimeConfig.Research, Version: runtimeConfig.Revision, ConfigDigest: configDigest, Worker: researchWorker},
+		{Name: "futures", State: futuresModule, Version: runtimeConfig.Revision, ConfigDigest: configDigest, Worker: ops.HTTPProbe(os.Getenv("FUTURES_WORKER_URL"), runtimeConfig.FuturesToken, nil)},
+		{Name: "intel", State: runtimeConfig.Intel, Version: runtimeConfig.Revision, ConfigDigest: configDigest, Worker: intelWorker},
+	}, runtimeConfig.InternalToken)
+	engine.Use(monitor.Instrument())
+	if runtimeConfig.DeploymentEnvironment == runtime.Production {
+		engine.Use(monitor.RequireReady())
+	}
 	engine.Use(func(c *gin.Context) {
 		if !runtimeConfig.RequestAllowed(c.Request.Method, c.Request.URL.Path, c.GetHeader("X-Intel-Mode")) {
 			httpx.Fail(c, http.StatusServiceUnavailable, "RUNTIME_UNAVAILABLE", "当前模块暂不可用")
@@ -112,17 +186,7 @@ func main() {
 		}
 		c.Next()
 	})
-	engine.GET("/healthz", func(c *gin.Context) {
-		mode := "http"
-		if os.Getenv("ZHIGU_RESEARCH_MODE") == "unit-test" {
-			mode = "fake"
-		}
-		httpx.OK(c, http.StatusOK, gin.H{
-			"status": "ok", "stage": "B", "mode": finance.DataMode(),
-			"research_client": mode, "research_url_configured": os.Getenv("ZHIGU_RESEARCH_URL") != "",
-			"catalog_size": finance.CatalogSize(),
-		})
-	})
+	monitor.Register(engine)
 	financeapi.Register(engine, svc, proxy)
 	financeapi.RegisterAdmin(engine, cfg, svc)
 	futuresapi.Register(engine, futuressvc.NewService(futuresEnabled).WithRuntimeState(futuresState).WithDomain(futuresDomain))
@@ -158,6 +222,7 @@ func main() {
 		intelapi.Register(engine, intelSvc)
 		if runtimeConfig.DeploymentEnvironment != runtime.Production || runtimeConfig.Intel.OperationMode == runtime.Live {
 			intelSvc.StartWorker(ctx)
+			intelWorkerStarted = true
 		}
 		log.Printf("intel module enabled (mode=%s providers=%s)", os.Getenv("ZHIGU_INTEL_MODE"), os.Getenv("ZHIGU_INTEL_PROVIDERS"))
 	}
