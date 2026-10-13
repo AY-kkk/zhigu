@@ -201,6 +201,131 @@ func TestErrorRegistryCoversGoServices(t *testing.T) {
 	}
 }
 
+func TestErrorRegistryDeclaresActualInternalHandlerInterfaces(t *testing.T) {
+	raw, err := os.ReadFile("../../contracts/error-codes.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var registry struct {
+		Errors []registeredError `json:"errors"`
+	}
+	if err := json.Unmarshal(raw, &registry); err != nil {
+		t.Fatal(err)
+	}
+	declarations := map[string][]string{}
+	for _, entry := range registry.Errors {
+		declarations[entry.Code] = entry.Interfaces
+	}
+	file, err := parser.ParseFile(token.NewFileSet(), "../api/v1/finance/handlers.go", nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	groups := map[string]string{}
+	handlers := map[string][]string{}
+	ast.Inspect(file, func(node ast.Node) bool {
+		if assignment, ok := node.(*ast.AssignStmt); ok && len(assignment.Lhs) == 1 && len(assignment.Rhs) == 1 {
+			if lhs, ok := assignment.Lhs[0].(*ast.Ident); ok {
+				if call, ok := assignment.Rhs[0].(*ast.CallExpr); ok {
+					if selector, ok := call.Fun.(*ast.SelectorExpr); ok && selector.Sel.Name == "Group" && len(call.Args) > 0 {
+						if literal, ok := call.Args[0].(*ast.BasicLit); ok {
+							groups[lhs.Name], _ = strconv.Unquote(literal.Value)
+						}
+					}
+				}
+			}
+		}
+		if call, ok := node.(*ast.CallExpr); ok && len(call.Args) >= 2 {
+			if selector, ok := call.Fun.(*ast.SelectorExpr); ok {
+				if group, ok := selector.X.(*ast.Ident); ok && strings.HasPrefix(groups[group.Name], "/internal") {
+					if path, ok := call.Args[0].(*ast.BasicLit); ok {
+						if handler, ok := call.Args[len(call.Args)-1].(*ast.SelectorExpr); ok {
+							suffix, _ := strconv.Unquote(path.Value)
+							handlers[handler.Sel.Name] = append(handlers[handler.Sel.Name], groups[group.Name]+suffix)
+						}
+					}
+				}
+			}
+		}
+		return true
+	})
+	// Propagate route ownership through receiver helpers (ProxyLLMChat and
+	// ProxyLLMResponses both delegate validation to a.proxyLLM).
+	for pass := 0; pass < len(file.Decls); pass++ {
+		changed := false
+		for _, declaration := range file.Decls {
+			function, ok := declaration.(*ast.FuncDecl)
+			if !ok || function.Recv == nil || len(function.Recv.List[0].Names) == 0 || len(handlers[function.Name.Name]) == 0 {
+				continue
+			}
+			receiver := function.Recv.List[0].Names[0].Name
+			ast.Inspect(function.Body, func(node ast.Node) bool {
+				call, ok := node.(*ast.CallExpr)
+				if !ok {
+					return true
+				}
+				selector, ok := call.Fun.(*ast.SelectorExpr)
+				if !ok {
+					return true
+				}
+				owner, ok := selector.X.(*ast.Ident)
+				if !ok || owner.Name != receiver {
+					return true
+				}
+				for _, route := range handlers[function.Name.Name] {
+					exists := false
+					for _, known := range handlers[selector.Sel.Name] {
+						exists = exists || known == route
+					}
+					if !exists {
+						handlers[selector.Sel.Name] = append(handlers[selector.Sel.Name], route)
+						changed = true
+					}
+				}
+				return true
+			})
+		}
+		if !changed {
+			break
+		}
+	}
+	checked := 0
+	for _, declaration := range file.Decls {
+		function, ok := declaration.(*ast.FuncDecl)
+		if !ok || len(handlers[function.Name.Name]) == 0 {
+			continue
+		}
+		ast.Inspect(function.Body, func(node ast.Node) bool {
+			call, ok := node.(*ast.CallExpr)
+			if !ok || len(call.Args) < 4 {
+				return true
+			}
+			selector, ok := call.Fun.(*ast.SelectorExpr)
+			if !ok || selector.Sel.Name != "Fail" {
+				return true
+			}
+			literal, ok := call.Args[2].(*ast.BasicLit)
+			if !ok {
+				return true
+			}
+			code, _ := strconv.Unquote(literal.Value)
+			for _, route := range handlers[function.Name.Name] {
+				matched := false
+				for _, allowed := range declarations[code] {
+					matched = matched || route == allowed || strings.HasSuffix(allowed, "*") && strings.HasPrefix(route, strings.TrimSuffix(allowed, "*"))
+				}
+				if !matched {
+					t.Errorf("%s handler %s emits %s without registry interface permission", route, function.Name.Name, code)
+				}
+				checked++
+			}
+			return true
+		})
+	}
+	if checked < 5 {
+		t.Fatalf("route/error AST scan ineffective: checked %d", checked)
+	}
+}
+
 func TestEnvelopeStableErrorAndTrace(t *testing.T) {
 	for _, status := range []int{400, 429, 503} {
 		w := httptest.NewRecorder()

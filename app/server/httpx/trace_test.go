@@ -1,12 +1,41 @@
 package httpx
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
+
+func TestPanicLogsTraceAndSanitizedStackWithoutRequestSecrets(t *testing.T) {
+	var logs bytes.Buffer
+	r := gin.New()
+	InstallTraceWithLogger(r, func(format string, args ...any) { fmt.Fprintf(&logs, format, args...) })
+	r.POST("/panic", func(c *gin.Context) { panic("token=panic-secret") })
+	req := httptest.NewRequest("POST", "/panic?key=query-secret", strings.NewReader("body-secret"))
+	req.Header.Set("Authorization", "Bearer authorization-secret")
+	req.Header.Set("Cookie", "session=cookie-secret")
+	req.Header.Set("X-Trace-ID", "01ARZ3NDEKTSV4RRFFQ69G5FAV")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	for _, required := range []string{"01ARZ3NDEKTSV4RRFFQ69G5FAV", "panic_type", "panic_message", "stack", "trace_test.go:"} {
+		if !strings.Contains(logs.String(), required) {
+			t.Errorf("missing panic diagnostic %s: %s", required, logs.String())
+		}
+	}
+	for _, secret := range []string{"panic-secret", "query-secret", "body-secret", "authorization-secret", "cookie-secret", "Authorization", "Cookie"} {
+		if strings.Contains(logs.String(), secret) {
+			t.Errorf("panic log leaked %s", secret)
+		}
+	}
+	if w.Code != 500 || !strings.Contains(w.Body.String(), "内部错误") {
+		t.Fatal("external panic contract changed")
+	}
+}
 
 func TestTraceMiddlewareRoutesAndRecovery(t *testing.T) {
 	for _, path := range []string{"/ok", "/ok/", "/fail", "/missing", "/panic", "/method"} {

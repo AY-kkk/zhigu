@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -146,9 +147,17 @@ func main() {
 	configDigest := hex.EncodeToString(configSum[:])
 	futuresModule := runtimeConfig.Futures
 	if futuresModule.Enabled {
-		futuresModule.OperationMode = runtime.OperationMode(futuresState.Mode)
+		// Preserve the configured intent when bootstrap failed; an isolated failure
+		// returning mode=off must not look like an operator deliberately disabled it.
+		if futuresDomain != nil {
+			futuresModule.OperationMode = runtime.OperationMode(futuresState.Mode)
+		}
 		if futuresDBErr != nil || futuresDomain == nil {
 			futuresModule.Health = runtime.Unavailable
+			futuresModule.Reason = futuresState.Reason
+			if futuresDBErr != nil {
+				futuresModule.Reason = "FUTURES_DATABASE_UNAVAILABLE"
+			}
 		}
 	}
 	intelWorkerStarted := false
@@ -171,6 +180,11 @@ func main() {
 		{Name: "futures", State: futuresModule, Version: runtimeConfig.Revision, ConfigDigest: configDigest, Worker: ops.HTTPProbe(os.Getenv("FUTURES_WORKER_URL"), runtimeConfig.FuturesToken, nil)},
 		{Name: "intel", State: runtimeConfig.Intel, Version: runtimeConfig.Revision, ConfigDigest: configDigest, Worker: intelWorker},
 	}, runtimeConfig.InternalToken)
+	var futuresMetricsPool *sql.DB
+	if runtimeConfig.Futures.Enabled && futuresDBErr == nil {
+		futuresMetricsPool, _ = futuresDB.DB()
+	}
+	monitor.SetMetricsProvider(ops.NewSQLMetricsProvider(sqlDB, futuresMetricsPool, os.Getenv("ZHIGU_BACKUP_STATE_FILE"), os.Getenv("ZHIGU_BACKUP_LAST_SUCCESS_UNIX")))
 	engine.Use(monitor.Instrument())
 	if runtimeConfig.DeploymentEnvironment == runtime.Production {
 		engine.Use(monitor.RequireReady())

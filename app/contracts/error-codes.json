@@ -10,7 +10,9 @@
       "retryable": false,
       "message_key": "errors.active_run_exists",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -22,7 +24,9 @@
       "retryable": false,
       "message_key": "errors.args_hash_mismatch",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -34,7 +38,9 @@
       "retryable": false,
       "message_key": "errors.bootstrap_required",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -46,7 +52,9 @@
       "retryable": true,
       "message_key": "errors.budget_exceeded",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -58,7 +66,9 @@
       "retryable": false,
       "message_key": "errors.cancel_in_progress",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -70,7 +80,9 @@
       "retryable": true,
       "message_key": "errors.cancel_not_confirmed",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -82,7 +94,9 @@
       "retryable": false,
       "message_key": "errors.config_not_found",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -94,7 +108,9 @@
       "retryable": false,
       "message_key": "errors.contract_version_mismatch",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -106,7 +122,9 @@
       "retryable": false,
       "message_key": "errors.copy_target_gone",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -118,7 +136,9 @@
       "retryable": false,
       "message_key": "errors.csrf_invalid",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -130,7 +150,10 @@
       "retryable": false,
       "message_key": "errors.cursor_expired",
       "interfaces": [
-        "/api/finance/intel/v1/*"
+        "/api/finance/intel/v1/*",
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -142,7 +165,9 @@
       "retryable": true,
       "message_key": "errors.daily_research_limit",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -154,7 +179,9 @@
       "retryable": true,
       "message_key": "errors.data_unavailable",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -166,7 +193,9 @@
       "retryable": false,
       "message_key": "errors.deadline",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -178,7 +207,9 @@
       "retryable": false,
       "message_key": "errors.demo_session_expired",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -190,7 +221,9 @@
       "retryable": false,
       "message_key": "errors.document_attachment_missing",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -202,7 +235,9 @@
       "retryable": false,
       "message_key": "errors.document_not_found",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -214,7 +249,9 @@
       "retryable": false,
       "message_key": "errors.document_not_ready",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -226,7 +263,9 @@
       "retryable": false,
       "message_key": "errors.document_run_mismatch",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -238,7 +277,9 @@
       "retryable": false,
       "message_key": "errors.document_span_not_found",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -250,7 +291,9 @@
       "retryable": false,
       "message_key": "errors.document_too_large",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -262,7 +305,9 @@
       "retryable": false,
       "message_key": "errors.draft_already_confirmed",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -274,7 +319,9 @@
       "retryable": false,
       "message_key": "errors.draft_not_found",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -286,7 +333,9 @@
       "retryable": false,
       "message_key": "errors.draft_revision",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -298,7 +347,9 @@
       "retryable": false,
       "message_key": "errors.empty_document",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -310,7 +361,9 @@
       "retryable": false,
       "message_key": "errors.empty_result",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -322,7 +375,9 @@
       "retryable": false,
       "message_key": "errors.evidence_grade_mismatch",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -334,7 +389,9 @@
       "retryable": false,
       "message_key": "errors.evidence_not_found",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -346,7 +403,9 @@
       "retryable": false,
       "message_key": "errors.evidence_not_granted",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -358,7 +417,9 @@
       "retryable": false,
       "message_key": "errors.evidence_rejected",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -370,7 +431,9 @@
       "retryable": false,
       "message_key": "errors.fee_cap_required",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -382,7 +445,9 @@
       "retryable": false,
       "message_key": "errors.forbidden",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -394,7 +459,9 @@
       "retryable": false,
       "message_key": "errors.future_evidence",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -728,7 +795,9 @@
       "retryable": true,
       "message_key": "errors.global_concurrency",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -740,7 +809,9 @@
       "retryable": false,
       "message_key": "errors.grant_consumed",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -752,7 +823,9 @@
       "retryable": false,
       "message_key": "errors.grant_expired",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -764,7 +837,9 @@
       "retryable": false,
       "message_key": "errors.grant_not_found",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -776,7 +851,9 @@
       "retryable": false,
       "message_key": "errors.grant_payload_conflict",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -788,7 +865,9 @@
       "retryable": false,
       "message_key": "errors.grant_revoked",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -800,7 +879,9 @@
       "retryable": false,
       "message_key": "errors.grant_unknown",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -813,7 +894,9 @@
       "message_key": "errors.harness_unavailable",
       "interfaces": [
         "/api/finance/*",
-        "/internal/finance/*"
+        "/internal/finance/*",
+        "/api/*",
+        "/internal/llm/v1/*"
       ]
     },
     {
@@ -825,7 +908,9 @@
       "retryable": false,
       "message_key": "errors.idempotency_conflict",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -837,7 +922,9 @@
       "retryable": false,
       "message_key": "errors.in_flight",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -849,7 +936,9 @@
       "retryable": false,
       "message_key": "errors.in_progress",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -861,7 +950,9 @@
       "retryable": false,
       "message_key": "errors.incomparable_metric",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -873,7 +964,9 @@
       "retryable": false,
       "message_key": "errors.incomplete_verdict",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -885,7 +978,9 @@
       "retryable": false,
       "message_key": "errors.instrument_unsupported",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -897,7 +992,9 @@
       "retryable": false,
       "message_key": "errors.insufficient_denominator",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -909,7 +1006,9 @@
       "retryable": false,
       "message_key": "errors.insufficient_history",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -925,7 +1024,9 @@
         "/internal/*",
         "/readyz",
         "/metrics",
-        "/*"
+        "/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -937,7 +1038,9 @@
       "retryable": false,
       "message_key": "errors.invalid_chronology",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -949,7 +1052,9 @@
       "retryable": false,
       "message_key": "errors.invalid_citation",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -961,7 +1066,9 @@
       "retryable": false,
       "message_key": "errors.invalid_claim_type",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -973,7 +1080,9 @@
       "retryable": false,
       "message_key": "errors.invalid_decimal",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -985,7 +1094,9 @@
       "retryable": false,
       "message_key": "errors.invalid_fact_status",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -997,7 +1108,9 @@
       "retryable": false,
       "message_key": "errors.invalid_filename",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1009,7 +1122,9 @@
       "retryable": false,
       "message_key": "errors.invalid_focus_text",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1021,7 +1136,9 @@
       "retryable": false,
       "message_key": "errors.invalid_horizon",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1033,7 +1150,9 @@
       "retryable": false,
       "message_key": "errors.invalid_inputs",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1045,7 +1164,9 @@
       "retryable": false,
       "message_key": "errors.invalid_items",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1057,7 +1178,9 @@
       "retryable": false,
       "message_key": "errors.invalid_json",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1069,7 +1192,9 @@
       "retryable": false,
       "message_key": "errors.invalid_metrics",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1081,7 +1206,9 @@
       "retryable": false,
       "message_key": "errors.invalid_multipart",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1093,7 +1220,9 @@
       "retryable": false,
       "message_key": "errors.invalid_operation",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1105,7 +1234,9 @@
       "retryable": false,
       "message_key": "errors.invalid_param",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1117,7 +1248,9 @@
       "retryable": false,
       "message_key": "errors.invalid_periods",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1129,7 +1262,9 @@
       "retryable": false,
       "message_key": "errors.invalid_query",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1141,7 +1276,9 @@
       "retryable": false,
       "message_key": "errors.invalid_schema",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1153,7 +1290,9 @@
       "retryable": false,
       "message_key": "errors.invalid_status",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1165,7 +1304,9 @@
       "retryable": false,
       "message_key": "errors.invalid_storage_path",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1177,7 +1318,9 @@
       "retryable": false,
       "message_key": "errors.invalid_task_token",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1189,7 +1332,9 @@
       "retryable": false,
       "message_key": "errors.invalid_text",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1201,7 +1346,9 @@
       "retryable": false,
       "message_key": "errors.invalid_url",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1213,7 +1360,9 @@
       "retryable": false,
       "message_key": "errors.invalid_url_scheme",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1225,7 +1374,9 @@
       "retryable": false,
       "message_key": "errors.lease_lost",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1237,7 +1388,9 @@
       "retryable": false,
       "message_key": "errors.market_item_withdrawn",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1249,7 +1402,9 @@
       "retryable": false,
       "message_key": "errors.market_not_copyable",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1261,7 +1416,9 @@
       "retryable": false,
       "message_key": "errors.market_version_changed",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1277,7 +1434,9 @@
         "/internal/*",
         "/readyz",
         "/metrics",
-        "/*"
+        "/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1289,7 +1448,9 @@
       "retryable": false,
       "message_key": "errors.metric_not_found",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1301,7 +1462,9 @@
       "retryable": false,
       "message_key": "errors.missing_args_hash",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1313,7 +1476,9 @@
       "retryable": false,
       "message_key": "errors.missing_citation",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1325,7 +1490,9 @@
       "retryable": false,
       "message_key": "errors.missing_idempotency_key",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1337,7 +1504,9 @@
       "retryable": false,
       "message_key": "errors.missing_request_id",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1349,7 +1518,9 @@
       "retryable": false,
       "message_key": "errors.missing_research_input",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1361,7 +1532,9 @@
       "retryable": false,
       "message_key": "errors.missing_task_token",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1373,7 +1546,9 @@
       "retryable": false,
       "message_key": "errors.missing_verdict",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1385,7 +1560,10 @@
       "retryable": false,
       "message_key": "errors.mode_conflict",
       "interfaces": [
-        "/api/finance/intel/v1/*"
+        "/api/finance/intel/v1/*",
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1397,7 +1575,9 @@
       "retryable": false,
       "message_key": "errors.mode_mismatch",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1409,7 +1589,9 @@
       "retryable": true,
       "message_key": "errors.model_budget_exceeded",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1421,7 +1603,9 @@
       "retryable": false,
       "message_key": "errors.model_not_configured",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1433,7 +1617,9 @@
       "retryable": false,
       "message_key": "errors.model_protocol_mismatch",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1446,7 +1632,9 @@
       "retryable": true,
       "message_key": "errors.model_unavailable",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1458,7 +1646,9 @@
       "retryable": false,
       "message_key": "errors.no_claim_items",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1470,7 +1660,9 @@
       "retryable": false,
       "message_key": "errors.no_report",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1486,7 +1678,9 @@
         "/internal/*",
         "/readyz",
         "/metrics",
-        "/*"
+        "/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1502,7 +1696,9 @@
         "/internal/*",
         "/readyz",
         "/metrics",
-        "/*"
+        "/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1514,7 +1710,9 @@
       "retryable": false,
       "message_key": "errors.notification_state_conflict",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1526,7 +1724,9 @@
       "retryable": true,
       "message_key": "errors.parse_rate_limit",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1538,7 +1738,9 @@
       "retryable": false,
       "message_key": "errors.period_mismatch",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1550,7 +1752,9 @@
       "retryable": false,
       "message_key": "errors.period_not_annual",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1562,7 +1766,9 @@
       "retryable": false,
       "message_key": "errors.period_required",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1574,7 +1780,9 @@
       "retryable": false,
       "message_key": "errors.policy_invalid",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1586,7 +1794,9 @@
       "retryable": false,
       "message_key": "errors.policy_raise_forbidden",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1598,7 +1808,9 @@
       "retryable": false,
       "message_key": "errors.provider_disabled",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1610,7 +1822,9 @@
       "retryable": false,
       "message_key": "errors.python_error",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1622,7 +1836,9 @@
       "retryable": true,
       "message_key": "errors.python_invalid_response",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1634,7 +1850,9 @@
       "retryable": true,
       "message_key": "errors.python_unavailable",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1646,7 +1864,9 @@
       "retryable": true,
       "message_key": "errors.question_limit",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1658,7 +1878,9 @@
       "retryable": false,
       "message_key": "errors.range_too_large",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1670,7 +1892,9 @@
       "retryable": true,
       "message_key": "errors.rate_limited",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1682,7 +1906,9 @@
       "retryable": false,
       "message_key": "errors.reparse_required",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1694,7 +1920,9 @@
       "retryable": false,
       "message_key": "errors.replay_forbidden",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1706,7 +1934,9 @@
       "retryable": false,
       "message_key": "errors.report_schema",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1718,7 +1948,9 @@
       "retryable": false,
       "message_key": "errors.report_section_missing",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1730,7 +1962,9 @@
       "retryable": false,
       "message_key": "errors.request_id_conflict",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1742,7 +1976,9 @@
       "retryable": false,
       "message_key": "errors.request_in_progress",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1754,7 +1990,9 @@
       "retryable": false,
       "message_key": "errors.reservation_not_found",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1766,7 +2004,9 @@
       "retryable": false,
       "message_key": "errors.result_run_mismatch",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1778,7 +2018,9 @@
       "retryable": false,
       "message_key": "errors.result_task_mismatch",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1790,7 +2032,9 @@
       "retryable": false,
       "message_key": "errors.review_required",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1802,7 +2046,9 @@
       "retryable": false,
       "message_key": "errors.revision_conflict",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1814,7 +2060,9 @@
       "retryable": true,
       "message_key": "errors.role_timeout",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1826,7 +2074,9 @@
       "retryable": false,
       "message_key": "errors.rule_data_incomplete",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1838,7 +2088,9 @@
       "retryable": false,
       "message_key": "errors.run_canceled",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1850,7 +2102,9 @@
       "retryable": false,
       "message_key": "errors.run_closed",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1862,7 +2116,9 @@
       "retryable": false,
       "message_key": "errors.run_failed",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1874,7 +2130,9 @@
       "retryable": false,
       "message_key": "errors.run_not_found",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1886,7 +2144,9 @@
       "retryable": false,
       "message_key": "errors.run_not_succeeded",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1898,7 +2158,9 @@
       "retryable": true,
       "message_key": "errors.runtime_unavailable",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1910,7 +2172,9 @@
       "retryable": false,
       "message_key": "errors.scope_required",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1922,7 +2186,9 @@
       "retryable": false,
       "message_key": "errors.ssrf_blocked",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1934,7 +2200,9 @@
       "retryable": false,
       "message_key": "errors.stale_test",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1946,7 +2214,9 @@
       "retryable": false,
       "message_key": "errors.strategy_invalid",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1958,7 +2228,9 @@
       "retryable": false,
       "message_key": "errors.strategy_unsupported",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1970,7 +2242,9 @@
       "retryable": false,
       "message_key": "errors.structural_invalid",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1982,7 +2256,9 @@
       "retryable": false,
       "message_key": "errors.task_not_found",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -1994,7 +2270,9 @@
       "retryable": false,
       "message_key": "errors.task_payload_conflict",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -2006,7 +2284,9 @@
       "retryable": false,
       "message_key": "errors.task_run_mismatch",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -2018,7 +2298,9 @@
       "retryable": false,
       "message_key": "errors.task_token_mismatch",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -2030,7 +2312,9 @@
       "retryable": false,
       "message_key": "errors.task_token_purpose",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -2042,7 +2326,9 @@
       "retryable": false,
       "message_key": "errors.task_token_revoked",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -2054,7 +2340,9 @@
       "retryable": false,
       "message_key": "errors.time_gate",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -2066,7 +2354,9 @@
       "retryable": false,
       "message_key": "errors.token_revoked",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -2078,7 +2368,9 @@
       "retryable": false,
       "message_key": "errors.tool_forbidden",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -2090,7 +2382,9 @@
       "retryable": false,
       "message_key": "errors.tool_mismatch",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -2103,7 +2397,9 @@
       "message_key": "errors.tool_path_failed",
       "interfaces": [
         "/api/finance/*",
-        "/internal/finance/*"
+        "/internal/finance/*",
+        "/api/*",
+        "/internal/llm/v1/*"
       ]
     },
     {
@@ -2119,7 +2415,9 @@
         "/internal/*",
         "/readyz",
         "/metrics",
-        "/*"
+        "/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -2131,7 +2429,9 @@
       "retryable": false,
       "message_key": "errors.unbound_number",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -2143,7 +2443,9 @@
       "retryable": false,
       "message_key": "errors.unit_mismatch",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -2155,7 +2457,9 @@
       "retryable": false,
       "message_key": "errors.unknown_claim",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -2167,7 +2471,9 @@
       "retryable": false,
       "message_key": "errors.unknown_gate",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -2179,7 +2485,9 @@
       "retryable": false,
       "message_key": "errors.unregistered_citation",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -2191,7 +2499,9 @@
       "retryable": false,
       "message_key": "errors.unsupported_document",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -2203,7 +2513,10 @@
       "retryable": false,
       "message_key": "errors.unsupported_event",
       "interfaces": [
-        "/api/finance/intel/v1/*"
+        "/api/finance/intel/v1/*",
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -2215,7 +2528,9 @@
       "retryable": false,
       "message_key": "errors.unsupported_export",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -2227,7 +2542,9 @@
       "retryable": false,
       "message_key": "errors.unsupported_instrument",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -2239,7 +2556,9 @@
       "retryable": false,
       "message_key": "errors.unsupported_metric",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -2251,7 +2570,9 @@
       "retryable": false,
       "message_key": "errors.unsupported_web_content",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -2263,7 +2584,9 @@
       "retryable": false,
       "message_key": "errors.untrusted_record",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -2275,7 +2598,9 @@
       "retryable": true,
       "message_key": "errors.upstream_error",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -2287,7 +2612,9 @@
       "retryable": true,
       "message_key": "errors.upstream_unavailable",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -2299,7 +2626,9 @@
       "retryable": false,
       "message_key": "errors.url_credentials_forbidden",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -2311,7 +2640,9 @@
       "retryable": false,
       "message_key": "errors.url_dns_failed",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -2323,7 +2654,9 @@
       "retryable": false,
       "message_key": "errors.url_port_forbidden",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -2335,7 +2668,9 @@
       "retryable": false,
       "message_key": "errors.url_redirect_limit",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -2347,7 +2682,9 @@
       "retryable": false,
       "message_key": "errors.value_type_mismatch",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -2359,7 +2696,9 @@
       "retryable": false,
       "message_key": "errors.version_conflict",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -2371,7 +2710,9 @@
       "retryable": false,
       "message_key": "errors.version_mismatch",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -2383,7 +2724,9 @@
       "retryable": false,
       "message_key": "errors.watchlist_limit",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -2395,7 +2738,9 @@
       "retryable": false,
       "message_key": "errors.web_article_empty",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -2407,7 +2752,9 @@
       "retryable": false,
       "message_key": "errors.web_article_too_large",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     },
     {
@@ -2419,7 +2766,9 @@
       "retryable": true,
       "message_key": "errors.web_fetch_failed",
       "interfaces": [
-        "/api/*"
+        "/api/*",
+        "/internal/llm/v1/*",
+        "/internal/finance/*"
       ]
     }
   ]

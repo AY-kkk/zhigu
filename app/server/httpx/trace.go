@@ -1,7 +1,13 @@
 package httpx
 
 import (
+	"encoding/json"
+	"fmt"
+	"log"
+	"path/filepath"
+	"reflect"
 	"regexp"
+	"runtime"
 
 	"github.com/gin-gonic/gin"
 )
@@ -14,6 +20,13 @@ func validTraceID(id string) bool { return uuidTrace.MatchString(id) || ulidTrac
 // InstallTrace must be the first engine middleware. Recovery stays inside the
 // trace scope so even errors and unmatched routes share the same identifier.
 func InstallTrace(engine *gin.Engine) {
+	InstallTraceWithLogger(engine, log.Printf)
+}
+
+// InstallTraceWithLogger makes the structured, sanitized panic diagnostic sink
+// explicit. Request headers, bodies, query strings, and raw panic values are
+// never inspected by the logger.
+func InstallTraceWithLogger(engine *gin.Engine, logger func(string, ...any)) {
 	// Gin's automatic redirects bypass middleware, so unmatched slash variants
 	// use the normal traced JSON 404 contract instead.
 	engine.RedirectTrailingSlash = false
@@ -30,6 +43,29 @@ func InstallTrace(engine *gin.Engine) {
 	engine.Use(func(c *gin.Context) {
 		defer func() {
 			if recovered := recover(); recovered != nil {
+				if logger != nil {
+					pcs := make([]uintptr, 32)
+					n := runtime.Callers(3, pcs)
+					frames := runtime.CallersFrames(pcs[:n])
+					stack := []string{}
+					for {
+						frame, more := frames.Next()
+						stack = append(stack, fmt.Sprintf("%s %s:%d", frame.Function, filepath.Base(frame.File), frame.Line))
+						if !more {
+							break
+						}
+					}
+					panicType := "unknown"
+					if typ := reflect.TypeOf(recovered); typ != nil {
+						panicType = typ.Kind().String()
+					}
+					message := "panic value redacted"
+					if _, ok := recovered.(runtime.Error); ok {
+						message = "runtime panic"
+					}
+					record, _ := json.Marshal(map[string]any{"event": "http_panic", "trace_id": TraceID(c), "panic_type": panicType, "panic_message": message, "stack": stack})
+					logger("%s", record)
+				}
 				// Gin's default recovery prints panic payloads and request headers, which
 				// can contain private bodies and credentials. Expose only a stable error.
 				if !c.Writer.Written() {
