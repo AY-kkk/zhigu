@@ -79,3 +79,27 @@ func TestProductionBcryptRejectsNonCanonicalEncoding(t *testing.T) {
 		}
 	}
 }
+
+func TestProductionPrimaryArgonRequiresCanonicalTransitionHash(t *testing.T) {
+	password := "parent-version-owner-password"
+	hash, err := HashPassword(password)
+	if err != nil {
+		t.Fatal(err)
+	}
+	user := model.User{PasswordHash: hash}
+	if valid, _ := VerifyLoginPassword(&user, password, true); !valid {
+		t.Fatal("canonical parent-version primary Argon2id rejected")
+	}
+	parts := strings.Split(hash, "$")
+	noncanonicalSalt := strings.Replace(hash, parts[4], parts[4]+"\n", 1)
+	for _, bad := range []string{
+		strings.Replace(hash, "m=19456", "m=19456,trailing=1", 1),
+		strings.Replace(hash, "t=2", "t=1", 1),
+		noncanonicalSalt,
+	} {
+		user.PasswordHash = bad
+		if valid, _ := verifyLoginPassword(&user, password, true, func(string, string) (bool, bool) { return true, false }); valid {
+			t.Fatal("noncanonical primary Argon2id reached authentication")
+		}
+	}
+}

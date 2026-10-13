@@ -1,10 +1,8 @@
 package initialize
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -39,7 +37,7 @@ func EnsureOwner(db *gorm.DB, cfg runtime.Config) error {
 					return errors.New("production database contains a default account or password")
 				}
 				defaultPassword := false
-				if httpx.CanonicalProductionBcrypt(user.PasswordHash) {
+				if validOwnerHash(user.PasswordHash) {
 					defaultPassword, _ = httpx.VerifyPassword(user.PasswordHash, "Passw0rd!")
 				}
 				if user.PasswordHashV2 != nil && strings.HasPrefix(*user.PasswordHashV2, "$argon2id$") && validOwnerHash(*user.PasswordHashV2) {
@@ -52,7 +50,12 @@ func EnsureOwner(db *gorm.DB, cfg runtime.Config) error {
 			}
 			if user.Role == "admin" {
 				if cfg.DeploymentEnvironment == runtime.Production {
-					if !httpx.CanonicalProductionBcrypt(user.PasswordHash) || (user.PasswordHashV2 != nil && (!strings.HasPrefix(*user.PasswordHashV2, "$argon2id$") || !validOwnerHash(*user.PasswordHashV2))) {
+					legacyValid := httpx.CanonicalProductionBcrypt(user.PasswordHash)
+					// Task 1 and the first session implementation wrote Argon2id
+					// into the primary column. The first successful login normalizes
+					// this exact, canonical NULL-v2 transition into dual hashes.
+					primaryTransition := user.PasswordHashV2 == nil && httpx.CanonicalProductionArgon2id(user.PasswordHash)
+					if (!legacyValid && !primaryTransition) || (user.PasswordHashV2 != nil && !httpx.CanonicalProductionArgon2id(*user.PasswordHashV2)) {
 						return errors.New("owner password hash does not meet production policy")
 					}
 				}
@@ -133,26 +136,7 @@ func defaultUsername(name string) bool {
 }
 
 func validOwnerHash(hash string) bool {
-	if strings.HasPrefix(hash, "$2") {
-		return httpx.CanonicalProductionBcrypt(hash)
-	}
-	parts := strings.Split(hash, "$")
-	if len(parts) != 6 || parts[1] != "argon2id" || parts[2] != "v=19" {
-		return false
-	}
-	var memory, iterations, parallelism uint32
-	if _, err := fmt.Sscanf(parts[3], "m=%d,t=%d,p=%d", &memory, &iterations, &parallelism); err != nil || memory < 19*1024 || memory > 64*1024 || iterations < 2 || iterations > 4 || parallelism < 1 || parallelism > 4 {
-		return false
-	}
-	if parts[3] != fmt.Sprintf("m=%d,t=%d,p=%d", memory, iterations, parallelism) {
-		return false
-	}
-	salt, err := base64.RawStdEncoding.Strict().DecodeString(parts[4])
-	if err != nil || len(salt) < 16 || len(salt) > 64 {
-		return false
-	}
-	key, err := base64.RawStdEncoding.Strict().DecodeString(parts[5])
-	return err == nil && len(key) == 32
+	return httpx.CanonicalProductionBcrypt(hash) || httpx.CanonicalProductionArgon2id(hash)
 }
 
 func hashOwnerPassword(password string) (string, error) {

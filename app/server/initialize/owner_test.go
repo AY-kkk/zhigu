@@ -227,3 +227,26 @@ func TestProductionRejectsCost13LegacyOwnerBeforeExpensiveVerification(t *testin
 		t.Fatal("cost13 legacy owner accepted in production")
 	}
 }
+
+func TestProductionRejectsDefaultOrMalformedPrimaryArgonTransition(t *testing.T) {
+	defaultHash, err := httpx.RehashPassword("Passw0rd!")
+	if err != nil {
+		t.Fatal(err)
+	}
+	validHash, err := httpx.HashPassword("parent-version-owner-password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, hash := range []string{defaultHash, strings.Replace(validHash, "p=1$", "p=1,trailing=1$", 1)} {
+		db := testDB(t)
+		if err := Migrate(db); err != nil {
+			t.Fatal(err)
+		}
+		if err := db.Create(&modelfinance.User{Username: "research-owner", PasswordHash: hash, Role: "admin"}).Error; err != nil {
+			t.Fatal(err)
+		}
+		if err := EnsureOwner(db, runtime.Config{State: runtime.State{DeploymentEnvironment: runtime.Production}}); err == nil {
+			t.Fatal("default or malformed primary Argon2id transition accepted")
+		}
+	}
+}

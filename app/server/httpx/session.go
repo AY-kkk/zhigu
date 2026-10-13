@@ -301,6 +301,28 @@ func CanonicalProductionBcrypt(hash string) bool {
 	return strings.ContainsRune(".Oeu", rune(hash[28])) && strings.ContainsRune(".CGKOSWaeimquy26", rune(hash[59]))
 }
 
+// CanonicalProductionArgon2id recognizes the bounded hashes written by the
+// parent release. It permits only exact parameters and canonical base64.
+func CanonicalProductionArgon2id(hash string) bool {
+	parts := strings.Split(hash, "$")
+	if len(parts) != 6 || parts[0] != "" || parts[1] != "argon2id" || parts[2] != "v=19" {
+		return false
+	}
+	var memory, iterations, parallelism uint32
+	if _, err := fmt.Sscanf(parts[3], "m=%d,t=%d,p=%d", &memory, &iterations, &parallelism); err != nil || memory < 19*1024 || memory > 64*1024 || iterations < 2 || iterations > 4 || parallelism < 1 || parallelism > 4 {
+		return false
+	}
+	if parts[3] != fmt.Sprintf("m=%d,t=%d,p=%d", memory, iterations, parallelism) {
+		return false
+	}
+	salt, err := base64.RawStdEncoding.Strict().DecodeString(parts[4])
+	if err != nil || len(salt) < 16 || len(salt) > 64 || base64.RawStdEncoding.EncodeToString(salt) != parts[4] {
+		return false
+	}
+	key, err := base64.RawStdEncoding.Strict().DecodeString(parts[5])
+	return err == nil && len(key) == 32 && base64.RawStdEncoding.EncodeToString(key) == parts[5]
+}
+
 func VerifyLoginPassword(user *model.User, password string, production bool) (bool, bool) {
 	return verifyLoginPassword(user, password, production, VerifyPassword)
 }
@@ -315,7 +337,7 @@ func verifyLoginPassword(user *model.User, password string, production bool, ver
 			}
 		} else {
 			hash = user.PasswordHash
-			if production && !CanonicalProductionBcrypt(hash) {
+			if production && !CanonicalProductionBcrypt(hash) && !CanonicalProductionArgon2id(hash) {
 				hash, eligible = dummyPasswordHash, false
 			}
 		}

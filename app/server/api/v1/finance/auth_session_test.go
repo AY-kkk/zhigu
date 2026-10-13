@@ -16,7 +16,9 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 	"zhigu/server/httpx"
+	"zhigu/server/initialize"
 	model "zhigu/server/model/finance"
+	"zhigu/server/runtime"
 	service "zhigu/server/service/finance"
 	"zhigu/server/testdb"
 )
@@ -69,6 +71,104 @@ func TestProductionLoginUsesCookieAndRehashesLegacyPassword(t *testing.T) {
 	var v2 string
 	if err := db.Raw("SELECT password_hash_v2 FROM finance_users WHERE id = ?", user.ID).Scan(&v2).Error; err != nil || !strings.HasPrefix(v2, "$argon2id$v=19$m=19456,t=2,p=1$") {
 		t.Fatalf("login did not populate Argon2id v2: %v", err)
+	}
+}
+
+func TestLegacyOnlyPasswordResetClearsV2AndRejectsOldPassword(t *testing.T) {
+	db := testdb.Start(t)
+	oldPassword, newPassword := "previous-owner-password", "replacement-owner-password"
+	legacy, err := bcrypt.GenerateFromPassword([]byte(oldPassword), 12)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v2, err := httpx.HashPassword(oldPassword)
+	if err != nil {
+		t.Fatal(err)
+	}
+	user := model.User{Username: "owner", PasswordHash: string(legacy), PasswordHashV2: &v2, Role: "admin"}
+	if err := db.Create(&user).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := httpx.CreateSession(db, user); err != nil {
+		t.Fatal(err)
+	}
+	replacement, err := bcrypt.GenerateFromPassword([]byte(newPassword), 12)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&model.User{}).Where("id = ?", user.ID).Update("password_hash", string(replacement)).Error; err != nil {
+		t.Fatal(err)
+	}
+	var revoked int64
+	if err := db.Model(&model.Session{}).Where("revoked_at IS NOT NULL").Count(&revoked).Error; err != nil || revoked != 1 {
+		t.Fatalf("old session not revoked: %v count=%d", err, revoked)
+	}
+	httpx.ConfigureAuth(httpx.AuthConfig{DB: db, Production: true, PublicOrigin: "https://zhigu.example"})
+	t.Cleanup(func() { httpx.ConfigureAuth(httpx.AuthConfig{}) })
+	engine := gin.New()
+	a := &API{Svc: service.NewService(db, service.NewFakeResearchClient(), service.NewMemoryBudget(), service.NewFixtureConfig()), LoginLimiter: httpx.NewLoginLimiter()}
+	engine.POST("/login", a.Login)
+	for _, tc := range []struct {
+		password string
+		want     int
+	}{{oldPassword, 401}, {newPassword, 200}} {
+		body, _ := json.Marshal(map[string]string{"username": "owner", "password": tc.password})
+		r := httptest.NewRequest("POST", "/login", bytes.NewReader(body))
+		r.Header.Set("Origin", "https://zhigu.example")
+		w := httptest.NewRecorder()
+		engine.ServeHTTP(w, r)
+		if w.Code != tc.want {
+			t.Fatalf("post-reset password validity: want=%d got=%d", tc.want, w.Code)
+		}
+	}
+	var current model.User
+	if err := db.First(&current, user.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if current.PasswordHash != string(replacement) || current.PasswordHashV2 == nil {
+		t.Fatal("replacement legacy password not preserved or new v2 missing")
+	}
+	if valid, _ := httpx.VerifyPassword(*current.PasswordHashV2, newPassword); !valid {
+		t.Fatal("replacement password was not upgraded to v2")
+	}
+}
+
+func TestParentVersionPrimaryArgonOwnerStartsAndNormalizesOnLogin(t *testing.T) {
+	db := testdb.Start(t)
+	password := "parent-version-owner-password"
+	primary, err := httpx.HashPassword(password)
+	if err != nil {
+		t.Fatal(err)
+	}
+	user := model.User{Username: "research-owner", PasswordHash: primary, Role: "admin"}
+	if err := db.Create(&user).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := initialize.EnsureOwner(db, runtime.Config{State: runtime.State{DeploymentEnvironment: runtime.Production}}); err != nil {
+		t.Fatalf("parent-version owner cannot start: %v", err)
+	}
+	httpx.ConfigureAuth(httpx.AuthConfig{DB: db, Production: true, PublicOrigin: "https://zhigu.example"})
+	t.Cleanup(func() { httpx.ConfigureAuth(httpx.AuthConfig{}) })
+	engine := gin.New()
+	a := &API{Svc: service.NewService(db, service.NewFakeResearchClient(), service.NewMemoryBudget(), service.NewFixtureConfig()), LoginLimiter: httpx.NewLoginLimiter()}
+	engine.POST("/login", a.Login)
+	body, _ := json.Marshal(map[string]string{"username": user.Username, "password": password})
+	r := httptest.NewRequest("POST", "/login", bytes.NewReader(body))
+	r.Header.Set("Origin", "https://zhigu.example")
+	w := httptest.NewRecorder()
+	engine.ServeHTTP(w, r)
+	if w.Code != 200 || len(w.Result().Cookies()) != 1 {
+		t.Fatalf("parent-version login failed: %d %s", w.Code, w.Body)
+	}
+	var current model.User
+	if err := db.First(&current, user.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if !httpx.CanonicalProductionBcrypt(current.PasswordHash) || bcrypt.CompareHashAndPassword([]byte(current.PasswordHash), []byte(password)) != nil || current.PasswordHashV2 == nil || *current.PasswordHashV2 != primary {
+		t.Fatal("normalization did not atomically preserve original Argon2id and create N-1 bcrypt12")
+	}
+	if err := initialize.EnsureOwner(db, runtime.Config{State: runtime.State{DeploymentEnvironment: runtime.Production}}); err != nil {
+		t.Fatalf("normalized dual owner cannot restart: %v", err)
 	}
 }
 

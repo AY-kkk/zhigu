@@ -17,6 +17,23 @@ CREATE TABLE finance_browser_sessions (
 CREATE INDEX idx_finance_browser_sessions_user ON finance_browser_sessions(user_id);
 CREATE INDEX idx_finance_browser_sessions_expiry ON finance_browser_sessions(expires_at);
 
+-- N-1/host password resets know only the legacy column. Clear stale v2 when
+-- the legacy value changes without a corresponding v2 change. Assign NEW
+-- directly instead of issuing another UPDATE, so the trigger cannot recurse.
+CREATE FUNCTION finance_sync_password_hashes() RETURNS trigger AS $$
+BEGIN
+    IF OLD.password_hash IS DISTINCT FROM NEW.password_hash
+       AND OLD.password_hash_v2 IS NOT DISTINCT FROM NEW.password_hash_v2 THEN
+        NEW.password_hash_v2 := NULL;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER finance_sync_password_hashes
+    BEFORE UPDATE OF password_hash ON finance_users
+    FOR EACH ROW EXECUTE FUNCTION finance_sync_password_hashes();
+
 -- Host password recovery and owner disable must revoke even if no browser
 -- request observes the change. Keep this invariant for N-1 application writes.
 CREATE FUNCTION finance_revoke_browser_sessions() RETURNS trigger AS $$

@@ -13,7 +13,9 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"zhigu/server/httpx"
 	modelfinance "zhigu/server/model/finance"
@@ -133,20 +135,42 @@ func (a *API) Login(c *gin.Context) {
 		httpx.Fail(c, http.StatusUnauthorized, "UNAUTHENTICATED", "用户名或密码错误")
 		return
 	}
-	if rehash {
-		hash, err := httpx.RehashPassword(req.Password)
-		if err != nil {
-			httpx.Fail(c, 500, "INTERNAL", "登录暂不可用")
-			return
-		}
-		if err := a.Svc.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-			query := tx.Model(&modelfinance.User{}).Where("id = ? AND password_hash = ? AND disabled_at IS NULL", user.ID, user.PasswordHash)
-			if user.PasswordHashV2 == nil {
-				query = query.Where("password_hash_v2 IS NULL")
-			} else {
-				query = query.Where("password_hash_v2 = ?", *user.PasswordHashV2)
+	primaryTransition := (user.PasswordHashV2 == nil || *user.PasswordHashV2 == "") && httpx.CanonicalProductionArgon2id(user.PasswordHash)
+	if rehash || primaryTransition {
+		legacyHash, v2Hash := user.PasswordHash, ""
+		updates := make(map[string]any)
+		if primaryTransition {
+			// Preserve the already verified parent Argon2id exactly. bcrypt's
+			// 72-byte limit is enforced without truncation during normalization.
+			legacy, err := bcrypt.GenerateFromPassword([]byte(req.Password), 12)
+			if err != nil {
+				httpx.Fail(c, 500, "INTERNAL", "登录暂不可用")
+				return
 			}
-			result := query.Update("password_hash_v2", hash)
+			legacyHash, v2Hash = string(legacy), user.PasswordHash
+			updates["password_hash"] = legacyHash
+		} else {
+			hash, err := httpx.RehashPassword(req.Password)
+			if err != nil {
+				httpx.Fail(c, 500, "INTERNAL", "登录暂不可用")
+				return
+			}
+			v2Hash = hash
+		}
+		updates["password_hash_v2"] = v2Hash
+		if err := a.Svc.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+			var current modelfinance.User
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", user.ID).Take(&current).Error; err != nil {
+				return err
+			}
+			sameV2 := current.PasswordHashV2 == nil && user.PasswordHashV2 == nil
+			if current.PasswordHashV2 != nil && user.PasswordHashV2 != nil {
+				sameV2 = *current.PasswordHashV2 == *user.PasswordHashV2
+			}
+			if current.DisabledAt != nil || current.PasswordHash != user.PasswordHash || !sameV2 {
+				return fmt.Errorf("credentials changed")
+			}
+			result := tx.Model(&modelfinance.User{}).Where("id = ?", user.ID).Updates(updates)
 			if result.Error != nil {
 				return result.Error
 			}
@@ -158,7 +182,7 @@ func (a *API) Login(c *gin.Context) {
 			httpx.Fail(c, 500, "INTERNAL", "登录暂不可用")
 			return
 		}
-		user.PasswordHashV2 = &hash
+		user.PasswordHash, user.PasswordHashV2 = legacyHash, &v2Hash
 	}
 	if httpx.ProductionAuth() {
 		token, err := httpx.CreateSession(a.Svc.DB.WithContext(ctx), user)
