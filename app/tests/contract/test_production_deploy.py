@@ -21,6 +21,7 @@ class ProductionDeployContractTests(unittest.TestCase):
         self.assertIn("max-size", text)
         for variable in ("ZHIGU_RESEARCH_DOCUMENT_DIR", "ZHIGU_RESEARCH_STORAGE_DIR", "ZHIGU_FUTURES_STORAGE_DIR"):
             self.assertIn(variable, text)
+        self.assertIn('ZHIGU_PERSISTENT_MOUNTS: \'["/data","/futures-documents"]\'', text)
         self.assertIn("research-data:/data", text)
         self.assertIn("futures-documents:/futures-documents", text)
         workflow = (ROOT.parent / ".github/workflows/ci.yml").read_text()
@@ -101,6 +102,9 @@ class ProductionDeployContractTests(unittest.TestCase):
         self.assertGreaterEqual(smoke.count("ZHIGU_PUBLIC_ORIGIN:"), 3)
         self.assertGreaterEqual(smoke.count("ZHIGU_TLS_CERT_DIR:"), 3)
         self.assertIn("chown 10001:10001 app/deploy/secrets/", smoke)
+        self.assertIn("app/deploy/secrets/session_keys", smoke)
+        self.assertIn("printf '[\"%s\",\"%s\"]'", smoke)
+        self.assertIn("tr '/+' '_-'", smoke)
 
     def test_preflight_requires_runtime_secret_owner(self):
         script = (ROOT / "scripts/production-preflight.sh").read_text()

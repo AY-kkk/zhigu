@@ -18,7 +18,7 @@ LABEL org.opencontainers.image.revision=${VCS_REF} \
       org.opencontainers.image.created=${BUILD_DATE} \
       org.opencontainers.image.version=${VERSION}
 RUN useradd --system --uid 10001 --create-home zhigu \
-  && install -d -o zhigu -g zhigu /data
+  && install -d -o zhigu -g zhigu /data /data/documents /data/storage
 WORKDIR /app
 COPY --from=build /opt/venv /opt/venv
 COPY --from=build /src/app/research-service/app /app/app

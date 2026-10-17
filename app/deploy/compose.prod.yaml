@@ -92,6 +92,7 @@ services:
       ZHIGU_RESEARCH_EXECUTOR: harness
       ZHIGU_RESEARCH_DOCUMENT_DIR: /data/documents
       ZHIGU_RESEARCH_STORAGE_DIR: /data/storage
+      ZHIGU_PERSISTENT_MOUNTS: '["/data","/futures-documents"]'
       ZHIGU_FUTURES_ENABLED: "true"
       FUTURES_WORKER_URL: http://futures:8092
       FUTURES_SERVICE_TOKEN_FILE: /run/secrets/futures_token

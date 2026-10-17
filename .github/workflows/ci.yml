@@ -152,11 +152,12 @@ jobs:
         run: |
           mkdir -p app/deploy/secrets /tmp/zhigu-tls
           for name in postgres_password postgres_dsn internal_token futures_token jwt_secret session_keys master_key bootstrap_owner; do
-            head -c 48 /dev/urandom | base64 | tr -d '\n' > app/deploy/secrets/$name
+            head -c 48 /dev/urandom | base64 | tr '/+' '_-' | tr -d '\n=' > app/deploy/secrets/$name
             chmod 600 app/deploy/secrets/$name
           done
           printf 'postgres://zhigu:%s@postgres:5432/zhigu?sslmode=disable' "$(cat app/deploy/secrets/postgres_password)" > app/deploy/secrets/postgres_dsn
-          printf '{"username":"owner-%s","password":"%s"}' "$(head -c 6 /dev/urandom | base64 | tr -d '\n')" "$(head -c 48 /dev/urandom | base64 | tr -d '\n')" > app/deploy/secrets/bootstrap_owner
+          printf '["%s","%s"]' "$(head -c 48 /dev/urandom | base64 | tr '/+' '_-' | tr -d '\n=')" "$(head -c 48 /dev/urandom | base64 | tr '/+' '_-' | tr -d '\n=')" > app/deploy/secrets/session_keys
+          printf '{"username":"owner-%s","password":"%s"}' "$(head -c 6 /dev/urandom | base64 | tr '/+' '_-' | tr -d '\n=')" "$(head -c 48 /dev/urandom | base64 | tr '/+' '_-' | tr -d '\n=')" > app/deploy/secrets/bootstrap_owner
           sudo chown 10001:10001 app/deploy/secrets/*
           openssl req -x509 -newkey rsa:2048 -nodes -keyout /tmp/zhigu-tls/privkey.pem -out /tmp/zhigu-tls/fullchain.pem -subj /CN=localhost -days 1
       - run: app/scripts/production-preflight.sh
