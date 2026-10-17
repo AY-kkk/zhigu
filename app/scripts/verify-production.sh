@@ -3,7 +3,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 MODE="${1:---static}"
 run_static() {
-  app/research-service/.venv/bin/python -m unittest app.tests.contract.test_worker_ops_contract app.tests.contract.test_production_deploy app.tests.contract.test_release_evidence app.tests.contract.test_operational_scripts -v
+  app/research-service/.venv/bin/python -m unittest discover -s app/tests/contract -p 'test_*.py' -v
   app/research-service/.venv/bin/python app/scripts/verify-futures-contracts.py
   bash -n app/scripts/production-preflight.sh app/scripts/backup.sh app/scripts/restore-verify.sh app/scripts/maintenance-run.sh app/scripts/maintenance-watchdog.sh app/scripts/upgrade-verify.sh app/scripts/rollback.sh app/scripts/run-performance.sh
 }

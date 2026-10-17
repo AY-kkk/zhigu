@@ -6,7 +6,6 @@ ENV UV_LINK_MODE=copy UV_PROJECT_ENVIRONMENT=/opt/venv
 COPY --from=ghcr.io/astral-sh/uv:0.8.4 /uv /usr/local/bin/uv
 WORKDIR /src/app/research-service
 COPY app/research-service/pyproject.toml app/research-service/uv.lock ./
-COPY references/deer-flow/backend/packages/harness /src/references/deer-flow/backend/packages/harness
 RUN uv sync --frozen --no-dev --no-editable
 COPY app/research-service/app ./app
 

@@ -60,6 +60,8 @@ class ProductionDeployContractTests(unittest.TestCase):
             docker_text = (ROOT / dockerfile).read_text()
             self.assertIn("org.opencontainers.image.revision", docker_text)
             self.assertIn("USER", docker_text)
+        research_image = (ROOT / "research-service/Dockerfile").read_text()
+        self.assertNotIn("COPY references/", research_image)
         for unit in ("zhigu-maintenance.service", "zhigu-maintenance.timer", "zhigu-watchdog.service"):
             self.assertTrue((ROOT / "deploy/systemd" / unit).is_file(), unit)
         timer = (ROOT / "deploy/systemd/zhigu-maintenance.timer").read_text()
@@ -80,3 +82,19 @@ class ProductionDeployContractTests(unittest.TestCase):
         self.assertIn("NOT RUN: Docker unavailable", script)
         self.assertIn("fixture|latest", script)
         self.assertIn("ZHIGU_ALLOW_LOOPBACK_SMOKE", script)
+        self.assertLess(script.index("stat -c '%a'"), script.index("stat -f '%Lp'"))
+
+    def test_ci_contract_commands_do_not_depend_on_shadowed_or_missing_venvs(self):
+        workflow = (ROOT.parent / ".github/workflows/ci.yml").read_text()
+        production = workflow.split("  production-contracts:", 1)[1].split("\n  go-race-futures:", 1)[0]
+        self.assertIn("app/scripts/verify-production.sh --static", production)
+        self.assertNotIn("app.tests.contract", production)
+        backup = workflow.split("  backup-restore:", 1)[1].split("\n  security:", 1)[0]
+        self.assertNotIn("app/research-service/.venv/bin/python", backup)
+        self.assertIn("python -m unittest discover -s app/tests/contract", backup)
+
+    def test_production_smoke_cleanup_keeps_required_compose_environment(self):
+        workflow = (ROOT.parent / ".github/workflows/ci.yml").read_text()
+        smoke = workflow.split("  production-smoke:", 1)[1].split("\n  upgrade:", 1)[0]
+        self.assertGreaterEqual(smoke.count("ZHIGU_PUBLIC_ORIGIN:"), 3)
+        self.assertGreaterEqual(smoke.count("ZHIGU_TLS_CERT_DIR:"), 3)

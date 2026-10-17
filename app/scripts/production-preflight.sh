@@ -15,7 +15,7 @@ for secret in postgres_password postgres_dsn internal_token futures_token jwt_se
     echo "NOT RUN: missing production secret $secret; clean-host deployment remains BLOCKED" >&2
     exit 2
   fi
-  [[ "$(stat -f '%Lp' "$SECRETS/$secret" 2>/dev/null || stat -c '%a' "$SECRETS/$secret")" == "600" ]] || fail "secret $secret must be mode 600"
+  [[ "$(stat -c '%a' "$SECRETS/$secret" 2>/dev/null || stat -f '%Lp' "$SECRETS/$secret")" == "600" ]] || fail "secret $secret must be mode 600"
 done
 if grep -Eq 'fixture|latest|:/work|\\.\\.:/|/\\.env' "$COMPOSE"; then
   fail "production compose contains fixture/default/source bind/weak-secret pattern"

@@ -36,3 +36,5 @@ class ReleaseEvidenceTests(unittest.TestCase):
         self.assertIn("--static", text)
         self.assertIn("--full", text)
         self.assertIn("production-preflight.sh", text)
+        self.assertIn("unittest discover -s app/tests/contract", text)
+        self.assertNotIn("app.tests.contract", text)

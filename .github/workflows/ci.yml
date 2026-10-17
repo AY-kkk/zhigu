@@ -176,6 +176,9 @@ jobs:
           ! curl -kfsS https://127.0.0.1/metrics
       - if: always()
         run: docker compose -f app/deploy/compose.prod.yaml -f app/deploy/compose.bootstrap.yaml -p zhigu-production-smoke down -v
+        env:
+          ZHIGU_PUBLIC_ORIGIN: https://127.0.0.1
+          ZHIGU_TLS_CERT_DIR: /tmp/zhigu-tls
 
   upgrade:
     name: Upgrade and N/N-1 compatibility
@@ -215,8 +218,12 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with: {python-version: '3.12'}
       - run: bash -n app/scripts/backup.sh app/scripts/restore-verify.sh app/scripts/maintenance-watchdog.sh
-      - run: app/research-service/.venv/bin/python -m unittest app.tests.contract.test_production_deploy app.tests.contract.test_operational_scripts -q
+      - run: |
+          python -m unittest discover -s app/tests/contract -p 'test_production_deploy.py' -q
+          python -m unittest discover -s app/tests/contract -p 'test_operational_scripts.py' -q
 
   security:
     name: Security and defaults

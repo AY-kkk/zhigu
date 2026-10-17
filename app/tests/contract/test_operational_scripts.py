@@ -17,6 +17,18 @@ def fake_bin(directory: Path, name: str, body: str) -> None:
 
 
 class OperationalScriptTests(unittest.TestCase):
+    def test_performance_harness_reports_unavailable_target_as_blocked(self):
+        with tempfile.TemporaryDirectory() as tmp_name:
+            env = os.environ | {"ZHIGU_PUBLIC_ORIGIN": "http://127.0.0.1:1"}
+            result = subprocess.run(
+                ["bash", str(ROOT / "scripts/run-performance.sh"), tmp_name],
+                env=env,
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(result.returncode, 2, result.stderr)
+            self.assertIn("NOT RUN: performance target unavailable", result.stderr)
+
     def test_backup_quiesces_before_dump_encrypts_offhost_and_releases(self):
         with tempfile.TemporaryDirectory() as tmp_name:
             tmp = Path(tmp_name)
