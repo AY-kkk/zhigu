@@ -90,6 +90,12 @@ class WorkerOpsContractTests(unittest.TestCase):
             self.assertRegex(text, r"(?m)^USER\s+\S+")
             self.assertRegex(text, r"(?m)^LABEL\s+org\.opencontainers\.image\.(revision|source|created|version)=")
 
+    def test_worker_images_precreate_writable_volume_mountpoints(self):
+        research = (ROOT / "research-service/Dockerfile").read_text()
+        futures = (ROOT / "futures-service/Dockerfile").read_text()
+        self.assertIn("install -d -o zhigu -g zhigu /data", research)
+        self.assertIn("install -d -o zhigu -g zhigu /data /documents", futures)
+
 
 if __name__ == "__main__":
     unittest.main()

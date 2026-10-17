@@ -9,7 +9,7 @@ CI 的 `fixture-integration`、`production-smoke`、`upgrade`、`backup-restore`
 
 ## 发布前
 
-1. 在 `app/deploy/secrets/` 创建权限为 `600` 的 `postgres_password`、`postgres_dsn`、`internal_token`、`futures_token`、`jwt_secret`、`session_keys`、`master_key`；不要提交这些文件。
+1. 在 `app/deploy/secrets/` 创建权限为 `600` 的 `postgres_password`、`postgres_dsn`、`internal_token`、`futures_token`、`jwt_secret`、`session_keys`、`master_key`，并执行 `sudo chown 10001:10001 app/deploy/secrets/*`，使非 root 运行的服务能读取只读 secret；不要提交这些文件。
 2. 在 `ZHIGU_TLS_CERT_DIR` 挂载 `fullchain.pem` 和 `privkey.pem`。
 3. 执行 `app/scripts/production-preflight.sh`。Docker 不存在时返回 `2`/`NOT RUN`，不能视为通过。
 4. 构建镜像并以空卷启动：`docker compose -f app/deploy/compose.prod.yaml config`、`up -d`，确认 `/livez`、`/readyz` 和迁移状态。

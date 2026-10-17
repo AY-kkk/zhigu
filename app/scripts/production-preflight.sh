@@ -16,6 +16,7 @@ for secret in postgres_password postgres_dsn internal_token futures_token jwt_se
     exit 2
   fi
   [[ "$(stat -c '%a' "$SECRETS/$secret" 2>/dev/null || stat -f '%Lp' "$SECRETS/$secret")" == "600" ]] || fail "secret $secret must be mode 600"
+  [[ "$(stat -c '%u' "$SECRETS/$secret" 2>/dev/null || stat -f '%u' "$SECRETS/$secret")" == "10001" ]] || fail "secret $secret must be owned by uid 10001"
 done
 if grep -Eq 'fixture|latest|:/work|\\.\\.:/|/\\.env' "$COMPOSE"; then
   fail "production compose contains fixture/default/source bind/weak-secret pattern"

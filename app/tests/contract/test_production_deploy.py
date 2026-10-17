@@ -100,3 +100,8 @@ class ProductionDeployContractTests(unittest.TestCase):
         smoke = workflow.split("  production-smoke:", 1)[1].split("\n  upgrade:", 1)[0]
         self.assertGreaterEqual(smoke.count("ZHIGU_PUBLIC_ORIGIN:"), 3)
         self.assertGreaterEqual(smoke.count("ZHIGU_TLS_CERT_DIR:"), 3)
+        self.assertIn("chown 10001:10001 app/deploy/secrets/", smoke)
+
+    def test_preflight_requires_runtime_secret_owner(self):
+        script = (ROOT / "scripts/production-preflight.sh").read_text()
+        self.assertIn("secret $secret must be owned by uid 10001", script)
