@@ -38,6 +38,8 @@ class ProductionDeployContractTests(unittest.TestCase):
         self.assertIn("name: zhigu-test", text)
         self.assertIn("ZHIGU_DEPLOYMENT_ENVIRONMENT: test", text)
         self.assertIn("ZHIGU_RESEARCH_EXECUTOR: fixture", text)
+        self.assertIn('127.0.0.1:5173:8080', text)
+        self.assertNotIn('127.0.0.1:5173:80"', text)
         self.assertNotIn("name: zhigu-production", text)
 
     def test_tls_proxy_and_operational_scripts_exist(self):

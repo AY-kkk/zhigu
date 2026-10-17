@@ -50,7 +50,7 @@ services:
     depends_on: {postgres: {condition: service_healthy}, research: {condition: service_healthy}, futures: {condition: service_healthy}}
   web:
     build: {context: ../web, dockerfile: Dockerfile, args: {VITE_INTEL_ENABLED: "true", VITE_FUTURES_ENABLED: "true"}}
-    ports: ["127.0.0.1:5173:80"]
+    ports: ["127.0.0.1:5173:8080"]
     networks: [backend]
     depends_on: [server]
 networks: {backend: {}}
