@@ -30,6 +30,43 @@
       ]
     },
     {
+      "code": "BACKUP_EPOCH_CONFLICT",
+      "http_status": 409,
+      "http_statuses": [
+        409
+      ],
+      "retryable": false,
+      "message_key": "errors.backup_epoch_conflict",
+      "interfaces": [
+        "/internal/ops/v1/backup/*"
+      ]
+    },
+    {
+      "code": "BACKUP_EPOCH_INVALID",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.backup_epoch_invalid",
+      "interfaces": [
+        "/internal/ops/v1/backup/*"
+      ]
+    },
+    {
+      "code": "BACKUP_QUIESCING",
+      "http_status": 503,
+      "http_statuses": [
+        503
+      ],
+      "retryable": true,
+      "message_key": "errors.backup_quiescing",
+      "interfaces": [
+        "/api/*",
+        "/internal/*"
+      ]
+    },
+    {
       "code": "BOOTSTRAP_REQUIRED",
       "http_status": 400,
       "http_statuses": [
@@ -493,6 +530,19 @@
       ]
     },
     {
+      "code": "FUTURES_CURSOR_INVALID",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.futures_cursor_invalid",
+      "interfaces": [
+        "/api/v1/futures/*",
+        "/api/v1/admin/futures/*"
+      ]
+    },
+    {
       "code": "FUTURES_DOCUMENT_LIMIT",
       "http_status": 413,
       "http_statuses": [
@@ -588,6 +638,18 @@
         "/api/v1/futures/*",
         "/api/v1/admin/futures/*",
         "/internal/futures/*"
+      ]
+    },
+    {
+      "code": "FUTURES_NOTIFICATION_BATCH_INVALID",
+      "http_status": 400,
+      "http_statuses": [
+        400
+      ],
+      "retryable": false,
+      "message_key": "errors.futures_notification_batch_invalid",
+      "interfaces": [
+        "/api/v1/futures/*"
       ]
     },
     {
@@ -700,6 +762,18 @@
         "/api/v1/futures/*",
         "/api/v1/admin/futures/*",
         "/internal/futures/*"
+      ]
+    },
+    {
+      "code": "FUTURES_RELEASE_GATE_INVALID",
+      "http_status": 409,
+      "http_statuses": [
+        409
+      ],
+      "retryable": false,
+      "message_key": "errors.futures_release_gate_invalid",
+      "interfaces": [
+        "/api/v1/admin/futures/*"
       ]
     },
     {

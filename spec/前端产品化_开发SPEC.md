@@ -1,8 +1,10 @@
 # 知股前端产品化 · 开发 SPEC
 
-版本 FPROD-SPEC-1.0｜2026-10-12｜适用基线：`codex/futures-review-release`。
+版本 FPROD-SPEC-1.1｜2026-10-13｜适用基线：`codex/futures-review-release`。
 
-本文定义知股个人项目从“功能型工程界面”达到“完整、稳定、可正式使用的个人投研产品”的前端开发合同。前端产品化以已冻结的后端 API、错误码、能力状态和运行模式为输入，不承担用假数据掩盖后端缺口，也不要求在部署前具备真实供应商凭据。
+1.1 修订重点：前端与后端统一四维运行状态、HttpOnly 会话、机器错误注册表和探针/release gate；补齐通知批量操作与来源探针 API，并把无障碍、性能和生产/fixture 测试改为可复现门禁。
+
+本文定义知股个人项目从“功能型工程界面”达到“完整、稳定、可正式使用的个人投研产品”的前端开发合同。前端产品化以已冻结的后端 API、错误码和四维 capability 为输入，不承担用假数据掩盖后端缺口，也不要求在部署前具备真实供应商凭据。
 
 本文与以下文件共同构成开发约束：
 
@@ -58,7 +60,7 @@ P1 不意味着等待 P0 全部结束才开始编码；页面框架、设计系�
 交付一个面向项目所有者本人的中文个人投研工作台。用户能够在同一个产品中完成：
 
 1. 登录并理解当前系统与各模块是否可用；
-2. 发起股票观点研究，查看证据、事实核验、推理过程和报告；
+2. 发起股票观点研究，查看证据、事实核验、结构化论据/反证和报告；
 3. 浏览策略市场、配置策略并理解行情来源与状态；
 4. 查看事件情报、证据和回放；
 5. 浏览期货品种、提交材料、发起研究、核验报告、保存假设并复盘；
@@ -89,7 +91,7 @@ P1 不意味着等待 P0 全部结束才开始编码；页面框架、设计系�
 
 - Vue 3、Vue Router、Pinia、Vite、Axios 和 Playwright 基础；
 - 登录、观点研究、历史、策略、事件情报、管理页和期货模块路由；
-- 研究报告、证据抽屉、事实核验、推理链、材料上传等可复用组件；
+- 研究报告、证据抽屉、事实核验、结构化论据、材料上传等可复用组件；
 - 期货概览、品种、发起研究、研究详情、假设、通知和来源管理页面；
 - Semi UI 消费端组件、Element Plus 既有管理端组件和品牌素材；
 - 用户切换时取消旧请求、generation 隔离和基础安全跳转。
@@ -108,6 +110,10 @@ P1 不意味着等待 P0 全部结束才开始编码；页面框架、设计系�
 | FG-08 | 大主包影响首屏，模块边界未全部懒加载 | 设定 bundle 预算并拆分图表、管理和研究详情 |
 | FG-09 | 移动端、键盘和屏幕阅读器未成为验收项 | 达到本文响应式与 WCAG 2.2 AA 基线 |
 | FG-10 | E2E 对正常链路有覆盖，但真实故障和重启恢复不足 | 增加全栈、故障注入和恢复旅程 |
+| FG-11 | 浏览器 token 存入 localStorage，且生产存在默认账号/secret 风险 | 改为同源 HttpOnly 会话；前端不可读取 token，生产无默认身份 |
+| FG-12 | 错误 code、trace 字段和页面所需 batch/probe API 未形成闭环 | 使用唯一错误注册表，保留 retry/trace，并先补机器契约和服务端接口 |
+| FG-13 | `demo/fixture/unavailable` 与运行模式混用，功能开关依赖构建变量 | 使用四维 capability；生产路由全部编入，由运行时服务端能力控制 |
+| FG-14 | 性能与 WCAG 验收条件不足，自动扫描可能被误当作完整 AA | 固定工具/设备/样本与统计口径，并增加键盘、缩放、重排和屏幕阅读器人工矩阵 |
 
 ## 4. 信息架构与导航
 
@@ -159,17 +165,18 @@ P1 不意味着等待 P0 全部结束才开始编码；页面框架、设计系�
 
 不允许使用“已完成”“已同步”“可用”等模糊成功文案替代后端状态。金额、日期、比例、时区和品种代码必须使用统一格式化工具。
 
-### 5.2 模式展示
+### 5.2 四维状态展示
 
-| 模式 | 产品行为 |
-|---|---|
-| `off` | 页面只解释模块关闭原因，不发送写请求 |
-| `read_only` | 允许查看历史与能力，写操作禁用并解释原因 |
-| `live` | 按能力对象决定具体操作；并不等于所有来源健康 |
-| `fixture` | 仅非生产可出现；全局常驻高可见提示，不得伪装真实数据 |
-| unavailable | 模块壳可访问，显示依赖失败、request_id 和可恢复动作 |
+前端必须分别消费并展示服务端 capability 的四个正交维度，禁止自行从 URL、构建变量或字段缺失推断：
 
-生产构建接收到 fixture 数据时必须将其视为契约错误，页面显示阻断态并记录诊断，不渲染为普通报告。
+| 维度 | 允许值 | 产品行为 |
+|---|---|---|
+| `deployment_environment` | `test/demo/production` | 非生产在全局 Header 常驻环境标记；`demo` 不代表可写 |
+| `operation_mode` | `off/read_only/live` | `off` 不发写请求；`read_only` 禁用写/付费动作；`live` 仍服从具体能力和健康 |
+| `data_provenance` | `fixture/real` | fixture 仅可在 test/demo 出现并高可见标识；缓存 key 必须包含 provenance |
+| `health` | `ready/degraded/unavailable` | degraded 保留可用旧数据并标陈旧；unavailable 显示 `trace_id`、原因和合法恢复动作 |
+
+生产响应出现 `data_provenance=fixture` 或字段组合非法时必须视为契约/安全错误：停止渲染业务数据、显示阻断态并上报诊断。事件、期货等发布路由全部编入生产产物；构建开关不得作为运行时权限或能力来源。
 
 ### 5.3 金融表达
 
@@ -178,6 +185,7 @@ P1 不意味着等待 P0 全部结束才开始编码；页面框架、设计系�
 - 禁止仅以红绿颜色传达涨跌、通过/失败或风险等级；
 - 任何预测都显示观察期限、前提、生成模型/规则版本和引用时间；
 - 缺证据时显示“证据不足”，不得用空白或默认正向文案替代。
+- 产品只能展示可核验的结构化依据、支持/反证、计算步骤、引用和不确定性；不得展示或声称提供模型隐藏推理、原始 chain-of-thought、系统 prompt、工具凭据或内部调试上下文。
 
 ## 6. 公共壳与设计系统
 
@@ -239,6 +247,7 @@ app/web/src/components/system/
 - 支持 Enter 提交、密码可见性切换和提交中锁定；
 - 401 使用账号/密码错误文案，网络失败不得误报凭证错误；
 - 登录成功只跳转到 `safeInternalRedirect` 允许的内部地址；
+- 登录响应不得包含 bearer/JWT；会话由 HttpOnly Cookie 建立，前端通过 `GET /api/v1/session/csrf` 获取 session-bound token 并仅保存在内存；
 - 会话失效时保留原访问地址，重新登录后返回；
 - 不提供不存在的注册、找回密码或第三方登录入口。
 
@@ -246,7 +255,7 @@ app/web/src/components/system/
 
 - “新建研究”首屏展示研究问题、材料上传、研究范围和可用模型；
 - 提交前确认预计预算、数据范围、模型和不可用能力；
-- 研究详情展示运行阶段、取消、重试、证据、事实核验、推理链和最终报告；
+- 研究详情展示运行阶段、取消、重试、证据、事实核验、结构化论据/反证和最终报告；
 - 运行中离开再返回可恢复当前状态；失败时保留已完成阶段和诊断标识；
 - 历史页支持状态、时间和关键词筛选，删除使用服务端确认语义；
 - 无真实模型时禁用提交而非生成 fixture 结果。
@@ -263,7 +272,7 @@ app/web/src/components/system/
 
 - 事件列表支持来源、重要性、标的和时间筛选；
 - 详情同步展示事实、来源、影响路径、反证和相关回放；
-- demo 与 live 使用独立视觉标记和路由状态，不共享缓存污染；
+- test/demo/production 环境和 fixture/real provenance 使用独立视觉标记及缓存命名空间，不与 `operation_mode=live` 混为一谈；
 - 通知可确认并定位到事件；来源缺失时不能发布肯定性结论。
 
 ### 7.5 期货概览
@@ -304,7 +313,7 @@ app/web/src/components/system/
 - 取消中立即进入 `canceling` 本地过渡态，最终以服务端状态为准；
 - 成功报告按照领域 SPEC 的固定章节渲染，不接受任意 HTML；
 - 证据抽屉显示引用片段、来源、时间、权限、claim 关联和校验结果；
-- 失败显示错误类别、可否重试、已保留产物和 request_id；
+- 失败显示错误类别、可否重试、已保留产物和 `trace_id`；
 - 导出、保存假设等派生操作只有在服务端门禁允许时启用；
 - 页面刷新、服务重启和浏览器休眠后能从服务端恢复状态。
 
@@ -321,6 +330,7 @@ app/web/src/components/system/
 - 支持未读、已读、需处理筛选；
 - 每条通知展示发生时间、对象、严重级别、原因和目标链接；
 - 批量已读允许乐观更新，失败时回滚并提示；
+- 筛选必须映射到服务端 `read/action_required/cursor` 参数；批量已读只调用 `POST /api/v1/futures/notifications/batch-read`，不得循环发送单条请求伪装原子操作；
 - 删除或不存在的对象显示上下文摘要，不进入无限 404 循环；
 - 关键故障通知不能只靠颜色表达。
 
@@ -329,10 +339,10 @@ app/web/src/components/system/
 - 默认使用结构化表单编辑名称、类型、覆盖品种、权限、模式、刷新策略和 endpoint ref；
 - secret 只能选择或填写 secret reference，保存后永不回显原值；
 - JSON manifest 仅作为“高级导入”，先解析预览差异，再明确确认；
-- 列表展示健康、最后成功、数据截止、权限、模式和最近错误；
-- 测试连接是独立、限时、可取消动作，不自动保存配置；
+- 列表直接展示服务端 `health/last_success_at/data_as_of/last_error_code/last_probe_id`、权限和操作模式，不用前端当前时间推算成功；
+- 测试连接通过 `POST /api/v1/admin/futures/sources/{source_id}/probes` 创建异步 probe，并用对应 GET 查询；它是独立、限时、可取消动作，不自动保存配置；
 - 删除前显示受影响品种、计划任务和研究能力；
-- `live` 切换必须由后端校验权限和探针结果，前端不能绕过。
+- `live` 切换提交目标配置摘要和 release gate ID；前端只展示 gate 状态，必须由后端事务校验未过期 PASS、配置/adapter 版本、预算与 readiness，前端不能构造或绕过 PASS。
 
 ## 8. 状态管理与请求并发
 
@@ -361,7 +371,9 @@ modules/futures/stores/
   data: null,
   status: 'idle' | 'loading' | 'refreshing' | 'success' | 'empty' | 'error',
   error: null,
-  requestId: null,
+  requestKey: null,
+  traceId: null,
+  staleReason: null,
   updatedAt: null
 }
 ```
@@ -383,32 +395,32 @@ modules/futures/stores/
 ### 9.1 client 分层
 
 ```text
-src/utils/http.js                 鉴权、request_id、统一 envelope、401
+src/utils/http.js                 Cookie/CSRF、trace_id、统一 envelope、401
 src/modules/futures/api.js        纯请求函数与参数序列化
 src/modules/futures/stores/*      缓存、并发、乐观更新和业务状态
 pages/components                  view model 与交互，不拼 URL
 ```
 
-禁止页面直接调用 Axios。所有 query 参数必须通过 serializer；所有外部 URL 必须经过安全链接组件。
+禁止页面直接调用 Axios。公共 client 由浏览器自动携带同源 HttpOnly 会话 Cookie，写请求附带内存中的 `X-CSRF-Token`；会话恢复后先重新获取 CSRF token，不得从 Web Storage 读取 token 或自行拼 `Authorization`。所有 query 参数必须通过 serializer；所有外部 URL 必须经过安全链接组件。
 
 ### 9.2 错误映射
 
-前端依据后端稳定 `code` 决定操作，禁止依赖自由文本：
+前端必须由版本化 `contracts/error-codes.json`（或等价生成源）生成类型/映射，并对完整 `code` 精确匹配；禁止依赖自由文本、剥离 `FUTURES_` 等前缀或在页面维护第二份别名表：
 
-| 错误族 | 页面行为 |
+| 规范 code（示例为精确值） | 页面行为 |
 |---|---|
 | `UNAUTHENTICATED` | 清理会话并跳转登录，保存安全返回地址 |
 | `FORBIDDEN` | 显示权限说明，不循环重试 |
-| `VALIDATION_FAILED` | 聚焦错误摘要并映射到字段 |
-| `CONFLICT` | 刷新当前对象，展示发生变化的字段 |
-| `CAPABILITY_DISABLED` | 显示 ModeBanner 和恢复条件 |
-| `SOURCE_UNAVAILABLE` | 保留可用旧数据，标记来源与最后成功时间 |
-| `BUDGET_EXCEEDED` | 阻断提交，显示预算事实，不建议绕过 |
+| `FUTURES_INVALID_INPUT` 或注册的校验 code | 聚焦错误摘要并映射到字段 |
+| `FUTURES_REVISION_CONFLICT` / `FUTURES_IDEMPOTENCY_CONFLICT` | 刷新当前对象，展示发生变化的字段 |
+| `FUTURES_OFF` / `FUTURES_READ_ONLY` / `FUTURES_NOT_READY` | 显示 ModeBanner、四维状态和恢复条件 |
+| `FUTURES_SOURCE_UNAVAILABLE` | 保留可用旧数据，标记来源与最后成功时间 |
+| `BUDGET_EXCEEDED` / `MODEL_BUDGET_EXCEEDED` / `FUTURES_QUOTA_EXCEEDED` | 阻断提交，显示预算事实，不建议绕过 |
 | `RATE_LIMITED` | 显示可重试时间；GET 可按 header 延迟重试 |
-| `RUN_NOT_RETRYABLE` | 隐藏重试按钮，解释保留产物 |
-| `INTERNAL_ERROR` | 通用安全文案 + request_id，不显示堆栈 |
+| `FUTURES_QUEUE_TIMEOUT` / `FUTURES_EXECUTION_TIMEOUT` | 按 run 可用动作和 `retryable` 展示重试或不可重试原因 |
+| `INTERNAL_ERROR` | 通用安全文案 + `trace_id`，不显示堆栈 |
 
-未知 code 使用安全通用错误，同时上报诊断；不得崩溃、显示 `[object Object]` 或吞掉失败。
+client 必须保留并归一化 `code/message/retryable/retry_after_seconds/trace_id/http_status`，且校验 body 的 `trace_id` 与 `X-Trace-ID` 一致。自动重试同时受 HTTP 方法、`retryable` 和 §8.3 约束；`retryable=true` 也不得自动重做付费或副作用操作。未知 code 使用安全通用错误并展示 `trace_id`，同时上报诊断；不得崩溃、显示 `[object Object]` 或吞掉失败。
 
 ## 10. 表单、上传、报告与导出
 
@@ -461,9 +473,11 @@ pages/components                  view model 与交互，不拼 URL
 - 图表提供文字摘要和关键数据表；
 - 图标按钮有可访问名称；
 - 错误摘要可跳转字段；
-- 触控目标建议不小于 44 × 44 px；
+- 交互目标默认不小于 44 × 44 CSS px；若因密集界面使用更小目标，仍必须满足下述 24 × 24 最低尺寸/间距例外并记录理由；
 - 尊重 `prefers-reduced-motion`；
 - 页面标题随路由更新且唯一。
+
+WCAG 2.2 SC 2.5.8 的 24 × 24 CSS px 最小目标尺寸或其间距/等价例外是硬门禁；44 × 44 px 是本产品默认设计目标，不得把“建议”当作免测。自动 axe 只是辅助，AA 验收还必须人工覆盖：仅键盘、200%/400% 缩放、320 CSS px 重排、高对比/减弱动画、VoiceOver/Safari 与 NVDA/Chrome 核心旅程，并记录浏览器、辅助技术版本和结果。
 
 ### 11.3 浏览器
 
@@ -485,10 +499,11 @@ pages/components                  view model 与交互，不拼 URL
 
 ### 12.2 运行预算
 
-在生产构建、本地 fixture 全栈和桌面中端设备条件下：
+性能报告固定仓库中的 Lighthouse/Playwright/Chromium 版本，在 CI 2 vCPU/4 GiB runner、生产构建、本地隔离 fixture 全栈、全新浏览器 profile 和冷缓存下执行。每个关键路由独立运行 5 次，记录 5 次中位数和最差值；门禁要求最差值也不超过下列阈值。报告必须包含 commit、bundle hash、视口、CPU/网络模拟参数、数据规模和原始 JSON，不接受手工 DevTools 截图替代：
 
 - 登录后工作台 LCP ≤ 2.5 秒；
-- 可交互 ≤ 3 秒；
+- Lighthouse TBT ≤ 200 ms，CLS ≤ 0.1；不再使用已移除的 TTI 作为门禁；
+- Playwright 对导航、筛选、打开证据和提交确认的输入到下一帧/状态反馈延迟 ≤ 200 ms；
 - 路由切换到 skeleton ≤ 150 ms；
 - 长任务不得连续阻塞主线程超过 200 ms；
 - 研究进度页面连续运行 30 分钟无无界计时器、请求或 DOM 增长；
@@ -498,12 +513,12 @@ pages/components                  view model 与交互，不拼 URL
 
 ## 13. 安全与隐私
 
-- 浏览器只持有用户会话，不持有 provider、模型、内部服务或数据库凭据；
+- 浏览器只通过不可被 JavaScript 读取的同源 HttpOnly Cookie 持有用户会话；`localStorage/sessionStorage/IndexedDB/URL` 不得出现 session、JWT、refresh token、provider、模型、内部服务或数据库凭据；
 - 生产 API 使用同源 `/api`，不得把内部 worker URL 编译进前端；
 - 保留安全内部跳转规则，所有来源链接限制为 `http/https` 并使用 `noopener noreferrer`；
 - 用户输入、模型输出和来源内容默认按文本处理；HTML 必须经过白名单 sanitizer；
 - 登录失败、报告错误和埋点不得泄露 secret、token、完整材料或数据库细节；
-- 管理写操作防止重复提交并携带后端要求的 CSRF/鉴权机制；
+- 所有状态修改请求防止重复提交，携带后端要求的 CSRF token，并依赖服务端 Origin/Referer 校验；
 - 前端生产环境不得通过 debug flag 绕过角色、能力或发布门禁；
 - CSP、HSTS、X-Content-Type-Options、Referrer-Policy 和 framing 策略由 Web/Nginx 合同统一验证。
 
@@ -536,22 +551,24 @@ verify
 
 必须覆盖：
 
-- API envelope、错误 code、日期/金额/来源格式化；
+- API envelope、唯一错误 code、retry/retry-after/trace 一致性、日期/金额/来源格式化；
 - generation、abort、旧响应抑制、轮询退避和停止条件；
-- fixture/live 隔离与生产 fixture 阻断；
+- 四维 capability、fixture/real 隔离、缓存分区与生产 fixture 阻断；
 - ModeBanner、CapabilityStatus、RequestError、DataFreshness；
 - 材料上传、claims 核对、范围确认和重复提交保护；
 - run 全状态、取消、失败、恢复、证据定位和导出；
-- 假设校验条件与通知乐观更新回滚；
-- 来源配置 secret 不回显、JSON 预览和删除影响；
+- 假设校验条件、通知筛选/批量已读 API 与乐观更新回滚；
+- 来源配置 secret 不回显、JSON 预览、probe/release gate 和删除影响；
 - sanitizer、安全链接和内部重定向。
 
 ### 14.3 契约与集成测试
 
 - 前端 fixture 必须由正式 schema 生成，不维护手写漂移副本；
-- 每个 API code 至少有一个页面映射断言；
-- 本地完整 Compose 使用 fixture provider 跑真实 HTTP，不 mock server；
+- 每个已注册 API code 至少有一个默认映射断言；关键页面 code 有交互断言，未知 code 有安全降级断言；
+- 列表分页/筛选、通知 batch-read、来源 probe 和 live gate 必须有真实 HTTP 契约旅程，禁止用页面内 mock 掩盖缺失接口；
+- 隔离的测试 Compose 使用 fixture provider 跑真实 HTTP，不 mock server；生产 Compose 另做无 fixture/default account 的 fail-closed 浏览器 smoke，二者不共享卷或会话；
 - 浏览器验证 server、两个 worker 和 PostgreSQL 的启动、重启与恢复；
+- 登录、登出、过期、撤销和 CSRF 失败通过 Cookie 流程验证，并断言所有 Web Storage 无 token；
 - 后端契约改变时前端合同测试在同一 PR 失败，禁止靠可选链吞掉字段缺失。
 
 ### 14.4 E2E 核心旅程
@@ -563,8 +580,8 @@ verify
 5. 运行中刷新/休眠/恢复 → 成功 → 保存假设 → 校验/复盘；
 6. run 失败 → 保留部分产物 → 合法重试或显示不可重试；
 7. 来源不可用 → 页面降级 → 管理页诊断 → 恢复后刷新；
-8. `read_only` → 写操作禁用 → 恢复 `live` 后不刷新整站即可使用；
-9. 用户登出或会话过期 → 请求取消 → 重新登录安全返回；
+8. `read_only` → 写操作禁用 → probe/release gate 通过 → 服务端切换 `live` → 不刷新整站即可使用；
+9. 用户登出、会话过期或被撤销 → 请求取消 → 重新登录安全返回；CSRF 失败不得误报网络错误；
 10. 手机视口查看报告、证据、通知和取消操作。
 
 ### 14.5 视觉与无障碍测试
@@ -573,7 +590,7 @@ verify
 - 只对确定性 fixture 截图，隐藏动态时间但不得遮盖业务状态；
 - 1440、1024、390 三档纳入 CI，320 做人工冒烟；
 - axe 在关键页不允许 critical/serious 问题；
-- 每个里程碑完成后用键盘和 VoiceOver/Safari 人工验收一次核心旅程。
+- 每个里程碑完成后执行键盘、缩放和重排人工检查；每个候选 release 用 VoiceOver/Safari 与 NVDA/Chrome 各验收一次核心旅程并保存记录。
 
 ### 14.6 失败注入
 
@@ -608,7 +625,7 @@ app/contracts/                          前后端契约生成输入
 
 ### FE1：合同冻结与质量底座（依赖后端 P0）
 
-- 冻结能力、模式、错误、run、来源和数据新鲜度合同；
+- 冻结四维 capability、唯一错误注册表、retry/trace、run、分页、通知 batch-read、来源 probe/gate 和数据新鲜度合同；
 - 增加 lint、Vitest、组件测试和 axe 基线；
 - 建立前端契约 fixture 生成与 bundle 报告；
 - 交付：门禁可在 CI 重复运行。
@@ -617,7 +634,7 @@ app/contracts/                          前后端契约生成输入
 
 - 重构 Workspace shell、导航、页面标题和响应式布局；
 - 建立 ModeBanner、CapabilityStatus、DataFreshness、RequestError；
-- 完成登录、401、安全返回和错误边界；
+- 完成 HttpOnly Cookie 登录、CSRF、会话过期/撤销、401、安全返回和错误边界；
 - 交付：各模块共享一致且真实的系统状态表达。
 
 ### FE3：期货核心旅程
@@ -643,7 +660,7 @@ app/contracts/                          前后端契约生成输入
 ### FE6：稳定性、性能与上线验收
 
 - 完成响应式、a11y、视觉回归、bundle 优化和长时运行；
-- 对完整生产构建执行 Compose E2E 和故障注入；
+- 对隔离 fixture Compose 执行完整 E2E/故障注入，对生产 Compose 执行 fail-closed 浏览器 smoke；
 - 生成 F0–F3 验收报告；
 - 交付：可与后端一同部署。
 
@@ -662,8 +679,8 @@ app/contracts/                          前后端契约生成输入
 - [ ] `FPR-02` 桌面和移动导航均正确显示当前位置、模块状态和未读数；
 - [ ] `FPR-03` 页面首屏出现当前任务或核心结论，无无功能大留白；
 - [ ] `FPR-04` 公共 loading/empty/error/mode/freshness 组件被各模块复用；
-- [ ] `FPR-05` 登录、会话过期、角色拒绝和安全返回全部通过；
-- [ ] `FPR-06` 404 与未知错误提供可恢复入口和 request_id；
+- [ ] `FPR-05` HttpOnly Cookie 登录/登出、会话过期/撤销、CSRF、角色拒绝和安全返回全部通过，Web Storage 无 token；
+- [ ] `FPR-06` 404 与未知错误提供可恢复入口和 `trace_id`，且 header/body 一致；
 
 ### 17.2 期货旅程
 
@@ -677,18 +694,18 @@ app/contracts/                          前后端契约生成输入
 - [ ] `FPR-14` 取消、合法重试和不可重试原因符合后端合同；
 - [ ] `FPR-15` 报告章节、证据定位、事实核验和导出完整；
 - [ ] `FPR-16` 假设生命周期、校验条件、关闭和复盘完整；
-- [ ] `FPR-17` 通知筛选、确认、跳转和乐观回滚完整；
-- [ ] `FPR-18` 来源结构化表单、secret 不回显、探针和删除影响完整；
+- [ ] `FPR-17` 通知服务端筛选、batch-read、确认、跳转和乐观回滚完整；
+- [ ] `FPR-18` 来源结构化表单、secret 不回显、异步 probe、release gate 和删除影响完整；
 
 ### 17.3 状态、真实性与安全
 
-- [ ] `FPR-19` `off/read_only/live` 行为分别通过且无灰度语义；
-- [ ] `FPR-20` 非生产 fixture 全局标识，生产 fixture 响应被阻断；
+- [ ] `FPR-19` 环境、操作模式、provenance、health 四维分别通过；`off/read_only/live` 无灰度语义；
+- [ ] `FPR-20` test/demo 与 fixture 全局标识并隔离缓存，生产 fixture 或非法组合被阻断；
 - [ ] `FPR-21` 所有数据页面显示来源与截止/更新时间；
 - [ ] `FPR-22` 旧响应、账号切换和路由切换不污染当前页面；
 - [ ] `FPR-23` 副作用操作不自动重试，GET 重试遵守上限；
 - [ ] `FPR-24` 未净化模型/来源 HTML 无法进入 DOM；
-- [ ] `FPR-25` 浏览器构建和运行时均不出现外部/内部 secret；
+- [ ] `FPR-25` 浏览器构建、网络诊断与 Web Storage 均不出现 session/JWT 或外部/内部 secret；
 - [ ] `FPR-26` 外链、下载、Object URL 和内部 redirect 安全测试通过；
 
 ### 17.4 视觉、响应式与无障碍
@@ -697,25 +714,25 @@ app/contracts/                          前后端契约生成输入
 - [ ] `FPR-28` 报告、证据、通知和关键操作在 390 px 可用；
 - [ ] `FPR-29` 全核心旅程可仅用键盘完成；
 - [ ] `FPR-30` 焦点、dialog/drawer、skip link 和路由标题正确；
-- [ ] `FPR-31` 关键页 axe 无 critical/serious；
+- [ ] `FPR-31` 关键页 axe 无 critical/serious，且键盘、200%/400% 缩放、320 px 重排、VoiceOver/Safari、NVDA/Chrome 人工矩阵通过；
 - [ ] `FPR-32` 颜色不是任何关键状态的唯一表达；
 - [ ] `FPR-33` 视觉快照已审核且不存在非预期差异；
 
 ### 17.5 性能与稳定性
 
 - [ ] `FPR-34` 首次 JS/CSS 和路由 chunk 符合预算；
-- [ ] `FPR-35` 主要页面 LCP、可交互和路由反馈符合预算；
+- [ ] `FPR-35` 固定工具/runner/冷缓存下 5 次测试的 LCP、TBT、CLS、关键交互和路由反馈最差值符合预算；
 - [ ] `FPR-36` 30 分钟 run 观察无无界资源增长；
 - [ ] `FPR-37` 页面后台恢复无请求风暴或重复通知；
 - [ ] `FPR-38` lint、unit、component、contract、build 全部通过；
-- [ ] `FPR-39` 十条核心 E2E 和全部失败注入场景通过；
+- [ ] `FPR-39` 十条核心 E2E、分页/通知 batch/probe/gate 真实 API 旅程和全部失败注入场景通过；
 - [ ] `FPR-40` 正常门禁无 skip；仅真实供应商测试可在 F0–F3 标记 `NOT_RUN`；
 
 ### 17.6 部署与真实接入
 
-- [ ] `FPR-41` 生产镜像使用固定功能开关构建且 manifest 可追溯；
+- [ ] `FPR-41` 事件/期货路由编入生产镜像，运行时只由服务端 capability 控制，manifest 可追溯；
 - [ ] `FPR-42` Nginx 同源 API、SPA fallback、缓存与安全头通过；
-- [ ] `FPR-43` 完整生产 Compose 中浏览器核心旅程通过；
+- [ ] `FPR-43` 生产 Compose 使用随机一次性 owner bootstrap 执行登录/能力/路由浏览器 smoke，在无 fixture/default account 下 fail-closed；完整 fixture 旅程只在隔离测试 Compose 通过；
 - [ ] `FPR-44` 部署后不改代码即可注入真实来源与模型配置；
 - [ ] `FPR-45` 真实数据时间、来源、报告引用和模型版本在页面可核验；
 - [ ] `FPR-46` 生产全站不存在 fixture 标识、fixture 数据和 demo 假成功；
@@ -726,10 +743,17 @@ app/contracts/                          前后端契约生成输入
 
 1. F0–F3 的 `FPR-01` 至 `FPR-43` 全部有自动化结果或签字证据；
 2. 没有空白路由、占位按钮、静默失败、假成功或生产 fixture 回退；
-3. 所有页面完整覆盖加载、空、错误、能力关闭、只读、成功和陈旧状态；
+3. 所有页面基于四维 capability 完整覆盖加载、空、错误、关闭、只读、成功、陈旧和不可用状态；
 4. 观点、策略、情报和期货核心旅程没有回归；
-5. 响应式、键盘、屏幕阅读器和性能预算达到本文门禁；
-6. 生产构建可与后端整体部署，且真实接入只需要配置和探针，不需要改前端代码；
-7. 部署后完成 `FPR-44` 至 `FPR-46`，才宣布系统进入个人正式使用。
+5. 自动与人工无障碍矩阵、响应式和可复现性能预算达到本文门禁；
+6. 浏览器不持久化 token，错误/trace/retry、分页、通知 batch、probe 和 release gate 与机器契约一致；
+7. 生产构建可与后端整体部署，所有发布路由已编入，真实接入只需要配置和探针，不需要改前端代码；
+8. 部署后完成 `FPR-44` 至 `FPR-46`，才宣布系统进入个人正式使用。
 
 F4 真实探针在上线前允许明确记录为 `NOT_RUN`，不得记为通过；除此之外，正常测试、错误路径和可部署性验收不允许以“个人项目”为理由跳过。
+
+## 19. 规范参考
+
+- [OWASP HTML5 Security Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/HTML5_Security_Cheat_Sheet.html)：浏览器敏感凭据存储边界；
+- [WCAG 2.2 Understanding SC 2.5.8](https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum/)：24 × 24 CSS px 最小目标尺寸及例外；
+- [Chrome Lighthouse — Time to Interactive](https://developer.chrome.com/docs/lighthouse/performance/interactive/)：TTI 已从 Lighthouse 移除，不作为本 SPEC 门禁。

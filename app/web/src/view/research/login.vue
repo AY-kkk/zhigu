@@ -13,10 +13,13 @@
   </div>
 </template>
 <script setup>
+import { ElButton, ElForm, ElInput } from 'element-plus'
+import 'element-plus/dist/index.css'
+
 import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { safeInternalRedirect } from '../../router/finance.js'
-import { login } from '../../api/research.js'
+import { getCsrf, login } from '../../api/research.js'
 import { useSession } from '../../stores/session.js'
 import ZhiguLogo from '../../components/brand/ZhiguLogo.vue'
 
@@ -30,7 +33,13 @@ async function onSubmit() {
   error.value = ''
   try {
     const res = await login(username.value, password.value)
-    session.setAuth(res.data)
+    session.setAuth(res.data || {})
+    try {
+      await getCsrf()
+    } catch (csrfError) {
+      error.value = '登录成功，但安全令牌初始化失败，请刷新后重试'
+      return
+    }
     router.push(safeInternalRedirect(route.query.redirect))
   } catch (e) {
     error.value = e.message || '登录失败'

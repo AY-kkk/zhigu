@@ -7,7 +7,19 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test:e2e": "playwright test"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "test:axe": "playwright test e2e/accessibility.spec.js",
+    "check:web": "npm run test && npm run build",
+    "lint": "eslint .",
+    "test:unit": "vitest run tests/unit",
+    "test:component": "vitest run tests/components tests/regression",
+    "test:contracts": "node --test src/modules/futures/tests/*.test.mjs tests/regression/*.test.mjs",
+    "test:a11y": "playwright test e2e/accessibility.spec.js",
+    "test:visual": "playwright test e2e/visual-shots.spec.js",
+    "verify": "npm run lint && npm run test:unit && npm run test:component && npm run test:contracts && npm run test:performance && npm run build",
+    "test:performance": "node --test tests/performance/*.test.mjs"
   },
   "dependencies": {
     "@kousum/semi-icons-vue": "2.78.0",
@@ -20,8 +32,17 @@
     "vue-router": "^4.5.0"
   },
   "devDependencies": {
-    "@playwright/test": "^1.50.0",
-    "@vitejs/plugin-vue": "^5.2.1",
-    "vite": "^6.0.7"
+    "@eslint/js": "9.39.1",
+    "@playwright/test": "1.50.0",
+    "@vitejs/plugin-vue": "5.2.1",
+    "@vue/test-utils": "2.4.6",
+    "axe-core": "4.10.3",
+    "eslint": "9.39.1",
+    "eslint-plugin-vue": "10.6.0",
+    "globals": "16.5.0",
+    "jsdom": "26.0.0",
+    "vite": "6.0.7",
+    "vitest": "3.0.8",
+    "vue-eslint-parser": "^10.0.0"
   }
 }

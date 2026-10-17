@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Zhigu maintenance once per day
+
+[Timer]
+OnCalendar=*-*-* 02:30:00
+RandomizedDelaySec=15min
+Persistent=true
+Unit=zhigu-maintenance.service
+
+[Install]
+WantedBy=timers.target

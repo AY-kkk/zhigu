@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"sort"
+	"strconv"
 	"time"
 
 	"gorm.io/datatypes"
@@ -123,4 +126,91 @@ func (d *Domain) getNotification(ctx context.Context, id Identity, notificationI
 		return nil, ErrNotFound
 	}
 	return map[string]any{"id": value.ID, "type": value.Type, "object_id": value.ObjectID, "object_version": value.ObjectVersion, "read_at": value.ReadAt, "created_at": value.CreatedAt}, nil
+}
+
+type NotificationFilter struct {
+	Type          string
+	Read          *bool
+	ObjectID      string
+	ObjectVersion *int64
+}
+
+func (f NotificationFilter) String() string {
+	read := "any"
+	if f.Read != nil {
+		read = strconv.FormatBool(*f.Read)
+	}
+	version := "any"
+	if f.ObjectVersion != nil {
+		version = strconv.FormatInt(*f.ObjectVersion, 10)
+	}
+	return "type=" + f.Type + ";read=" + read + ";object_id=" + f.ObjectID + ";object_version=" + version
+}
+
+func (d *Domain) ListNotificationsPage(ctx context.Context, id Identity, filter NotificationFilter, options PageOptions) (Page[map[string]any], error) {
+	if options.Limit < 1 || options.Limit > 100 {
+		return Page[map[string]any]{}, ErrInvalidInput
+	}
+	query := d.DB.WithContext(ctx).Where(`owner_id=? AND mode=? AND deleted_at IS NULL`, id.OwnerID, id.Mode)
+	if filter.Type != "" {
+		query = query.Where(`type=?`, filter.Type)
+	}
+	if filter.Read != nil {
+		if *filter.Read {
+			query = query.Where(`read_at IS NOT NULL`)
+		} else {
+			query = query.Where(`read_at IS NULL`)
+		}
+	}
+	if filter.ObjectID != "" {
+		query = query.Where(`object_id=?`, filter.ObjectID)
+	}
+	if filter.ObjectVersion != nil {
+		query = query.Where(`object_version=?`, *filter.ObjectVersion)
+	}
+	if options.Cursor != nil {
+		cursorTime, err := time.Parse(time.RFC3339Nano, options.Cursor.Primary)
+		if err != nil {
+			return Page[map[string]any]{}, ErrInvalidInput
+		}
+		query = query.Where(`created_at < ? OR (created_at = ? AND id < ?)`, cursorTime, cursorTime, options.Cursor.Secondary)
+	}
+	var values []NotificationValue
+	if err := query.Order(`created_at DESC, id DESC`).Limit(options.Limit + 1).Find(&values).Error; err != nil {
+		return Page[map[string]any]{}, err
+	}
+	out := make([]map[string]any, 0, len(values))
+	for _, value := range values {
+		out = append(out, notificationMap(value))
+	}
+	return BuildPage(id, "notifications", filter.String(), options, out, func(value map[string]any) (string, string, string) {
+		return TimePagePosition(value["created_at"].(time.Time), fmt.Sprint(value["id"]), 0)
+	})
+}
+
+func notificationMap(value NotificationValue) map[string]any {
+	return map[string]any{"id": value.ID, "type": value.Type, "object_id": value.ObjectID, "object_version": value.ObjectVersion, "read_at": value.ReadAt, "created_at": value.CreatedAt}
+}
+
+func (d *Domain) MarkNotificationsRead(ctx context.Context, id Identity, ids []string) (map[string]any, error) {
+	if len(ids) == 0 || len(ids) > 100 {
+		return nil, ErrInvalidBatch
+	}
+	now := d.Now().UTC()
+	var updated []string
+	err := d.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		query := `UPDATE futures_notifications SET read_at=COALESCE(read_at, ?) WHERE owner_id=? AND mode=? AND deleted_at IS NULL AND id IN (?) RETURNING id`
+		if err := tx.Raw(query, now, id.OwnerID, id.Mode, ids).Scan(&updated).Error; err != nil {
+			return err
+		}
+		if len(updated) != len(ids) {
+			return ErrNotFound
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	sort.Strings(updated)
+	return map[string]any{"ids": updated, "read_at": now}, nil
 }

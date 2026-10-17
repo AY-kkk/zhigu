@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/url"
+	"strconv"
 	"time"
 
 	"gorm.io/datatypes"
@@ -175,6 +177,9 @@ func (d *Domain) PatchSource(ctx context.Context, sourceID string, expected int6
 		if res.RowsAffected != 1 {
 			return ErrRevisionConflict
 		}
+		if err := invalidateSourceGates(tx, sourceID, "SOURCE_STATUS_CHANGED", d.Now().UTC()); err != nil {
+			return err
+		}
 		return tx.Where(`id=?`, sourceID).First(&value).Error
 	})
 	if err != nil {
@@ -220,6 +225,9 @@ func (d *Domain) CreateSourceVersion(ctx context.Context, sourceID string, expec
 		})
 		if res.RowsAffected != 1 {
 			return ErrRevisionConflict
+		}
+		if err := invalidateSourceGates(tx, sourceID, "SOURCE_CONFIG_CHANGED", d.Now().UTC()); err != nil {
+			return err
 		}
 		value.ID = sourceID
 		return d.writeIdempotency(tx, Identity{OwnerID: 0, Mode: "live"}, "source.version", idempotencyKey, hashJSON(input), value)
@@ -278,7 +286,7 @@ func (d *Domain) GetOperations(ctx context.Context) (map[string]any, error) {
 	var value OperationsValue
 	err := d.DB.WithContext(ctx).Order(`version DESC`).First(&value).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return map[string]any{"version": 1, "mode": "off", "reason": "FUTURES_DEFAULT_OFF", "allowed_user_ids": []any{}, "updated_at": d.Now().UTC()}, nil
+		return map[string]any{"version": int64(1), "mode": "off", "reason": "FUTURES_DEFAULT_OFF", "allowed_user_ids": []any{}, "updated_at": d.Now().UTC()}, nil
 	}
 	if err != nil {
 		return nil, err
@@ -304,6 +312,7 @@ func (d *Domain) FillCapabilities(ctx context.Context, id Identity, capabilities
 		return
 	}
 	capabilities.Mode = operations.Mode
+	capabilities.OperationMode = operations.Mode
 	var allowed []int64
 	_ = json.Unmarshal(operations.AllowedUserIDs, &allowed)
 	if operations.Mode == "off" {
@@ -324,19 +333,28 @@ WHERE p.deleted_at IS NULL ORDER BY p.product_id`).Scan(&products).Error
 }
 
 func (d *Domain) PatchOperations(ctx context.Context, expected int64, mode, reason string, allowedUserIDs []int64) (map[string]any, error) {
+	if mode == "live" {
+		return nil, ErrForbidden
+	}
+	return d.PatchOperationsWithGate(ctx, Identity{}, expected, mode, reason, allowedUserIDs, "", "")
+}
+
+func (d *Domain) PatchOperationsWithGate(ctx context.Context, id Identity, expected int64, mode, reason string, allowedUserIDs []int64, releaseGateID, configDigest string) (map[string]any, error) {
 	if expected < 1 || reason == "" || (mode != "off" && mode != "read_only" && mode != "live") {
 		return nil, ErrInvalidInput
 	}
-	if mode == "live" {
-		return nil, ErrForbidden
-	} // G0-G6 production evidence is not available in development.
 	for _, userID := range allowedUserIDs {
 		if userID < 1 {
 			return nil, ErrInvalidInput
 		}
 	}
+	if mode == "live" && (id.OwnerID == 0 || releaseGateID == "" || configDigest == "") {
+		return nil, ErrReleaseGate
+	}
 	raw, _ := json.Marshal(allowedUserIDs)
+	now := d.Now().UTC()
 	newVersion := expected
+	var updated map[string]any
 	err := d.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var current OperationsValue
 		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Order(`version DESC`).First(&current).Error
@@ -344,7 +362,7 @@ func (d *Domain) PatchOperations(ctx context.Context, expected int64, mode, reas
 			if expected != 1 {
 				return ErrRevisionConflict
 			}
-			newVersion = 1
+			newVersion = expected + 1
 		} else if err != nil {
 			return err
 		} else {
@@ -353,12 +371,22 @@ func (d *Domain) PatchOperations(ctx context.Context, expected int64, mode, reas
 			}
 			newVersion = expected + 1
 		}
-		return tx.Create(OperationsValue{Version: newVersion, Mode: mode, Reason: reason, AllowedUserIDs: datatypes.JSON(raw), UpdatedAt: d.Now().UTC()}).Error
+		if mode == "live" {
+			if err := consumeReleaseGate(tx, id, releaseGateID, configDigest, newVersion, now); err != nil {
+				return err
+			}
+		}
+		value := OperationsValue{Version: newVersion, Mode: mode, Reason: reason, AllowedUserIDs: datatypes.JSON(raw), UpdatedAt: now}
+		if err := tx.Create(&value).Error; err != nil {
+			return err
+		}
+		updated = map[string]any{"version": newVersion, "mode": mode, "reason": reason, "allowed_user_ids": allowedUserIDs, "updated_at": now}
+		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"version": newVersion, "mode": mode, "reason": reason, "allowed_user_ids": allowedUserIDs, "updated_at": d.Now().UTC()}, nil
+	return updated, nil
 }
 
 func validateSourceManifest(input SourceManifestInput) error {
@@ -444,4 +472,54 @@ func oneOf(value string, allowed ...string) bool {
 		}
 	}
 	return false
+}
+
+func (d *Domain) ListSourcesPage(ctx context.Context, id Identity, options PageOptions) (Page[map[string]any], error) {
+	if options.Limit < 1 || options.Limit > 100 {
+		return Page[map[string]any]{}, ErrInvalidInput
+	}
+	query := d.DB.WithContext(ctx).Where(`deleted_at IS NULL`)
+	if options.Cursor != nil {
+		cursorTime, err := time.Parse(time.RFC3339Nano, options.Cursor.Primary)
+		if err != nil {
+			return Page[map[string]any]{}, ErrInvalidInput
+		}
+		query = query.Where(`created_at < ? OR (created_at = ? AND id < ?)`, cursorTime, cursorTime, options.Cursor.Secondary)
+	}
+	var values []SourceValue
+	if err := query.Order(`created_at DESC, id DESC`).Limit(options.Limit + 1).Find(&values).Error; err != nil {
+		return Page[map[string]any]{}, err
+	}
+	out := make([]map[string]any, 0, len(values))
+	for _, value := range values {
+		out = append(out, sourceMap(value))
+	}
+	return BuildPage(id, "sources", "", options, out, func(value map[string]any) (string, string, string) {
+		return TimePagePosition(value["created_at"].(time.Time), fmt.Sprint(value["id"]), 0)
+	})
+}
+
+func (d *Domain) ListAdmissionPage(ctx context.Context, id Identity, options PageOptions) (Page[map[string]any], error) {
+	if options.Limit < 1 || options.Limit > 100 {
+		return Page[map[string]any]{}, ErrInvalidInput
+	}
+	query := d.DB.WithContext(ctx).Model(&AdmissionValue{})
+	if options.Cursor != nil {
+		version, err := strconv.ParseInt(options.Cursor.Secondary, 10, 64)
+		if err != nil {
+			return Page[map[string]any]{}, ErrInvalidInput
+		}
+		query = query.Where(`product_id > ? OR (product_id = ? AND version < ?)`, options.Cursor.Primary, options.Cursor.Primary, version)
+	}
+	var values []AdmissionValue
+	if err := query.Order(`product_id ASC, version DESC`).Limit(options.Limit + 1).Find(&values).Error; err != nil {
+		return Page[map[string]any]{}, err
+	}
+	out := make([]map[string]any, 0, len(values))
+	for _, value := range values {
+		out = append(out, map[string]any{"product_id": value.ProductID, "version": value.Version, "status": value.Status, "evidence_manifest_id": value.EvidenceManifestID, "reason": value.Reason})
+	}
+	return BuildPage(id, "admission", "", options, out, func(value map[string]any) (string, string, string) {
+		return fmt.Sprint(value["product_id"]), fmt.Sprint(value["version"]), ""
+	})
 }

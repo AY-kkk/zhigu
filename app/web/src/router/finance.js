@@ -1,8 +1,8 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import ConsumerLayout from '../layout/consumer/index.vue'
-import AdminLayout from '../layout/admin/index.vue'
-import IntelLayout from '../layout/intel/index.vue'
 import { buildFuturesAdminRoute, buildFuturesRoutes } from '../modules/futures/routes.js'
+import RouteErrorBoundary from '../components/workspace/RouteErrorBoundary.vue'
+import { fetchCsrf } from '../api/session.js'
+import { hasAuthCredential } from '../utils/http.js'
 
 const intelEnabled = import.meta.env.VITE_INTEL_ENABLED === 'true'
 const futuresEnabled = import.meta.env.VITE_FUTURES_ENABLED === 'true'
@@ -10,7 +10,7 @@ const intelMeta = (mode, tab, extra = {}) => ({ module: 'intel', mode, intelTab:
 const intelRoutes = intelEnabled
   ? [{
       path: '/app/intel',
-      component: IntelLayout,
+      component: () => import('../layout/intel/index.vue'),
       children: [
         { path: '', component: () => import('../view/intel/index.vue'), meta: intelMeta('live', 'events') },
         { path: 'events/:id', component: () => import('../view/intel/index.vue'), meta: intelMeta('live', 'detail') },
@@ -38,7 +38,7 @@ const router = createRouter({
     ...(futuresAdminRoute ? [futuresAdminRoute] : []),
     {
       path: '/app',
-      component: ConsumerLayout,
+      component: () => import('../layout/consumer/index.vue'),
       children: [
         { path: 'research/new', component: () => import('../view/research/new.vue') },
         { path: 'research/:id', component: () => import('../view/research/detail.vue') },
@@ -71,8 +71,19 @@ const router = createRouter({
       ]
     },
     {
+      path: '/:pathMatch(.*)*',
+      component: RouteErrorBoundary,
+      props: {
+        error: {
+          code: 'ROUTE_NOT_FOUND',
+          message: '页面不存在或已被移动',
+          traceId: '',
+        },
+      },
+    },
+    {
       path: '/admin',
-      component: AdminLayout,
+      component: () => import('../layout/admin/index.vue'),
       children: [
         { path: '', redirect: '/admin/ai-settings' },
         { path: 'ai-settings', component: () => import('../view/researchAdmin/settings.vue') },
@@ -89,15 +100,29 @@ export function safeInternalRedirect(value, fallback = '/app/research/new') {
   return value
 }
 
-router.beforeEach((to) => {
-  const token = localStorage.getItem('zhigu_token')
-  const role = localStorage.getItem('zhigu_role')
+router.beforeEach(async (to) => {
   const demoIntel = to.meta?.module === 'intel' && to.meta?.mode === 'demo'
-  if (to.path !== '/login' && !token && !demoIntel) {
-    return { path: '/login', query: { redirect: safeInternalRedirect(to.fullPath, '/app/research/new') } }
+  if (to.path === '/login' || demoIntel) return true
+  if (!hasAuthCredential()) {
+    try {
+      await fetchCsrf()
+    } catch {
+      return { path: '/login', query: { redirect: safeInternalRedirect(to.fullPath, '/app/research/new') } }
+    }
   }
-  if (to.meta?.requiresAdmin && role !== 'admin') return '/app/research/new'
-  if (to.path.startsWith('/admin') && role !== 'admin') return '/app/research/new'
+  return true
+})
+
+router.afterEach((to) => {
+  const title = to.meta?.title || '知股'
+  document.title = `${title} · 知股`
+  window.setTimeout(() => {
+    const target = document.querySelector('#page-title') || document.querySelector('#main-content h1')
+    if (target) {
+      if (!target.hasAttribute('tabindex')) target.setAttribute('tabindex', '-1')
+      target.focus({ preventScroll: true })
+    }
+  }, 0)
 })
 
 export default router

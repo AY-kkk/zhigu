@@ -62,6 +62,7 @@ func Register(engine *gin.Engine, service CapabilityReader) {
 		{http.MethodPut, "/watchlist"},
 		{http.MethodGet, "/notifications"},
 		{http.MethodPatch, "/notifications/:id"},
+		{http.MethodPost, "/notifications/batch-read"},
 	} {
 		group.Handle(route.method, route.path, handler)
 	}
@@ -71,6 +72,8 @@ func Register(engine *gin.Engine, service CapabilityReader) {
 		adminHandler = func(c *gin.Context) { dispatchAdmin(c, concrete.Domain()) }
 	}
 	for _, route := range []struct{ method, path string }{
+		{http.MethodGet, "/source-probes"},
+		{http.MethodPost, "/source-probes"},
 		{http.MethodGet, "/sources"},
 		{http.MethodPost, "/sources"},
 		{http.MethodPatch, "/sources/:id"},

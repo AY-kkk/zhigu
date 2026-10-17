@@ -575,3 +575,53 @@ func findCondition(conditions []map[string]any, id string) (map[string]any, bool
 	}
 	return nil, false
 }
+
+func (d *Domain) ListHypothesesPage(ctx context.Context, id Identity, options PageOptions) (Page[map[string]any], error) {
+	if options.Limit < 1 || options.Limit > 100 {
+		return Page[map[string]any]{}, ErrInvalidInput
+	}
+	query := d.DB.WithContext(ctx).Where(`owner_id=? AND mode=? AND deleted_at IS NULL`, id.OwnerID, id.Mode)
+	if options.Cursor != nil {
+		cursorTime, err := time.Parse(time.RFC3339Nano, options.Cursor.Primary)
+		if err != nil {
+			return Page[map[string]any]{}, ErrInvalidInput
+		}
+		query = query.Where(`created_at < ? OR (created_at = ? AND id < ?)`, cursorTime, cursorTime, options.Cursor.Secondary)
+	}
+	var values []model.Hypothesis
+	if err := query.Order(`created_at DESC, id DESC`).Limit(options.Limit + 1).Find(&values).Error; err != nil {
+		return Page[map[string]any]{}, err
+	}
+	out := make([]map[string]any, 0, len(values))
+	for _, value := range values {
+		out = append(out, hypothesisMap(value))
+	}
+	return BuildPage(id, "hypotheses", "", options, out, func(value map[string]any) (string, string, string) {
+		return TimePagePosition(value["created_at"].(time.Time), fmt.Sprint(value["id"]), 0)
+	})
+}
+
+func (d *Domain) ListChecksPage(ctx context.Context, id Identity, hypothesisID string, options PageOptions) (Page[map[string]any], error) {
+	if options.Limit < 1 || options.Limit > 100 || hypothesisID == "" {
+		return Page[map[string]any]{}, ErrInvalidInput
+	}
+	query := d.DB.WithContext(ctx).Where(`hypothesis_id=? AND owner_id=? AND mode=?`, hypothesisID, id.OwnerID, id.Mode)
+	if options.Cursor != nil {
+		cursorTime, err := time.Parse(time.RFC3339Nano, options.Cursor.Primary)
+		if err != nil {
+			return Page[map[string]any]{}, ErrInvalidInput
+		}
+		query = query.Where(`checked_at < ? OR (checked_at = ? AND id < ?)`, cursorTime, cursorTime, options.Cursor.Secondary)
+	}
+	var values []model.Check
+	if err := query.Order(`checked_at DESC, id DESC`).Limit(options.Limit + 1).Find(&values).Error; err != nil {
+		return Page[map[string]any]{}, err
+	}
+	out := make([]map[string]any, 0, len(values))
+	for _, value := range values {
+		out = append(out, checkMap(value, []string{}))
+	}
+	return BuildPage(id, "checks", hypothesisID, options, out, func(value map[string]any) (string, string, string) {
+		return TimePagePosition(value["checked_at"].(time.Time), fmt.Sprint(value["id"]), 0)
+	})
+}

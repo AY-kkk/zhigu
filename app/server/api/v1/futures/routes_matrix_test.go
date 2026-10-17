@@ -49,6 +49,9 @@ func TestPublicRouteMatrixMatchesContract(t *testing.T) {
 		"PUT /api/v1/futures/watchlist",
 		"GET /api/v1/futures/notifications",
 		"PATCH /api/v1/futures/notifications/:id",
+		"POST /api/v1/futures/notifications/batch-read",
+		"GET /api/v1/admin/futures/source-probes",
+		"POST /api/v1/admin/futures/source-probes",
 		"GET /api/v1/admin/futures/sources",
 		"POST /api/v1/admin/futures/sources",
 		"PATCH /api/v1/admin/futures/sources/:id",
@@ -64,7 +67,7 @@ func TestPublicRouteMatrixMatchesContract(t *testing.T) {
 			t.Errorf("missing route %s", route)
 		}
 	}
-	if len(want) != 42 {
+	if len(want) != 45 {
 		t.Fatalf("contract matrix count=%d", len(want))
 	}
 }

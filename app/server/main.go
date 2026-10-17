@@ -96,6 +96,10 @@ func main() {
 	proxy := finance.NewModelProxy(db, budget)
 	ctx := context.Background()
 	engine := gin.New()
+	backupBarrier, backupBarrierErr := httpx.NewBackupBarrier(db)
+	if backupBarrierErr != nil {
+		log.Fatalf("backup barrier: %v", backupBarrierErr)
+	}
 	httpx.InstallTrace(engine)
 	if runtimeConfig.DeploymentEnvironment == runtime.Production {
 		// Only the private Compose proxy may supply the overwritten X-Real-IP.
@@ -103,6 +107,7 @@ func main() {
 			log.Fatal("invalid trusted proxy configuration")
 		}
 	}
+	engine.Use(backupBarrier.Middleware())
 	sqlDB, err := db.DB()
 	if err != nil {
 		log.Fatal("database pool unavailable")
@@ -211,6 +216,7 @@ func main() {
 	monitor.Register(engine)
 	financeapi.Register(engine, svc, proxy)
 	financeapi.RegisterAdmin(engine, cfg, svc)
+	httpx.RegisterBackupRoutes(engine, backupBarrier)
 	futuresapi.Register(engine, futuressvc.NewService(futuresEnabled).WithRuntimeState(futuresState).WithDomain(futuresDomain))
 	if futuresDomain != nil {
 		futuresGrants := futuressvc.NewGrantManager(futuressvc.NewDBGrantStore(futuresDB), futuressvc.DBLeaseAuthorizer{DB: futuresDB}, nil)

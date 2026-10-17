@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"zhigu/server/httpx"
@@ -34,6 +35,12 @@ func writeDomainError(c *gin.Context, err error) {
 		httpx.Fail(c, http.StatusForbidden, "FUTURES_READ_ONLY", "当前为只读模式")
 	case errors.Is(err, svc.ErrModuleOff):
 		httpx.Fail(c, http.StatusServiceUnavailable, "FUTURES_OFF", "期货研究已停用")
+	case errors.Is(err, svc.ErrInvalidCursor):
+		httpx.Fail(c, http.StatusBadRequest, "FUTURES_CURSOR_INVALID", "分页游标无效或已失效")
+	case errors.Is(err, svc.ErrReleaseGate):
+		httpx.Fail(c, http.StatusConflict, "FUTURES_RELEASE_GATE_INVALID", "发布闸门无效、已过期或已消费")
+	case errors.Is(err, svc.ErrInvalidBatch):
+		httpx.Fail(c, http.StatusBadRequest, "FUTURES_NOTIFICATION_BATCH_INVALID", "通知批量已读请求无效")
 	case errors.Is(err, svc.ErrInvalidInput):
 		httpx.Fail(c, http.StatusBadRequest, "FUTURES_INVALID_INPUT", "输入不符合 futures v1 契约")
 	case errors.Is(err, svc.ErrDocumentLimit):
@@ -60,19 +67,29 @@ func dispatchBusiness(c *gin.Context, domain *svc.Domain) {
 	}
 	switch {
 	case c.Request.Method == http.MethodGet && path == "/api/v1/futures/products":
-		items, err := domain.Products(c.Request.Context(), id, queryLimit(c))
+		options, err := pageOptions(c, id, "products", "")
 		if err != nil {
 			writeDomainError(c, err)
 			return
 		}
-		httpx.OK(c, http.StatusOK, gin.H{"items": items, "next_cursor": nil})
+		page, err := domain.ProductsPage(c.Request.Context(), id, options)
+		if err != nil {
+			writeDomainError(c, err)
+			return
+		}
+		httpx.OK(c, http.StatusOK, page)
 	case c.Request.Method == http.MethodGet && path == "/api/v1/futures/products/:id/contracts":
-		items, err := domain.Contracts(c.Request.Context(), id, c.Param("id"), queryLimit(c))
+		options, err := pageOptions(c, id, "contracts", c.Param("id"))
 		if err != nil {
 			writeDomainError(c, err)
 			return
 		}
-		httpx.OK(c, http.StatusOK, gin.H{"items": items, "next_cursor": nil})
+		page, err := domain.ContractsPage(c.Request.Context(), id, c.Param("id"), options)
+		if err != nil {
+			writeDomainError(c, err)
+			return
+		}
+		httpx.OK(c, http.StatusOK, page)
 	case c.Request.Method == http.MethodGet && path == "/api/v1/futures/products/:id/workbench":
 		window, _ := strconv.Atoi(c.DefaultQuery("window", "60"))
 		value, err := domain.Workbench(c.Request.Context(), id, c.Param("id"), c.Query("contract_id"), window, c.Query("price_type"))
@@ -134,12 +151,17 @@ func dispatchBusiness(c *gin.Context, domain *svc.Domain) {
 		}
 		httpx.OK(c, http.StatusAccepted, value)
 	case c.Request.Method == http.MethodGet && path == "/api/v1/futures/drafts/:id/claims":
-		value, err := domain.GetDraft(c.Request.Context(), id, c.Param("id"))
+		options, err := pageOptions(c, id, "claims", c.Param("id"))
 		if err != nil {
 			writeDomainError(c, err)
 			return
 		}
-		httpx.OK(c, http.StatusOK, gin.H{"items": value["claims"], "next_cursor": nil})
+		page, err := domain.ListClaimsPage(c.Request.Context(), id, c.Param("id"), options)
+		if err != nil {
+			writeDomainError(c, err)
+			return
+		}
+		httpx.OK(c, http.StatusOK, page)
 	case c.Request.Method == http.MethodPost && path == "/api/v1/futures/runs":
 		var input svc.RunCreateInput
 		if !BindJSON(c, &input) {
@@ -152,12 +174,17 @@ func dispatchBusiness(c *gin.Context, domain *svc.Domain) {
 		}
 		httpx.OK(c, http.StatusAccepted, value)
 	case c.Request.Method == http.MethodGet && path == "/api/v1/futures/runs":
-		items, err := domain.ListRuns(c.Request.Context(), id, queryLimit(c))
+		options, err := pageOptions(c, id, "runs", "")
 		if err != nil {
 			writeDomainError(c, err)
 			return
 		}
-		httpx.OK(c, http.StatusOK, gin.H{"items": items, "next_cursor": nil})
+		page, err := domain.ListRunsPage(c.Request.Context(), id, options)
+		if err != nil {
+			writeDomainError(c, err)
+			return
+		}
+		httpx.OK(c, http.StatusOK, page)
 	case c.Request.Method == http.MethodGet && path == "/api/v1/futures/runs/:id":
 		value, err := domain.GetRun(c.Request.Context(), id, c.Param("id"))
 		if err != nil {
@@ -253,12 +280,17 @@ func dispatchBusiness(c *gin.Context, domain *svc.Domain) {
 		}
 		httpx.OK(c, http.StatusCreated, value)
 	case c.Request.Method == http.MethodGet && path == "/api/v1/futures/hypotheses":
-		items, err := domain.ListHypotheses(c.Request.Context(), id, queryLimit(c))
+		options, err := pageOptions(c, id, "hypotheses", "")
 		if err != nil {
 			writeDomainError(c, err)
 			return
 		}
-		httpx.OK(c, http.StatusOK, gin.H{"items": items, "next_cursor": nil})
+		page, err := domain.ListHypothesesPage(c.Request.Context(), id, options)
+		if err != nil {
+			writeDomainError(c, err)
+			return
+		}
+		httpx.OK(c, http.StatusOK, page)
 	case c.Request.Method == http.MethodGet && path == "/api/v1/futures/hypotheses/:id":
 		value, err := domain.GetHypothesis(c.Request.Context(), id, c.Param("id"))
 		if err != nil {
@@ -285,12 +317,17 @@ func dispatchBusiness(c *gin.Context, domain *svc.Domain) {
 		}
 		httpx.OK(c, http.StatusAccepted, value)
 	case c.Request.Method == http.MethodGet && path == "/api/v1/futures/hypotheses/:id/checks":
-		items, err := domain.ListChecks(c.Request.Context(), id, c.Param("id"), queryLimit(c))
+		options, err := pageOptions(c, id, "checks", c.Param("id"))
 		if err != nil {
 			writeDomainError(c, err)
 			return
 		}
-		httpx.OK(c, http.StatusOK, gin.H{"items": items, "next_cursor": nil})
+		page, err := domain.ListChecksPage(c.Request.Context(), id, c.Param("id"), options)
+		if err != nil {
+			writeDomainError(c, err)
+			return
+		}
+		httpx.OK(c, http.StatusOK, page)
 	case c.Request.Method == http.MethodPost && path == "/api/v1/futures/hypotheses/:id/checks":
 		var input svc.CheckCreateInput
 		if !BindJSON(c, &input) {
@@ -342,12 +379,49 @@ func dispatchBusiness(c *gin.Context, domain *svc.Domain) {
 		}
 		httpx.OK(c, http.StatusOK, value)
 	case c.Request.Method == http.MethodGet && path == "/api/v1/futures/notifications":
-		items, err := domain.ListNotifications(c.Request.Context(), id, queryLimit(c))
+		filter := svc.NotificationFilter{Type: c.Query("type"), ObjectID: c.Query("object_id")}
+		if raw := c.Query("read"); raw != "" {
+			value, err := strconv.ParseBool(raw)
+			if err != nil {
+				httpx.Fail(c, http.StatusBadRequest, "FUTURES_INVALID_INPUT", "read 必须为 true 或 false")
+				return
+			}
+			filter.Read = &value
+		}
+		if raw := c.Query("object_version"); raw != "" {
+			value, err := strconv.ParseInt(raw, 10, 64)
+			if err != nil || value < 1 {
+				httpx.Fail(c, http.StatusBadRequest, "FUTURES_INVALID_INPUT", "object_version 必须为正整数")
+				return
+			}
+			filter.ObjectVersion = &value
+		}
+		options, err := pageOptions(c, id, "notifications", filter.String())
 		if err != nil {
 			writeDomainError(c, err)
 			return
 		}
-		httpx.OK(c, http.StatusOK, gin.H{"items": items, "next_cursor": nil})
+		page, err := domain.ListNotificationsPage(c.Request.Context(), id, filter, options)
+		if err != nil {
+			writeDomainError(c, err)
+			return
+		}
+		httpx.OK(c, http.StatusOK, page)
+	case c.Request.Method == http.MethodPost && path == "/api/v1/futures/notifications/batch-read":
+		var input notificationBatchReadInput
+		if !BindJSON(c, &input) {
+			return
+		}
+		if err := validateNotificationIDs(input.IDs); err != nil {
+			writeDomainError(c, err)
+			return
+		}
+		value, err := domain.MarkNotificationsRead(c.Request.Context(), id, input.IDs)
+		if err != nil {
+			writeDomainError(c, err)
+			return
+		}
+		httpx.OK(c, http.StatusOK, value)
 	case c.Request.Method == http.MethodPatch && path == "/api/v1/futures/notifications/:id":
 		var input struct {
 			Read bool `json:"read"`
@@ -378,12 +452,17 @@ func dispatchAdmin(c *gin.Context, domain *svc.Domain) {
 	}
 	switch {
 	case c.Request.Method == http.MethodGet && path == "/api/v1/admin/futures/sources":
-		items, err := domain.ListSources(c.Request.Context(), queryLimit(c))
+		options, err := pageOptions(c, serviceIdentity(c), "sources", "")
 		if err != nil {
 			writeDomainError(c, err)
 			return
 		}
-		httpx.OK(c, http.StatusOK, gin.H{"items": items, "next_cursor": nil})
+		page, err := domain.ListSourcesPage(c.Request.Context(), serviceIdentity(c), options)
+		if err != nil {
+			writeDomainError(c, err)
+			return
+		}
+		httpx.OK(c, http.StatusOK, page)
 	case c.Request.Method == http.MethodPost && path == "/api/v1/admin/futures/sources":
 		var input struct {
 			Manifest svc.SourceManifestInput `json:"manifest"`
@@ -426,13 +505,42 @@ func dispatchAdmin(c *gin.Context, domain *svc.Domain) {
 			return
 		}
 		httpx.OK(c, http.StatusCreated, value)
-	case c.Request.Method == http.MethodGet && path == "/api/v1/admin/futures/admission":
-		items, err := domain.ListAdmission(c.Request.Context(), queryLimit(c))
+	case c.Request.Method == http.MethodPost && path == "/api/v1/admin/futures/source-probes":
+		var input svc.SourceProbeInput
+		if !BindJSON(c, &input) {
+			return
+		}
+		value, err := domain.CreateSourceProbe(c.Request.Context(), serviceIdentity(c), c.GetHeader("Idempotency-Key"), input)
 		if err != nil {
 			writeDomainError(c, err)
 			return
 		}
-		httpx.OK(c, http.StatusOK, gin.H{"items": items, "next_cursor": nil})
+		httpx.OK(c, http.StatusCreated, value)
+	case c.Request.Method == http.MethodGet && path == "/api/v1/admin/futures/source-probes":
+		filter := svc.SourceProbeFilter{SourceID: c.Query("source_id"), Result: c.Query("result")}
+		options, err := pageOptions(c, serviceIdentity(c), "source-probes", filter.String())
+		if err != nil {
+			writeDomainError(c, err)
+			return
+		}
+		page, err := domain.ListSourceProbesPage(c.Request.Context(), serviceIdentity(c), filter, options)
+		if err != nil {
+			writeDomainError(c, err)
+			return
+		}
+		httpx.OK(c, http.StatusOK, page)
+	case c.Request.Method == http.MethodGet && path == "/api/v1/admin/futures/admission":
+		options, err := pageOptions(c, serviceIdentity(c), "admission", "")
+		if err != nil {
+			writeDomainError(c, err)
+			return
+		}
+		page, err := domain.ListAdmissionPage(c.Request.Context(), serviceIdentity(c), options)
+		if err != nil {
+			writeDomainError(c, err)
+			return
+		}
+		httpx.OK(c, http.StatusOK, page)
 	case c.Request.Method == http.MethodPut && path == "/api/v1/admin/futures/admission/:productId":
 		var input struct {
 			ExpectedVersion    int64  `json:"expected_version"`
@@ -462,11 +570,13 @@ func dispatchAdmin(c *gin.Context, domain *svc.Domain) {
 			Mode            string  `json:"mode"`
 			Reason          string  `json:"reason"`
 			AllowedUserIDs  []int64 `json:"allowed_user_ids"`
+			ReleaseGateID   string  `json:"release_gate_id"`
+			ConfigDigest    string  `json:"config_digest"`
 		}
 		if !BindJSON(c, &input) {
 			return
 		}
-		value, err := domain.PatchOperations(c.Request.Context(), input.ExpectedVersion, input.Mode, input.Reason, input.AllowedUserIDs)
+		value, err := domain.PatchOperationsWithGate(c.Request.Context(), serviceIdentity(c), input.ExpectedVersion, input.Mode, input.Reason, input.AllowedUserIDs, input.ReleaseGateID, input.ConfigDigest)
 		if err != nil {
 			writeDomainError(c, err)
 			return
@@ -481,7 +591,40 @@ func requiresIdempotency(method, path string) bool {
 	return method == http.MethodDelete || method == http.MethodPost
 }
 
-func queryLimit(c *gin.Context) int {
-	value, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
-	return value
+func pageOptions(c *gin.Context, id svc.Identity, kind, filter string) (svc.PageOptions, error) {
+	limit, err := svc.ParsePageLimit(c.Query("limit"))
+	if err != nil {
+		return svc.PageOptions{}, svc.ErrInvalidInput
+	}
+	options := svc.PageOptions{Limit: limit, Filter: filter}
+	if raw := c.Query("cursor"); raw != "" {
+		cursor, err := svc.DecodePageCursor(raw, id, kind, filter)
+		if err != nil {
+			return svc.PageOptions{}, err
+		}
+		options.Cursor = &cursor
+		options.CursorToken = &raw
+	}
+	return options, nil
+}
+
+type notificationBatchReadInput struct {
+	IDs []string `json:"ids"`
+}
+
+func validateNotificationIDs(ids []string) error {
+	if len(ids) == 0 || len(ids) > 100 {
+		return svc.ErrInvalidBatch
+	}
+	seen := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		if id == "" || id != strings.TrimSpace(id) || len(id) > 128 {
+			return svc.ErrInvalidBatch
+		}
+		if _, exists := seen[id]; exists {
+			return svc.ErrInvalidBatch
+		}
+		seen[id] = struct{}{}
+	}
+	return nil
 }

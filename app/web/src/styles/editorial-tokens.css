@@ -142,3 +142,25 @@
     --zg-duration-drawer: 0ms;
   }
 }
+
+.system-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  min-height: 28px;
+  padding: 4px 8px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+.system-status[data-tone='ready'] { color: var(--color-success, #237a4b); }
+.system-status[data-tone='warning'] { color: var(--color-warning, #9a5b00); }
+.system-status[data-tone='blocked'] { color: var(--color-danger, #b4232c); }
+.system-status[data-tone='neutral'] { color: var(--color-text-secondary, #5f5962); }
+.system-error {
+  padding: var(--space-4, 16px);
+  border-inline-start: 4px solid var(--color-danger, #b4232c);
+  background: var(--color-surface-raised, #fff);
+}

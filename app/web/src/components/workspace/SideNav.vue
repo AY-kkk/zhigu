@@ -4,19 +4,22 @@
       <ZhiguLogo variant="stacked" />
     </router-link>
     <nav class="zhigu-side-nav" :aria-label="navLabel">
-      <button
-        v-for="item in navItems"
-        :key="item.key"
-        type="button"
-        class="zhigu-nav-item"
-        :class="{ 'is-active': selected === item.key }"
-        :aria-current="selected === item.key ? 'page' : undefined"
-        :title="item.title"
-        @click="go(item)"
-      >
-        <ZhiguIcon :name="item.icon" :size="24" />
-        <span>{{ item.text }}</span>
-      </button>
+      <template v-for="item in navItems" :key="item.key">
+        <p v-if="item.groupLabel && item.showGroup" class="zhigu-nav-group">{{ item.groupLabel }}</p>
+        <button
+          type="button"
+          class="zhigu-nav-item"
+          :class="{ 'is-active': selected === item.key }"
+          :aria-current="selected === item.key ? 'page' : undefined"
+          :title="item.title || item.reason"
+          :disabled="item.disabled"
+          @click="go(item)"
+        >
+          <span v-if="item.badge" class="zhigu-nav-badge">{{ item.badge }}</span>
+          <ZhiguIcon :name="item.icon" :size="24" />
+          <span>{{ item.text }}</span>
+        </button>
+      </template>
     </nav>
     <a
       v-if="intelRetryVisible"
@@ -54,7 +57,8 @@ const props = defineProps({
   items: { type: Array, default: null },
   brandTo: { type: String, default: '/app/research/new' },
   brandLabel: { type: String, default: '知股 Zhigu' },
-  navLabel: { type: String, default: '主导航' }
+  navLabel: { type: String, default: '主导航' },
+  groups: { type: Array, default: null }
 })
 const emit = defineEmits(['navigated'])
 const route = useRoute()
@@ -62,7 +66,18 @@ const router = useRouter()
 const conversation = useResearchConversation()
 const intelRetryVisible = ref(false)
 let lastIntelOpenAt = 0
-const navItems = computed(() => props.items || CONSUMER_ITEMS)
+const navItems = computed(() => {
+  if (props.groups?.length) {
+    return props.groups.flatMap((group, groupIndex) => group.items.map((item, itemIndex) => ({
+      ...item,
+      key: item.key || item.to || `${group.label}-${itemIndex}`,
+      text: item.text || item.label,
+      groupLabel: group.label,
+      showGroup: itemIndex === 0 && groupIndex >= 0,
+    })))
+  }
+  return props.items || CONSUMER_ITEMS
+})
 
 const selected = computed(() => {
   if (props.items) {
@@ -78,17 +93,18 @@ const selected = computed(() => {
 })
 
 function go(item) {
+  if (item.disabled) return
+  if (item.to) {
+    if (route.path !== item.to) router.push(item.to)
+    emit('navigated')
+    return
+  }
   if (item.key === 'intel') {
     const now = Date.now()
     if (now - lastIntelOpenAt < 500) return
     lastIntelOpenAt = now
     intelRetryVisible.value = true
     openIntelWindow()
-    emit('navigated')
-    return
-  }
-  if (item.to) {
-    if (route.path !== item.to) router.push(item.to)
     emit('navigated')
     return
   }
@@ -105,6 +121,22 @@ function go(item) {
 }
 </script>
 <style scoped>
+.zhigu-nav-group {
+  margin: 14px 12px 6px;
+  color: var(--zg-muted, #68616b);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.zhigu-nav-badge {
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--zg-action, #b4232c);
+  color: white;
+  font-size: 11px;
+}
 .intel-retry-link {
   display: block;
   margin: 4px 12px 10px;

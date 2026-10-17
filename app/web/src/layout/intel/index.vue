@@ -48,6 +48,7 @@ import { ConfigProvider } from '@kousum/semi-ui-vue'
 import zhCN from '@kousum/semi-ui-vue/dist/locale/source/zh_CN.js'
 import { useIntelWorkspace } from '../../stores/intelWorkspace.js'
 import { safeInternalRedirect } from '../../router/finance.js'
+import { useSession, getSessionRole } from '../../stores/session.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -61,7 +62,7 @@ const visibleTabs = computed(() => {
     { key: 'notifications', label: '通知中心', live: '/app/intel/notifications', demo: '/app/intel/demo/notifications' }
   ]
   if (mode.value === 'demo') tabs.push({ key: 'replay', label: '回放', demo: '/app/intel/demo' })
-  if (mode.value === 'live' && localStorage.getItem('zhigu_role') === 'admin') {
+  if (mode.value === 'live' && getSessionRole() === 'admin') {
     tabs.push({ key: 'reviews', label: '待处理', live: '/app/intel/admin/reviews' })
     tabs.push({ key: 'sources', label: '数据接入', live: '/app/intel/admin/sources' })
   }
@@ -90,14 +91,12 @@ function logout() {
     closeWindow()
     return
   }
-  localStorage.removeItem('zhigu_token')
-  localStorage.removeItem('zhigu_role')
-  localStorage.removeItem('zhigu_user')
+  useSession().logout()
   workspace.resetForAccount('live')
   router.push('/login')
 }
 function onStorage(event) {
-  if (!['zhigu_token', 'zhigu_user', 'zhigu_role'].includes(event.key)) return
+  if (event.key) return
   workspace.resetForAccount(mode.value)
   workspace.bootstrap(mode.value)
 }

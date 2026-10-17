@@ -9,7 +9,9 @@
     >
       <ZhiguIcon name="menu" :size="20" />
     </button>
-    <p class="zhigu-header-title title">{{ title }}</p>
+    <p class="zhigu-header-title title">{{ displayTitle }}</p>
+    <span v-if="environment" class="header-environment">{{ environment }}<template v-if="provenance"> · {{ provenance }}</template></span>
+    <span v-if="capabilityReason" class="header-reason">{{ capabilityReason }}</span>
     <div class="actions">
       <button
         type="button"
@@ -47,14 +49,20 @@ import { historyTitle } from '../../utils/researchCopy.js'
 const emit = defineEmits(['open-nav', 'delete-research'])
 const props = defineProps({
   isMobile: { type: Boolean, default: false },
-  historyActive: { type: Boolean, default: false }
+  historyActive: { type: Boolean, default: false },
+  title: { type: String, default: '' },
+  environment: { type: String, default: '' },
+  provenance: { type: String, default: '' },
+  capabilityReason: { type: String, default: '' }
 })
 const route = useRoute()
 const router = useRouter()
 const session = useSession()
 const conversation = useResearchConversation()
 
-const title = computed(() => {
+const displayTitle = computed(() => props.title || deriveTitle())
+
+function deriveTitle() {
   if (route.path.startsWith('/app/history')) return '我的研究'
   if (route.path.startsWith('/app/profile')) return '个人界面'
   if (route.path.startsWith('/app/strategies')) return '交易策略'
@@ -65,7 +73,7 @@ const title = computed(() => {
     return historyTitle({ instrument_id: id, instrument_name: match?.name })
   }
   return '投研观点'
-})
+}
 
 const showNew = computed(() => {
   if (route.path.startsWith('/app/strategies')) return false
@@ -106,6 +114,18 @@ function onLogout() {
   width: 100%;
   min-width: 0;
 }
+.header-environment,
+.header-reason {
+  flex: none;
+  color: var(--zg-muted, #68616b);
+  font-size: 12px;
+}
+.header-reason {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .title {
   margin: 0;
   min-width: 0;
@@ -127,6 +147,18 @@ function onLogout() {
   color: var(--zg-action);
 }
 @media (max-width: 767px) {
-  .title { font-size: 14px; }
+  .header-environment,
+.header-reason {
+  flex: none;
+  color: var(--zg-muted, #68616b);
+  font-size: 12px;
+}
+.header-reason {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.title { font-size: 14px; }
 }
 </style>

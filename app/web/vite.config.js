@@ -4,6 +4,13 @@ import { fileURLToPath } from 'node:url'
 
 export default defineConfig({
   plugins: [vue()],
+  build: {
+    manifest: true,
+    sourcemap: false,
+    target: 'es2022',
+    cssCodeSplit: true,
+    chunkSizeWarningLimit: 220,
+  },
   resolve: {
     alias: [
       {

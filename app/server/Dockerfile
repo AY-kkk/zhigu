@@ -8,6 +8,13 @@ COPY . .
 RUN go build -trimpath -ldflags="-s -w" -o /out/zhigu-server .
 
 FROM debian:bookworm-slim
+ARG VCS_REF=unknown
+ARG BUILD_DATE=unknown
+ARG VERSION=dev
+LABEL org.opencontainers.image.revision=${VCS_REF} \
+      org.opencontainers.image.source=zhigu \
+      org.opencontainers.image.created=${BUILD_DATE} \
+      org.opencontainers.image.version=${VERSION}
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates wget && rm -rf /var/lib/apt/lists/* \
   && useradd --system --uid 10001 --create-home zhigu
 WORKDIR /app

@@ -1,3 +1,5 @@
+import { clearAuthCredential, getCsrfToken } from './http.js'
+
 const BASE = '/api/finance/intel/v1'
 
 class IntelError extends Error {
@@ -14,9 +16,8 @@ export async function intelRequest(path, { method = 'GET', mode = 'live', body, 
   const headers = { Accept: 'application/json', 'X-Intel-Mode': mode, 'X-Request-ID': crypto.randomUUID() }
   if (body !== undefined) headers['Content-Type'] = 'application/json'
   if (idempotencyKey) headers['Idempotency-Key'] = idempotencyKey
-  if (mode === 'live') {
-    const token = localStorage.getItem('zhigu_token')
-    if (token) headers.Authorization = `Bearer ${token}`
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(method) && getCsrfToken()) {
+    headers['X-CSRF-Token'] = getCsrfToken()
   }
   let response
   try {
@@ -36,9 +37,7 @@ export async function intelRequest(path, { method = 'GET', mode = 'live', body, 
     const error = payload?.error || {}
     const wrapped = new IntelError(error.message || `请求失败（${response.status}）`, error.code || `HTTP_${response.status}`, response.status, payload)
     if (mode === 'live' && response.status === 401) {
-      localStorage.removeItem('zhigu_token')
-      localStorage.removeItem('zhigu_role')
-      localStorage.removeItem('zhigu_user')
+      clearAuthCredential()
       window.dispatchEvent(new CustomEvent('zhigu:intel-auth-expired', { detail: window.location.pathname + window.location.search }))
     }
     throw wrapped

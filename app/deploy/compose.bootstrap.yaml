@@ -1,0 +1,8 @@
+services:
+  server:
+    environment:
+      ZHIGU_BOOTSTRAP_OWNER_FILE: /run/secrets/bootstrap_owner
+    secrets: [bootstrap_owner]
+
+secrets:
+  bootstrap_owner: {file: ./secrets/bootstrap_owner}

@@ -4,14 +4,18 @@ package futures
 // Capabilities is the data payload of GET /api/v1/futures/capabilities.
 // The scaffold deliberately fails closed, even when enabled in configuration.
 type Capabilities struct {
-	SchemaVersion string   `json:"schema_version"`
-	Enabled       bool     `json:"enabled"`
-	Ready         bool     `json:"ready"`
-	Mode          string   `json:"mode"`
-	Reason        string   `json:"reason"`
-	Products      []string `json:"products"`
-	Features      Features `json:"features"`
-	Limits        Limits   `json:"limits"`
+	SchemaVersion         string   `json:"schema_version"`
+	Enabled               bool     `json:"enabled"`
+	Ready                 bool     `json:"ready"`
+	Mode                  string   `json:"mode"`
+	DeploymentEnvironment string   `json:"deployment_environment"`
+	OperationMode         string   `json:"operation_mode"`
+	DataProvenance        string   `json:"data_provenance"`
+	Health                string   `json:"health"`
+	Reason                string   `json:"reason"`
+	Products              []string `json:"products"`
+	Features              Features `json:"features"`
+	Limits                Limits   `json:"limits"`
 }
 
 type Limits struct {
@@ -63,9 +67,45 @@ func (s *Service) RuntimeState() RuntimeState {
 
 func (s *Service) Capabilities() Capabilities {
 	state := s.RuntimeState()
+	deploymentEnvironment := state.DeploymentEnvironment
+	if deploymentEnvironment == "" {
+		if state.Mode == "live" {
+			deploymentEnvironment = "production"
+		} else {
+			deploymentEnvironment = "test"
+		}
+	}
+	operationMode := state.OperationMode
+	if operationMode == "" {
+		operationMode = state.Mode
+	}
+	if operationMode != "off" && operationMode != "read_only" && operationMode != "live" {
+		operationMode = "off"
+	}
+	dataProvenance := state.DataProvenance
+	if dataProvenance != "fixture" && dataProvenance != "real" {
+		dataProvenance = "fixture"
+	}
+	health := state.Health
+	if health != "ready" && health != "degraded" && health != "unavailable" {
+		if state.Ready {
+			health = "ready"
+		} else {
+			health = "unavailable"
+		}
+	}
+	reason := state.Reason
+	if deploymentEnvironment == "production" && dataProvenance == "fixture" {
+		dataProvenance = "real"
+		operationMode = "read_only"
+		health = "unavailable"
+		reason = "INVALID_DATA_PROVENANCE"
+	}
 	return Capabilities{
 		SchemaVersion: "futures.capabilities.v1", Enabled: state.Enabled,
-		Ready: state.Ready, Mode: state.Mode, Reason: state.Reason,
+		Ready: state.Ready, Mode: state.Mode, Reason: reason,
+		DeploymentEnvironment: deploymentEnvironment, OperationMode: operationMode,
+		DataProvenance: dataProvenance, Health: health,
 		Products: []string{}, Features: Features{},
 		Limits: Limits{DailyRuns: 5, ActiveRuns: 1, ActiveHypotheses: 20,
 			ModelCalls: 8, ToolCalls: 24, Tokens: 48000, UserDailyCNY: "5", ModuleDailyCNY: "50",

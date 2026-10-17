@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 	"zhigu/server/httpx"
 )
@@ -28,7 +29,7 @@ func NewHTTPResearchClient() (ResearchClient, error) {
 	if base == "" {
 		return nil, fmt.Errorf("ZHIGU_RESEARCH_URL is required unless ZHIGU_RESEARCH_MODE=unit-test")
 	}
-	token := os.Getenv("ZHIGU_INTERNAL_TOKEN")
+	token := researchSecret("ZHIGU_INTERNAL_TOKEN")
 	if token == "" {
 		token = "zhigu-internal-dev"
 	}
@@ -196,4 +197,19 @@ func isTerminalTaskStatus(status string) bool {
 	default:
 		return false
 	}
+}
+
+func researchSecret(name string) string {
+	if value := os.Getenv(name); value != "" {
+		return value
+	}
+	path := os.Getenv(name + "_FILE")
+	if path == "" {
+		return ""
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(raw))
 }

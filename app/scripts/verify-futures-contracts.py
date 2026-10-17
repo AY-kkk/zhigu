@@ -72,3 +72,48 @@ for mutate in (
 
 print("PASS: local refs, schema definitions, 5 fixtures, 10 invalid scope/data cases")
 print("NOTE: this does not verify business authorization, data rights or live readiness")
+
+capabilities = types["$defs"]["Capabilities"]
+for dimension in (
+    "deployment_environment",
+    "operation_mode",
+    "data_provenance",
+    "health",
+):
+    assert dimension in capabilities["properties"]
+    assert dimension in capabilities["required"]
+assert capabilities["properties"]["operation_mode"]["enum"] == ["off", "read_only", "live"]
+assert capabilities["properties"]["data_provenance"]["enum"] == ["fixture", "real"]
+
+list_responses = 0
+
+
+def check_list_responses(node):
+    global list_responses
+    if isinstance(node, dict):
+        properties = node.get("properties")
+        if isinstance(properties, dict) and "items" in properties and "next_cursor" in properties:
+            list_responses += 1
+            assert {"items", "limit", "cursor", "next_cursor"} <= properties.keys()
+            assert {"items", "limit", "cursor", "next_cursor"} <= set(node.get("required", []))
+        for value in node.values():
+            check_list_responses(value)
+    elif isinstance(node, list):
+        for value in node:
+            check_list_responses(value)
+
+
+check_list_responses(documents["openapi.json"])
+assert list_responses == 10, list_responses
+batch = types["$defs"]["NotificationBatchRead"]["properties"]["ids"]
+assert batch["minItems"] == 1 and batch["maxItems"] == 100 and batch["uniqueItems"] is True
+assert "/api/v1/futures/notifications/batch-read" in documents["openapi.json"]["paths"]
+source_probe = types["$defs"]["SourceProbeInput"]["properties"]
+assert source_probe["result"]["enum"] == ["PASS", "FAIL", "NOT_RUN", "BLOCKED"]
+assert source_probe["secret_revision"]["minimum"] == 1
+assert source_probe["secret_fingerprint"]["pattern"] == "^[A-Za-z0-9_-]{32,128}$"
+assert source_probe["evidence_hash"]["pattern"] == "^[0-9a-f]{64}$"
+operations_patch = documents["openapi.json"]["paths"]["/api/v1/admin/futures/operations"]["patch"]
+assert "release_gate_id" in operations_patch["requestBody"]["content"]["application/json"]["schema"]["properties"]
+assert "/api/v1/admin/futures/source-probes" in documents["openapi.json"]["paths"]
+print("PASS: 4 dimensions, 10 stable list envelopes, batch-read bounds, and route contract")

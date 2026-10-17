@@ -113,11 +113,29 @@
                               "type": "null"
                             }
                           ]
+                        },
+                        "limit": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 100
+                        },
+                        "cursor": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
                         }
                       },
                       "required": [
                         "items",
-                        "next_cursor"
+                        "next_cursor",
+                        "limit",
+                        "cursor"
                       ]
                     },
                     "error": {
@@ -221,11 +239,29 @@
                               "type": "null"
                             }
                           ]
+                        },
+                        "limit": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 100
+                        },
+                        "cursor": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
                         }
                       },
                       "required": [
                         "items",
-                        "next_cursor"
+                        "next_cursor",
+                        "limit",
+                        "cursor"
                       ]
                     },
                     "error": {
@@ -1230,11 +1266,29 @@
                               "type": "null"
                             }
                           ]
+                        },
+                        "limit": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 100
+                        },
+                        "cursor": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
                         }
                       },
                       "required": [
                         "items",
-                        "next_cursor"
+                        "next_cursor",
+                        "limit",
+                        "cursor"
                       ]
                     },
                     "error": {
@@ -2146,11 +2200,29 @@
                               "type": "null"
                             }
                           ]
+                        },
+                        "limit": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 100
+                        },
+                        "cursor": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
                         }
                       },
                       "required": [
                         "items",
-                        "next_cursor"
+                        "next_cursor",
+                        "limit",
+                        "cursor"
                       ]
                     },
                     "error": {
@@ -2254,11 +2326,29 @@
                               "type": "null"
                             }
                           ]
+                        },
+                        "limit": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 100
+                        },
+                        "cursor": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
                         }
                       },
                       "required": [
                         "items",
-                        "next_cursor"
+                        "next_cursor",
+                        "limit",
+                        "cursor"
                       ]
                     },
                     "error": {
@@ -2815,11 +2905,29 @@
                               "type": "null"
                             }
                           ]
+                        },
+                        "limit": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 100
+                        },
+                        "cursor": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
                         }
                       },
                       "required": [
                         "items",
-                        "next_cursor"
+                        "next_cursor",
+                        "limit",
+                        "cursor"
                       ]
                     },
                     "error": {
@@ -2885,6 +2993,45 @@
               "minimum": 1,
               "maximum": 100,
               "default": 20
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "check_changed",
+                "source_unavailable",
+                "revision",
+                "retraction",
+                "expired",
+                "run_succeeded",
+                "run_failed"
+              ]
+            }
+          },
+          {
+            "name": "read",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "object_id",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "object_version",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
             }
           }
         ]
@@ -3017,11 +3164,29 @@
                               "type": "null"
                             }
                           ]
+                        },
+                        "limit": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 100
+                        },
+                        "cursor": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
                         }
                       },
                       "required": [
                         "items",
-                        "next_cursor"
+                        "next_cursor",
+                        "limit",
+                        "cursor"
                       ]
                     },
                     "error": {
@@ -3327,11 +3492,29 @@
                               "type": "null"
                             }
                           ]
+                        },
+                        "limit": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 100
+                        },
+                        "cursor": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
                         }
                       },
                       "required": [
                         "items",
-                        "next_cursor"
+                        "next_cursor",
+                        "limit",
+                        "cursor"
                       ]
                     },
                     "error": {
@@ -3581,7 +3764,7 @@
       },
       "patch": {
         "operationId": "patch__api_v1_admin_futures_operations",
-        "description": "Admin only; available while off. Does not bypass data, model, budget or release gates.",
+        "description": "Admin only; live activation atomically consumes a matching, unexpired release gate. Source config changes invalidate active gates.",
         "responses": {
           "200": {
             "description": "Success",
@@ -3670,6 +3853,14 @@
                       "type": "integer",
                       "minimum": 1
                     }
+                  },
+                  "release_gate_id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "config_digest": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
                   }
                 },
                 "required": [
@@ -3677,6 +3868,26 @@
                   "mode",
                   "reason",
                   "allowed_user_ids"
+                ],
+                "allOf": [
+                  {
+                    "if": {
+                      "properties": {
+                        "mode": {
+                          "const": "live"
+                        }
+                      },
+                      "required": [
+                        "mode"
+                      ]
+                    },
+                    "then": {
+                      "required": [
+                        "release_gate_id",
+                        "config_digest"
+                      ]
+                    }
+                  }
                 ]
               }
             }
@@ -3717,11 +3928,29 @@
                               "type": "null"
                             }
                           ]
+                        },
+                        "limit": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 100
+                        },
+                        "cursor": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
                         }
                       },
                       "required": [
                         "items",
-                        "next_cursor"
+                        "next_cursor",
+                        "limit",
+                        "cursor"
                       ]
                     },
                     "error": {
@@ -3909,6 +4138,323 @@
           }
         }
       }
+    },
+    "/api/v1/futures/notifications/batch-read": {
+      "post": {
+        "operationId": "post__api_v1_futures_notifications_batch_read",
+        "description": "Atomically marks 1-100 owner-scoped notifications as read.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/NotificationBatchReadResult"
+                    },
+                    "error": {
+                      "type": "null"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 validation; 401 identity; 403 mode; 404 owner-scoped absence; 409 idempotency; 503 off/unready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationBatchRead"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/futures/source-probes": {
+      "get": {
+        "operationId": "get__api_v1_admin_futures_source_probes",
+        "description": "Owner-scoped source probe evidence list.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/SourceProbe"
+                          }
+                        },
+                        "limit": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 100
+                        },
+                        "cursor": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "next_cursor": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "items",
+                        "limit",
+                        "cursor",
+                        "next_cursor"
+                      ]
+                    },
+                    "error": {
+                      "type": "null"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 validation; 401 identity; 403 admin; 503 unready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "result",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "PASS",
+                "FAIL",
+                "NOT_RUN",
+                "BLOCKED"
+              ]
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ]
+      },
+      "post": {
+        "operationId": "post__api_v1_admin_futures_source_probes",
+        "description": "Persist a four-state source probe. PASS creates a single-use release gate valid for at most 24 hours.",
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SourceProbe"
+                    },
+                    "error": {
+                      "type": "null"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 validation; 401 identity; 403 admin; 404 source; 409 idempotency/revision; 503 unready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "error",
+                    "trace_id"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SourceProbeInput"
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -4036,6 +4582,18 @@
       },
       "SourceManifest": {
         "$ref": "./types.schema.json#/$defs/SourceManifest"
+      },
+      "NotificationBatchRead": {
+        "$ref": "./types.schema.json#/$defs/NotificationBatchRead"
+      },
+      "NotificationBatchReadResult": {
+        "$ref": "./types.schema.json#/$defs/NotificationBatchReadResult"
+      },
+      "SourceProbeInput": {
+        "$ref": "./types.schema.json#/$defs/SourceProbeInput"
+      },
+      "SourceProbe": {
+        "$ref": "./types.schema.json#/$defs/SourceProbe"
       }
     }
   }
