@@ -105,6 +105,8 @@ class ProductionDeployContractTests(unittest.TestCase):
         self.assertIn("app/deploy/secrets/session_keys", smoke)
         self.assertIn("printf '[\"%s\",\"%s\"]'", smoke)
         self.assertIn("tr '/+' '_-'", smoke)
+        self.assertNotIn("ZHIGU_PUBLIC_ORIGIN: https://127.0.0.1", smoke)
+        self.assertIn("--resolve smoke.zhigu.example.com:443:127.0.0.1", smoke)
 
     def test_preflight_requires_runtime_secret_owner(self):
         script = (ROOT / "scripts/production-preflight.sh").read_text()
