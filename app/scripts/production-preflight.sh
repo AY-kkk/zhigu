@@ -38,6 +38,8 @@ case "${ZHIGU_PUBLIC_ORIGIN}" in
 esac
 [[ -n "${ZHIGU_TLS_CERT_DIR:-}" ]] || fail "ZHIGU_TLS_CERT_DIR is required"
 [[ -s "${ZHIGU_TLS_CERT_DIR}/fullchain.pem" && -s "${ZHIGU_TLS_CERT_DIR}/privkey.pem" ]] || fail "TLS certificate files are missing"
+[[ "$(stat -c '%a' "${ZHIGU_TLS_CERT_DIR}/privkey.pem" 2>/dev/null || stat -f '%Lp' "${ZHIGU_TLS_CERT_DIR}/privkey.pem")" == "600" ]] || fail "TLS private key must be mode 600"
+[[ "$(stat -c '%u' "${ZHIGU_TLS_CERT_DIR}/privkey.pem" 2>/dev/null || stat -f '%u' "${ZHIGU_TLS_CERT_DIR}/privkey.pem")" == "101" ]] || fail "TLS private key must be owned by uid 101"
 if command -v docker >/dev/null 2>&1; then
   compose_env=()
   [[ -n "${ZHIGU_ENV_FILE:-}" ]] && compose_env=(--env-file "$ZHIGU_ENV_FILE")

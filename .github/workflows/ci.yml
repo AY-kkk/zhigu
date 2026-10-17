@@ -160,6 +160,7 @@ jobs:
           printf '{"username":"owner-%s","password":"%s"}' "$(head -c 6 /dev/urandom | base64 | tr '/+' '_-' | tr -d '\n=')" "$(head -c 48 /dev/urandom | base64 | tr '/+' '_-' | tr -d '\n=')" > app/deploy/secrets/bootstrap_owner
           sudo chown 10001:10001 app/deploy/secrets/*
           openssl req -x509 -newkey rsa:2048 -nodes -keyout /tmp/zhigu-tls/privkey.pem -out /tmp/zhigu-tls/fullchain.pem -subj /CN=smoke.zhigu.example.com -days 1
+          sudo chown 101:101 /tmp/zhigu-tls/*
       - run: app/scripts/production-preflight.sh
         env:
           ZHIGU_PUBLIC_ORIGIN: https://smoke.zhigu.example.com
@@ -169,7 +170,7 @@ jobs:
           ZHIGU_PUBLIC_ORIGIN: https://smoke.zhigu.example.com
           ZHIGU_TLS_CERT_DIR: /tmp/zhigu-tls
       - run: |
-          curl -kfsS --noproxy '*' --resolve smoke.zhigu.example.com:443:127.0.0.1 --retry 60 --retry-delay 2 https://smoke.zhigu.example.com/
+          curl -kfsS --noproxy '*' --resolve smoke.zhigu.example.com:443:127.0.0.1 --retry 60 --retry-delay 2 --retry-all-errors https://smoke.zhigu.example.com/
           docker compose -f app/deploy/compose.prod.yaml -f app/deploy/compose.bootstrap.yaml -p zhigu-production-smoke exec -T server wget -q -O - http://127.0.0.1:8080/readyz
           docker compose -f app/deploy/compose.prod.yaml -f app/deploy/compose.bootstrap.yaml -p zhigu-production-smoke exec -T research python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8091/readyz')"
           docker compose -f app/deploy/compose.prod.yaml -f app/deploy/compose.bootstrap.yaml -p zhigu-production-smoke exec -T futures python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8092/readyz')"
