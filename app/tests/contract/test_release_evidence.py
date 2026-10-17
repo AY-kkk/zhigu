@@ -1,6 +1,7 @@
 import json
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -8,6 +9,21 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 
 class ReleaseEvidenceTests(unittest.TestCase):
+    def test_futures_contract_verifier_validates_datetime_without_optional_plugin(self):
+        script = ROOT / "scripts/verify-futures-contracts.py"
+        command = (
+            "import runpy, sys; "
+            "sys.modules['rfc3339_validator'] = None; "
+            "runpy.run_path(sys.argv[1], run_name='__main__')"
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", command, str(script)],
+            cwd=ROOT.parent,
+            text=True,
+            capture_output=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_manifest_is_deterministic_secret_free_and_traceable(self):
         script = ROOT / "scripts/release-evidence.py"
         with tempfile.TemporaryDirectory() as directory:

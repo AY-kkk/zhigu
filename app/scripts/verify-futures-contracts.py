@@ -1,6 +1,8 @@
 """Offline schema/reference checks. Needs jsonschema in the verification runtime."""
 import copy
+import datetime as dt
 import json
+import re
 from pathlib import Path
 
 from jsonschema import Draft202012Validator, FormatChecker
@@ -11,13 +13,27 @@ CONTRACTS = ROOT / "contracts/futures/v1"
 documents = {p.name: json.loads(p.read_text()) for p in CONTRACTS.glob("*.json")}
 types = documents["types.schema.json"]
 registry = Registry().with_resource(types["$id"], Resource.from_contents(types))
+format_checker = FormatChecker()
+RFC3339_DATETIME = re.compile(
+    r"^\d{4}-\d{2}-\d{2}[Tt]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[Zz]|[+-]\d{2}:\d{2})$"
+)
+
+
+@format_checker.checks("date-time", raises=(TypeError, ValueError))
+def valid_rfc3339_datetime(value):
+    if not isinstance(value, str):
+        return True
+    if not RFC3339_DATETIME.fullmatch(value):
+        return False
+    normalized = value[:-1] + "+00:00" if value[-1] in "Zz" else value
+    return dt.datetime.fromisoformat(normalized).tzinfo is not None
 
 
 def validator(name):
     return Draft202012Validator(
         {"$ref": types["$id"] + "#/$defs/" + name},
         registry=registry,
-        format_checker=FormatChecker(),
+        format_checker=format_checker,
     )
 
 
