@@ -20,7 +20,7 @@ services:
     logging: {driver: json-file, options: {max-size: 10m, max-file: "3"}}
     deploy:
       resources:
-        limits: {cpus: "1.0", memory: 1G}
+        limits: {cpus: "1.0", memory: 1G, pids: 256}
 
   research:
     build:
@@ -48,7 +48,7 @@ services:
     tmpfs: ["/tmp"]
     deploy:
       resources:
-        limits: {cpus: "1.0", memory: 1G}
+        limits: {cpus: "1.0", memory: 1G, pids: 256}
 
   futures:
     build:
@@ -75,7 +75,7 @@ services:
     tmpfs: ["/tmp"]
     deploy:
       resources:
-        limits: {cpus: "1.0", memory: 1G}
+        limits: {cpus: "1.0", memory: 1G, pids: 256}
 
   server:
     build:
@@ -122,7 +122,7 @@ services:
     tmpfs: ["/tmp"]
     deploy:
       resources:
-        limits: {cpus: "2.0", memory: 2G}
+        limits: {cpus: "2.0", memory: 2G, pids: 512}
 
   web:
     build:
@@ -150,7 +150,7 @@ services:
     tmpfs: ["/tmp", "/var/cache/nginx", "/var/run"]
     deploy:
       resources:
-        limits: {cpus: "1.0", memory: 512M}
+        limits: {cpus: "1.0", memory: 512M, pids: 256}
 
 secrets:
   postgres_password: {file: ./secrets/postgres_password}

@@ -16,6 +16,8 @@ class ProductionDeployContractTests(unittest.TestCase):
         self.assertIn("internal: true", text)
         self.assertIn("restart: unless-stopped", text)
         self.assertIn("pids_limit", text)
+        self.assertEqual(text.count("pids_limit: 256"), text.count("pids: 256"))
+        self.assertEqual(text.count("pids_limit: 512"), text.count("pids: 512"))
         self.assertIn("max-size", text)
         for variable in ("ZHIGU_RESEARCH_DOCUMENT_DIR", "ZHIGU_RESEARCH_STORAGE_DIR", "ZHIGU_FUTURES_STORAGE_DIR"):
             self.assertIn(variable, text)
