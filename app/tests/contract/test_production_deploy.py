@@ -98,6 +98,16 @@ class ProductionDeployContractTests(unittest.TestCase):
         self.assertNotIn("app/research-service/.venv/bin/python", backup)
         self.assertIn("python -m unittest discover -s app/tests/contract", backup)
 
+    def test_web_ci_has_a_bounded_mock_api_and_realistic_timeout(self):
+        workflow = (ROOT.parent / ".github/workflows/ci.yml").read_text()
+        web = workflow.split("  web:", 1)[1].split("\n  production-contracts:", 1)[0]
+        self.assertIn("timeout-minutes: 20", web)
+        config = (ROOT / "web/playwright.config.js").read_text()
+        self.assertIn("e2e/mock-api.mjs", config)
+        intel_config = (ROOT / "web/playwright.intel.config.js").read_text()
+        self.assertIn("e2e/mock-api.mjs", intel_config)
+        self.assertTrue((ROOT / "web/e2e/mock-api.mjs").is_file())
+
     def test_production_smoke_cleanup_keeps_required_compose_environment(self):
         workflow = (ROOT.parent / ".github/workflows/ci.yml").read_text()
         smoke = workflow.split("  production-smoke:", 1)[1].split("\n  upgrade:", 1)[0]

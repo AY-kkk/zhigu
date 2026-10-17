@@ -67,7 +67,7 @@ jobs:
   web:
     name: Web
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: app/web
