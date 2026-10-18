@@ -14,7 +14,7 @@ test.describe('core product routes', () => {
     test(`renders recoverable content at ${path}`, async ({ page }) => {
       await installProductApi(page)
       await page.goto(path)
-      await expect(page.locator('h1, h2').first()).toContainText(heading)
+      await expect(page.locator('#page-title')).toContainText(heading)
       await expect(page.locator('body')).not.toBeEmpty()
     })
   }

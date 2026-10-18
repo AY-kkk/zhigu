@@ -1,5 +1,6 @@
 <template>
-  <main class="futures-shell">
+  <main id="main-content" ref="main" class="futures-shell" tabindex="-1">
+    <a class="skip-link" href="#main-content" @click.prevent="focusMain">跳到主要内容</a>
     <SideNav class="futures-main-nav" />
     <header class="futures-header">
       <div>
@@ -16,12 +17,21 @@
 </template>
 
 <script setup>
+import { ref } from 'vue'
 import FuturesNav from '../components/FuturesNav.vue'
 import SideNav from '../../../components/workspace/SideNav.vue'
+
+const main = ref(null)
+
+function focusMain() {
+  main.value?.focus({ preventScroll: true })
+}
 </script>
 
 <style scoped>
 .futures-shell { min-height: 100vh; padding: 24px; color: var(--zg-ink); background: var(--zg-surface); }
+.skip-link { position: fixed; inset-inline-start: 16px; inset-block-start: -64px; z-index: 1000; padding: 10px 14px; background: var(--zg-ink, #272329); color: white; }
+.skip-link:focus { inset-block-start: 12px; }
 .futures-header { max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; gap: 16px; align-items: start; }
 .futures-header h1 { margin: 4px 0 0; font-size: clamp(28px, 4vw, 48px); }
 .back-link, .admin-link { color: var(--zg-action, #9f2436); }

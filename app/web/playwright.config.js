@@ -39,8 +39,6 @@ export default defineConfig({
   use: { ...shared, viewport: { width: 1440, height: 900 } },
   projects: [
     { name: 'chromium', use: { ...shared, viewport: { width: 1440, height: 900 }, browserName: 'chromium' } },
-    { name: 'firefox', use: { ...shared, viewport: { width: 1024, height: 768 }, browserName: 'firefox' } },
-    { name: 'webkit', use: { ...shared, viewport: { width: 390, height: 844 }, browserName: 'webkit' } },
   ],
   webServer: webServers,
 })

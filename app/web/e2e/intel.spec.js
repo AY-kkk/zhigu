@@ -12,7 +12,7 @@ function mockIntel(page) {
     const fulfill = (data, status = 200, headers = {}) => route.fulfill({ status, contentType: 'application/json', headers, body: JSON.stringify(wrap(data)) })
     const fail = (status, code, message, headers = {}) => route.fulfill({ status, contentType: 'application/json', headers, body: JSON.stringify({ data: null, error: { code, message }, trace_id: 'e2e-intel', meta: null }) })
     if (path === '/session' && method === 'GET') {
-      if (request.headers().authorization) {
+      if (request.headers()['x-intel-mode'] === 'live') {
         return fulfill({ mode: 'live', principal_id: 'user-e2e', role: 'user', namespace_label: '真实数据', expires_at: '2026-09-27T00:00:00Z', replay_version: 0, generation: 1 })
       }
       if (!request.headers().cookie?.includes('zhigu_intel_demo=')) {
@@ -132,6 +132,18 @@ test('intel has empty/loading/failure/retry and mobile-safe controls', async ({ 
 
 
 test('intel live routes preserve safe login redirects and reject malicious redirects', async ({ page }) => {
+  let initialCsrfRequest = true
+  await page.route('**/api/v1/session/csrf', route => {
+    if (initialCsrfRequest) {
+      initialCsrfRequest = false
+      return route.abort()
+    }
+    return route.fulfill({
+      status: 200,
+      headers: { 'X-CSRF-Token': 'e2e-csrf-token' },
+      json: { data: { csrf_token: 'e2e-csrf-token' }, error: null, trace_id: 'e2e-csrf' },
+    })
+  })
   await page.route('**/api/finance/auth/login', (route) => route.fulfill({
     status: 200,
     contentType: 'application/json',
@@ -151,16 +163,21 @@ test('intel live routes preserve safe login redirects and reject malicious redir
   await expect(page).toHaveURL(/\/app\/intel\/demo$/)
 })
 
-test('intel live account storage change cancels stale identity and reauthenticates', async ({ page }) => {
+test('intel live ignores legacy browser credential storage', async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('zhigu_token', 'first-token')
     localStorage.setItem('zhigu_user', 'first-user')
     localStorage.setItem('zhigu_role', 'user')
   })
+  const authorizationHeaders = []
+  page.on('request', request => {
+    if (request.url().includes('/api/finance/intel/v1/')) {
+      authorizationHeaders.push(request.headers().authorization || '')
+    }
+  })
   mockIntel(page)
   await page.goto('/app/intel')
   await expect(page.getByRole('heading', { name: '事件情报与证据时间线' })).toBeVisible()
-  const reauth = page.waitForRequest((request) => request.url().includes('/api/finance/intel/v1/session') && request.headers().authorization === 'Bearer other-token')
   const second = await page.context().newPage()
   await second.goto('/app/research/new')
   await second.evaluate(() => {
@@ -168,6 +185,9 @@ test('intel live account storage change cancels stale identity and reauthenticat
     localStorage.setItem('zhigu_user', 'other-user')
     localStorage.setItem('zhigu_role', 'user')
   })
-  await reauth
   await second.close()
+  await page.getByRole('button', { name: '通知中心' }).click()
+  await expect(page.getByText('暂无变化通知')).toBeVisible()
+  expect(authorizationHeaders.length).toBeGreaterThan(0)
+  expect(authorizationHeaders.filter(Boolean)).toEqual([])
 })

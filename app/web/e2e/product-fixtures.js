@@ -4,6 +4,9 @@ export async function installProductApi(page, overrides = {}) {
   await page.route('**/api/**', async route => {
     const url = new URL(route.request().url())
     const path = url.pathname
+    // The glob also matches Vite source modules such as /src/api/session.js.
+    // Let those requests reach the dev server and mock only real API routes.
+    if (!path.startsWith('/api/')) return route.continue()
     for (const [suffix, value] of Object.entries(overrides)) {
       if (path.endsWith(suffix)) {
         return route.fulfill({ json: envelope(value) })
@@ -27,6 +30,9 @@ export async function installProductApi(page, overrides = {}) {
     }
     if (path.endsWith('/products')) {
       return route.fulfill({ json: envelope({ items: [{ id: 'SHFE.CU', product_id: 'SHFE.CU', name: '铜', exchange: 'SHFE', admission: 'admitted' }], limit: 20, cursor: null, next_cursor: null }) })
+    }
+    if (path.endsWith('/products/SHFE.CU/workbench')) {
+      return route.fulfill({ json: envelope({ product_name: '铜', exchange: 'SHFE', product_kind: 'metal', coverage_ready: false }) })
     }
     if (path.endsWith('/notifications')) {
       return route.fulfill({ json: envelope({ items: [], limit: 20, cursor: null, next_cursor: null }) })

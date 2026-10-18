@@ -5,11 +5,22 @@ test('three-stage research creation preserves idempotency key on retry', async (
   let createRunCalls = 0
   let firstKey = ''
   await installProductApi(page, {
+    '/capabilities': {
+      schema_version: 'futures.capabilities.v1',
+      deployment_environment: 'test',
+      operation_mode: 'live',
+      data_provenance: 'fixture',
+      health: 'ready',
+      reason: 'FUTURES_E2E_FIXTURE',
+      products: ['SHFE.CU'],
+      features: { research: true, tracking: true, export: true },
+      limits: { model_calls: 8, tool_calls: 24, tokens: 48000 },
+    },
     '/contracts': { items: [{ id: 'CU-1', product_id: 'SHFE.CU', kind: 'actual', last_trading_at: '2027-01-15', price_unit: 'CNY/ton', multiplier: '5', source_version: 'v1' }], limit: 20, cursor: null, next_cursor: null },
   })
   await page.route('**/api/v1/futures/drafts', async route => route.fulfill({ status: 201, json: envelope({ id: 'draft-1', revision: 1, parse_state: 'not_started', claims: [] }) }))
   await page.route('**/api/v1/futures/drafts/*/parse', async route => route.fulfill({ status: 202, json: envelope({ id: 'draft-1', revision: 1, parse_state: 'succeeded', claims: [{ id: 'claim-1', text: '条件性 claim', source: 'source-v1', as_of: '2026-10-13' }] }) }))
-  await page.route('**/api/v1/futures/drafts/*/claims', async route => route.fulfill({ json: envelope({ items: [{ id: 'claim-1', text: '条件性 claim', source: 'source-v1', as_of: '2026-10-13' }], limit: 20, cursor: null, next_cursor: null }) }))
+  await page.route('**/api/v1/futures/drafts/*/claims**', async route => route.fulfill({ json: envelope({ items: [{ id: 'claim-1', text: '条件性 claim', source: 'source-v1', as_of: '2026-10-13' }], limit: 20, cursor: null, next_cursor: null }) }))
   await page.route('**/api/v1/futures/runs', async route => {
     if (route.request().method() !== 'POST') return route.fulfill({ json: envelope({ items: [], limit: 20, cursor: null, next_cursor: null }) })
     createRunCalls += 1
@@ -24,9 +35,9 @@ test('three-stage research creation preserves idempotency key on retry', async (
   await expect(page.getByRole('heading', { name: '解析与核对' })).toBeVisible()
   await page.getByRole('button', { name: '进入范围确认' }).click()
   await page.getByRole('button', { name: '确认并开始研究' }).click()
-  await expect(page.getByText('正在提交…')).toBeVisible()
-  expect(createRunCalls).toBeLessThanOrEqual(1)
-  expect(firstKey || 'pending').toBeTruthy()
+  await expect(page).toHaveURL(/\/app\/futures\/research\/run-1/)
+  expect(createRunCalls).toBe(1)
+  expect(firstKey).toBeTruthy()
 })
 
 test('notification batch failure restores unread state', async ({ page }) => {

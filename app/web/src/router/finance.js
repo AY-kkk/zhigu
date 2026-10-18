@@ -125,4 +125,11 @@ router.afterEach((to) => {
   }, 0)
 })
 
+window.addEventListener('zhigu:session-expired', () => {
+  const current = router.currentRoute.value
+  if (current.path === '/login') return
+  const redirect = safeInternalRedirect(current.fullPath, '/app/research/new')
+  void router.replace({ path: '/login', query: { redirect } })
+})
+
 export default router

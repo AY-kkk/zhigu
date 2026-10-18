@@ -19,5 +19,5 @@ test('malformed envelope becomes a contract error without secrets', async ({ pag
   await installProductApi(page, { '/capabilities': { malformed: true } })
   await page.route('**/api/v1/futures/capabilities', route => route.fulfill({ json: { unexpected: true } }))
   await page.goto('/app/futures')
-  await expect(page.getByText(/CONTRACT|契约/)).toBeVisible()
+  await expect(page.getByText('CONTRACT_CAPABILITIES_INVALID', { exact: true })).toBeVisible()
 })

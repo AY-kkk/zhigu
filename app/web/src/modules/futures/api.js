@@ -1,10 +1,21 @@
 import http from '../../utils/http.js'
-import { normalizePage } from '../../utils/apiEnvelope.js'
+import { ContractError, normalizePage } from '../../utils/apiEnvelope.js'
 
 // Reuse only JWT/envelope transport, never a stock or intel business API.
 export async function getCapabilities(signal) {
   const response = await http.get('/api/v1/futures/capabilities', { signal })
-  return response.data
+  const value = response.data
+  if (
+    !value
+    || typeof value !== 'object'
+    || value.schema_version !== 'futures.capabilities.v1'
+    || !Array.isArray(value.products)
+    || !value.features
+    || typeof value.features !== 'object'
+  ) {
+    throw new ContractError('CONTRACT_CAPABILITIES_INVALID', '能力响应不符合契约')
+  }
+  return value
 }
 
 const idempotencyHeaders = (key) => ({ 'Idempotency-Key': key || crypto.randomUUID() })

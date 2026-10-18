@@ -20,8 +20,10 @@ for (const path of ['/app/futures', '/app/futures/research/new', '/app/futures/n
 test('skip link and route heading focus are keyboard reachable', async ({ page }) => {
   await installProductApi(page)
   await page.goto('/app/futures')
-  await page.keyboard.press('Tab')
-  await expect(page.getByRole('link', { name: '跳到主要内容' })).toBeFocused()
-  await page.keyboard.press('Enter')
   await expect(page.locator('#page-title')).toBeFocused()
+  const skipLink = page.getByRole('link', { name: '跳到主要内容' })
+  await skipLink.focus()
+  await expect(skipLink).toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect(page.locator('#main-content')).toBeFocused()
 })

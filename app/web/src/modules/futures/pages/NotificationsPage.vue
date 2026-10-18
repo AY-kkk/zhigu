@@ -27,7 +27,7 @@
     </form>
 
     <RequestError v-if="error" :error="error" @retry="load" />
-    <LoadingState v-else-if="loading" label="正在读取通知" :rows="5" />
+    <LoadingState v-if="loading" label="正在读取通知" :rows="5" />
     <EmptyState
       v-else-if="!items.length"
       title="没有符合条件的通知"
