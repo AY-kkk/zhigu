@@ -17,6 +17,7 @@ test('login page is usable at 390px', async ({ page }) => {
 })
 
 test('unauthenticated research route redirects to login', async ({ page }) => {
+  await page.route('**/api/v1/session/csrf', route => route.abort())
   await page.goto('/app/research/new')
   await expect(page).toHaveURL(/\/login/)
 })

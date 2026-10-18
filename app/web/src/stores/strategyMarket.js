@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import * as api from '../api/strategyMarket.js'
+import { getSessionRole } from './session.js'
 
 function errText(e) {
   return e?.message || '请求失败'
@@ -43,7 +44,7 @@ export const useStrategyMarket = defineStore('strategyMarket', {
   actions: {
     // 切到其他账号：清空两个 store 相关缓存、复制 key 与列表。
     ensureAccount() {
-      const user = localStorage.getItem('zhigu_user') || ''
+      const user = getSessionRole() || ''
       if (this.account && this.account !== user) {
         this.$reset()
       }

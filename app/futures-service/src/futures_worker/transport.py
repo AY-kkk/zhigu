@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from typing import Any, Mapping, Protocol
 
 import httpx
@@ -108,7 +109,7 @@ class HTTPModelGateway:
 
 def default_executor() -> ResearchExecutor:
     base_url = os.getenv("FUTURES_GO_BASE_URL", "http://127.0.0.1:8080")
-    service_token = os.getenv("FUTURES_SERVICE_TOKEN")
+    service_token = os.getenv("FUTURES_SERVICE_TOKEN") or (Path(os.environ["FUTURES_SERVICE_TOKEN_FILE"]).read_text(encoding="utf-8").strip() if os.getenv("FUTURES_SERVICE_TOKEN_FILE") else "")
     if not service_token:
         raise RuntimeError("FUTURES_SERVICE_TOKEN is required")
     tools = HTTPToolGateway(base_url, service_token)

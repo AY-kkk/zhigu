@@ -1,0 +1,17 @@
+[Unit]
+Description=Zhigu health watchdog with bounded restart backoff
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+Environment=ZHIGU_ROOT=/opt/zhigu
+ExecStart=/usr/local/lib/zhigu/maintenance-watchdog.sh
+Restart=always
+RestartSec=30s
+User=zhigu
+Group=zhigu
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/run/zhigu /var/run/docker.sock

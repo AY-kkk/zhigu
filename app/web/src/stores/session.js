@@ -1,27 +1,64 @@
 import { defineStore } from 'pinia'
+import http, { clearAuthCredential, hasAuthCredential, setBearerToken, setCsrfToken } from '../utils/http.js'
+
+let sessionRole = ''
+
+export function getSessionRole() {
+  return sessionRole
+}
 
 export const useSession = defineStore('session', {
   state: () => ({
-    token: localStorage.getItem('zhigu_token') || '',
-    role: localStorage.getItem('zhigu_role') || '',
-    username: localStorage.getItem('zhigu_user') || ''
+    token: '',
+    role: '',
+    username: '',
+    userId: null,
+    authenticated: false,
+    checked: false,
   }),
   actions: {
-    setAuth({ token, role, username }) {
-      this.token = token
-      this.role = role
-      this.username = username
-      localStorage.setItem('zhigu_token', token)
-      localStorage.setItem('zhigu_role', role)
-      localStorage.setItem('zhigu_user', username)
+    setAuth(payload = {}) {
+      this.role = payload.role || ''
+      sessionRole = this.role
+      this.username = payload.username || ''
+      this.userId = payload.user_id ?? null
+      this.authenticated = true
+      this.checked = true
+      this.token = payload.token || ''
+      if (payload.token) setBearerToken(payload.token)
+    },
+    setChecked(value) {
+      this.checked = Boolean(value)
+    },
+    markAuthenticated() {
+      this.authenticated = true
+      this.checked = true
     },
     logout() {
       this.token = ''
       this.role = ''
+      sessionRole = ''
       this.username = ''
-      localStorage.removeItem('zhigu_token')
-      localStorage.removeItem('zhigu_role')
-      localStorage.removeItem('zhigu_user')
-    }
-  }
+      this.userId = null
+      this.authenticated = false
+      this.checked = true
+      clearAuthCredential()
+    },
+    async bootstrapSession() {
+      if (hasAuthCredential()) {
+        this.markAuthenticated()
+        return true
+      }
+      try {
+        const response = await http.get('/api/v1/session/csrf')
+        const token = response.headers?.['x-csrf-token'] || response.data?.data?.csrf_token || response.data?.csrf_token
+        if (token) setCsrfToken(token)
+        this.markAuthenticated()
+        return true
+      } catch {
+        this.logout()
+        return false
+      }
+    },
+  },
 })

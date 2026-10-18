@@ -15,13 +15,15 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
+	"zhigu/server/httpx"
 	modelfinance "zhigu/server/model/finance"
 )
 
 type ModelProxy struct {
-	DB     *gorm.DB
-	Budget BudgetService
-	Client *http.Client
+	DB       *gorm.DB
+	Budget   BudgetService
+	Client   *http.Client
+	Observer httpx.OperationalObserver
 }
 
 func NewModelProxy(db *gorm.DB, budget BudgetService) *ModelProxy {
@@ -136,11 +138,15 @@ func (p *ModelProxy) forward(ctx context.Context, run modelfinance.ResearchRun, 
 	payload := rewriteModel(body, modelName)
 	var raw []byte
 	var code int
+	started := time.Now()
 	switch protocol {
 	case ProtocolResponses:
 		raw, code, err = (&ResponsesAdapter{Client: p.Client}).Forward(baseURL, apiKey, payload)
 	default:
 		raw, code, err = (&ChatCompletionsAdapter{Client: p.Client}).Forward(baseURL, apiKey, payload)
+	}
+	if p.Observer != nil {
+		p.Observer.ObserveProvider("model", time.Since(started), err != nil || code < 200 || code >= 300)
 	}
 	if err != nil {
 		return nil, ObservedUsage{}, err

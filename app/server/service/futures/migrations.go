@@ -21,15 +21,21 @@ type Migration struct {
 }
 
 type RuntimeState struct {
-	Enabled bool
-	Ready   bool
-	Mode    string
-	Reason  string
+	Enabled               bool
+	Ready                 bool
+	Mode                  string
+	DeploymentEnvironment string
+	OperationMode         string
+	DataProvenance        string
+	Health                string
+	Reason                string
 }
 
 type Config struct {
-	Enabled bool
-	Mode    string
+	Enabled               bool
+	Mode                  string
+	DeploymentEnvironment string
+	DataProvenance        string
 }
 
 func LoadMigrations() ([]Migration, error) {
@@ -63,20 +69,39 @@ func Bootstrap(ctx context.Context, db *gorm.DB, cfg Config) (RuntimeState, erro
 		if mode == "" {
 			mode = "off"
 		}
-		return RuntimeState{Enabled: false, Ready: false, Mode: "off", Reason: "FUTURES_DISABLED"}, nil
+		return RuntimeState{Enabled: false, Ready: false, Mode: "off", DeploymentEnvironment: normalizedEnvironment(cfg.DeploymentEnvironment), OperationMode: "off", DataProvenance: normalizedProvenance(cfg.DataProvenance, cfg.DeploymentEnvironment), Health: "unavailable", Reason: "FUTURES_DISABLED"}, nil
 	}
 	ms, err := LoadMigrations()
 	if err != nil {
-		return RuntimeState{Enabled: true, Ready: false, Mode: "off", Reason: "FUTURES_MIGRATION_UNAVAILABLE"}, err
+		return RuntimeState{Enabled: true, Ready: false, Mode: "off", DeploymentEnvironment: normalizedEnvironment(cfg.DeploymentEnvironment), OperationMode: "off", DataProvenance: normalizedProvenance(cfg.DataProvenance, cfg.DeploymentEnvironment), Health: "unavailable", Reason: "FUTURES_MIGRATION_UNAVAILABLE"}, err
 	}
 	if err := MigrateList(ctx, db, ms); err != nil {
-		return RuntimeState{Enabled: true, Ready: false, Mode: "off", Reason: "FUTURES_MIGRATION_FAILED"}, err
+		return RuntimeState{Enabled: true, Ready: false, Mode: "off", DeploymentEnvironment: normalizedEnvironment(cfg.DeploymentEnvironment), OperationMode: "off", DataProvenance: normalizedProvenance(cfg.DataProvenance, cfg.DeploymentEnvironment), Health: "unavailable", Reason: "FUTURES_MIGRATION_FAILED"}, err
 	}
 	mode := cfg.Mode
 	if mode == "live" {
 		mode = "read_only"
 	} // M1 has no verified data/model pipeline.
-	return RuntimeState{Enabled: true, Ready: false, Mode: mode, Reason: "FUTURES_NOT_IMPLEMENTED"}, nil
+	return RuntimeState{Enabled: true, Ready: false, Mode: mode, DeploymentEnvironment: normalizedEnvironment(cfg.DeploymentEnvironment), OperationMode: mode, DataProvenance: normalizedProvenance(cfg.DataProvenance, cfg.DeploymentEnvironment), Health: "unavailable", Reason: "FUTURES_NOT_IMPLEMENTED"}, nil
+}
+
+func normalizedEnvironment(value string) string {
+	switch value {
+	case "test", "demo", "production":
+		return value
+	default:
+		return "test"
+	}
+}
+
+func normalizedProvenance(value, environment string) string {
+	if environment == "production" {
+		return "real"
+	}
+	if value == "real" {
+		return "real"
+	}
+	return "fixture"
 }
 
 func Migrate(ctx context.Context, db *gorm.DB) error {

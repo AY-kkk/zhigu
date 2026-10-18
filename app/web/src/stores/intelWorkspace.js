@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import * as api from '../api/intel.js'
 import { isDemoExpired } from '../utils/intelHttp.js'
+import { getSessionRole } from './session.js'
 
 function key() { return `intel-${Math.random().toString(36).slice(2)}-${Date.now()}` }
 function errText(error) { return error?.message || '请求失败' }
@@ -70,7 +71,7 @@ export const useIntelWorkspace = defineStore('intelWorkspace', {
           throw error
         }
         await this.loadWorkspace(epoch)
-        if (this.mode === 'live' && localStorage.getItem('zhigu_role') === 'admin') await this.fetchReviews(epoch)
+        if (this.mode === 'live' && getSessionRole() === 'admin') await this.fetchReviews(epoch)
       } catch (error) {
         if (epoch === this.accountEpoch) this.bootError = errText(error)
       } finally {
@@ -87,7 +88,7 @@ export const useIntelWorkspace = defineStore('intelWorkspace', {
         this.session = result.data
         this.demoNeedsStart = false
         await this.loadWorkspace(epoch)
-        if (this.mode === 'live' && localStorage.getItem('zhigu_role') === 'admin') await this.fetchReviews(epoch)
+        if (this.mode === 'live' && getSessionRole() === 'admin') await this.fetchReviews(epoch)
       } catch (error) {
         if (epoch === this.accountEpoch) this.bootError = errText(error)
       } finally {

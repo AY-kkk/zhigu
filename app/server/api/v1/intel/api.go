@@ -40,9 +40,7 @@ type intelEnvelope struct {
 }
 
 type intelErr struct {
-	Code      string `json:"code"`
-	Message   string `json:"message"`
-	Retryable bool   `json:"retryable"`
+	httpx.APIErr
 	RequestID string `json:"request_id"`
 }
 
@@ -81,6 +79,10 @@ func Register(engine *gin.Engine, svc *intelsvc.Service) {
 
 func (h *handler) origin() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if httpx.ProductionAuth() {
+			c.Next()
+			return
+		}
 		if c.Request.Method == http.MethodGet || c.Request.Method == http.MethodHead || c.Request.Method == http.MethodOptions {
 			c.Next()
 			return
@@ -135,7 +137,11 @@ func (h *handler) fail(c *gin.Context, err error) {
 		status, code, message = app.status, app.code, app.message
 	}
 	id := requestID(c)
-	c.JSON(status, intelEnvelope{Data: nil, Error: &intelErr{Code: code, Message: message, Retryable: status == 429 || status >= 500, RequestID: id}, TraceID: httpx.TraceID(c), Meta: nil})
+	apiError := httpx.DefaultError(status, code, message)
+	if apiError.RetryAfterSeconds != nil {
+		c.Header("Retry-After", strconv.Itoa(*apiError.RetryAfterSeconds))
+	}
+	c.JSON(status, intelEnvelope{Data: nil, Error: &intelErr{APIErr: *apiError, RequestID: id}, TraceID: httpx.TraceID(c), Meta: nil})
 }
 
 type appError struct {
@@ -241,6 +247,27 @@ func (h *handler) createDemoSession(c *gin.Context) {
 
 func (h *handler) scope() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if httpx.ProductionAuth() {
+			if mode := c.GetHeader("X-Intel-Mode"); mode != "" && mode != "live" {
+				h.fail(c, &appError{status: 400, code: "MODE_CONFLICT", message: "生产环境仅允许 live"})
+				c.Abort()
+				return
+			}
+			if !httpx.AuthenticateBrowser(c) {
+				return
+			}
+			role, _ := c.Get("role")
+			roleName, _ := role.(string)
+			scope, err := h.svc.LiveScope(c.Request.Context(), httpx.CurrentUserID(c), roleName)
+			if err != nil {
+				h.fail(c, &appError{status: 503, code: "DATA_UNAVAILABLE", message: "真实数据空间暂不可用"})
+				c.Abort()
+				return
+			}
+			c.Set("intel_scope", scope)
+			c.Next()
+			return
+		}
 		mode := c.GetHeader("X-Intel-Mode")
 		if mode != "demo" && mode != "live" {
 			h.fail(c, &appError{status: 400, code: "MODE_CONFLICT", message: "X-Intel-Mode 必须是 live 或 demo"})

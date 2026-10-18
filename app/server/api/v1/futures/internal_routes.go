@@ -45,7 +45,7 @@ type ObservationIngestRequest struct {
 func RegisterInternal(engine *gin.Engine, grants *svc.GrantManager, domain *svc.Domain) {
 	group := engine.Group("/internal/futures/v1")
 	group.Use(func(c *gin.Context) {
-		expected := os.Getenv("FUTURES_SERVICE_TOKEN")
+		expected := internalSecret("FUTURES_SERVICE_TOKEN")
 		provided := c.GetHeader("X-Futures-Service-Token")
 		if expected == "" || subtle.ConstantTimeCompare([]byte(expected), []byte(provided)) != 1 {
 			httpx.Fail(c, http.StatusUnauthorized, "FUTURES_SERVICE_TOKEN_INVALID", "服务身份无效")
@@ -190,4 +190,19 @@ func int64FromMap(value any) int64 {
 	default:
 		return 0
 	}
+}
+
+func internalSecret(name string) string {
+	if value := os.Getenv(name); value != "" {
+		return value
+	}
+	path := os.Getenv(name + "_FILE")
+	if path == "" {
+		return ""
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(raw))
 }

@@ -1,0 +1,14 @@
+# Backend productionization progress
+
+| Task | Status | Tests | Commit | Review |
+|---|---|---|---|---|
+| 1. Runtime/startup | complete | `go test -count=1 ./runtime ./initialize`; `go test ./...` | `c548cab`, `5a1d5ab` | PASS after 3 findings fixed |
+| 2. Sessions/CSRF | complete | focused auth/finance/intel/migration tests; `go test -count=1 ./...` | `21d10ec`, `105ffe7`, `916a6c3`, `b8af30a` | PASS after review fixes |
+| 3. Trace/health | complete | `go test ./...`; focused `httpx`, `ops`, finance/intel observability tests | `b2b2ec3`, `e0cf4cc`, `52bef54`, `a06f0dd` | PASS |
+| 4. Futures contracts | implemented | `go test ./api/v1/futures`; focused `service/futures`; `verify-futures-contracts.py` | pending Git write | pagination/capabilities/batch-read review pass |
+| 5. Probes/release gates | implemented | focused digest/gate tests; API route tests; DB integration tests written | pending Git write | transactional gate and invalidation tests written |
+| 6. Workers/images | complete | `test_worker_ops_contract` 4; futures unittest 21; research pytest 53 | pending Git write | worker health/quiesce/production fail-closed pass |
+| 7. Deploy/backup | implemented | `test_production_deploy` 4; `test_operational_scripts` 3; `httpx` barrier test; shell syntax/static checks; `upgrade-verify.sh --static` | pending Git write | Compose/TLS/preflight/backup/watchdog/upgrade contracts pass |
+| 8. CI/evidence | implemented | `test_release_evidence` 2; `verify-production.sh --static`; performance tool compile | pending Git write | deterministic manifest includes test counts/evidence; performance acceptance remains blocked |
+
+Verification boundary (2026-10-13): `verify-production.sh --static` passes 13 contract tests; web production build passes with chunk warning, futures schema checks, and shell syntax. Futures unittest 21 and research pytest 53 pass. Go listener/database suites were not executable in this sandbox because binding local ports and writing the Go cache were denied; Git staging/commit was also denied by the approval service. Those remain `BLOCKED`, not PASS. External Docker/clean-host, real provider/model probes, encrypted off-host restore, RPO/RTO, upgrade/rollback runtime, DNS/TLS and firewall evidence remain `NOT_RUN/BLOCKED`. A database-backed Go write barrier now records `finance_backup_epochs`, rejects mutating requests during backup, and is wired into `backup.sh`; production containers are read-only with isolated writable mounts and internal ports bind loopback only; fake-command tests verify quiesce-before-dump, encryption/off-host handoff, retention, restore hash verification and watchdog restart. Worker quiesce and off-host encryption remain runtime gates. Maintenance systemd service/timer and watchdog artifacts are present but not installed on a target host.

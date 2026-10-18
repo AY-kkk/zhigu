@@ -1,0 +1,3 @@
+services:
+  server:
+    image: ${ZHIGU_PREVIOUS_SERVER_IMAGE:?set ZHIGU_PREVIOUS_SERVER_IMAGE}

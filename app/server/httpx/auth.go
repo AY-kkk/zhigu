@@ -40,6 +40,9 @@ func SignToken(userID uint, username, role string) (string, error) {
 }
 
 func TokenFromRequest(c *gin.Context) string {
+	if ProductionAuth() {
+		return ""
+	}
 	if h := c.GetHeader("Authorization"); strings.HasPrefix(h, "Bearer ") {
 		return strings.TrimPrefix(h, "Bearer ")
 	}
@@ -51,6 +54,13 @@ func TokenFromRequest(c *gin.Context) string {
 
 func AuthRequired() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if ProductionAuth() {
+			if !AuthenticateBrowser(c) {
+				return
+			}
+			c.Next()
+			return
+		}
 		raw := TokenFromRequest(c)
 		if raw == "" {
 			Fail(c, http.StatusUnauthorized, "UNAUTHENTICATED", "未登录")
@@ -60,7 +70,7 @@ func AuthRequired() gin.HandlerFunc {
 		claims := &Claims{}
 		tok, err := jwt.ParseWithClaims(raw, claims, func(t *jwt.Token) (any, error) {
 			return JWTSecret(), nil
-		})
+		}, jwt.WithValidMethods([]string{"HS256"}))
 		if err != nil || !tok.Valid {
 			Fail(c, http.StatusUnauthorized, "UNAUTHENTICATED", "未登录或令牌无效")
 			c.Abort()
@@ -71,6 +81,22 @@ func AuthRequired() gin.HandlerFunc {
 		c.Set("role", claims.Role)
 		c.Next()
 	}
+}
+
+// AuthenticateBrowser applies durable session authentication and CSRF without
+// advancing the Gin chain, so modules may safely derive their own user scope.
+func AuthenticateBrowser(c *gin.Context) bool {
+	if !authenticateSession(c) {
+		Fail(c, http.StatusUnauthorized, "UNAUTHENTICATED", "未登录或会话已失效")
+		c.Abort()
+		return false
+	}
+	if c.Request.Method != http.MethodGet && c.Request.Method != http.MethodHead && c.Request.Method != http.MethodOptions && !validateCSRF(c) {
+		Fail(c, http.StatusForbidden, "CSRF_INVALID", "请求校验失败")
+		c.Abort()
+		return false
+	}
+	return true
 }
 
 func AdminRequired() gin.HandlerFunc {

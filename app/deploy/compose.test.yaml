@@ -1,0 +1,57 @@
+name: zhigu-test
+services:
+  postgres:
+    image: postgres:16.4
+    environment: {POSTGRES_USER: zhigu, POSTGRES_PASSWORD: test-only, POSTGRES_DB: zhigu}
+    volumes: [postgres-data:/var/lib/postgresql/data]
+    networks: [backend]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zhigu -d zhigu"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+  research:
+    build: {context: ../.., dockerfile: app/research-service/Dockerfile}
+    environment:
+      ZHIGU_DEPLOYMENT_ENVIRONMENT: test
+      ZHIGU_INTERNAL_TOKEN: test-worker-token
+      ZHIGU_RESEARCH_SQLITE: /data/jobs.sqlite
+      ZHIGU_GO_INTERNAL_URL: http://server:8080
+      ZHIGU_RESEARCH_EXECUTOR: fixture
+    volumes: [research-data:/data]
+    networks: [backend]
+    expose: ["8091"]
+    depends_on: {postgres: {condition: service_healthy}}
+  futures:
+    build: {context: ../.., dockerfile: app/futures-service/Dockerfile}
+    environment:
+      ZHIGU_DEPLOYMENT_ENVIRONMENT: test
+      FUTURES_SERVICE_TOKEN: test-worker-token
+      FUTURES_GO_BASE_URL: http://server:8080
+      FUTURES_STORAGE_DIR: /documents
+    volumes: [futures-documents:/documents]
+    networks: [backend]
+    expose: ["8092"]
+  server:
+    build: {context: ../server, dockerfile: Dockerfile}
+    environment:
+      ZHIGU_DEPLOYMENT_ENVIRONMENT: test
+      ZHIGU_POSTGRES_DSN: host=postgres user=zhigu password=test-only dbname=zhigu port=5432 sslmode=disable
+      ZHIGU_HTTP_ADDR: ":8080"
+      ZHIGU_INTERNAL_TOKEN: test-worker-token
+      ZHIGU_RESEARCH_URL: http://research:8091
+      ZHIGU_RESEARCH_EXECUTOR: fixture
+      FUTURES_WORKER_URL: http://futures:8092
+      FUTURES_SERVICE_TOKEN: test-worker-token
+      ZHIGU_DATA_PROVENANCE: fixture
+      ZHIGU_OPERATION_MODE: read_only
+    networks: [backend]
+    expose: ["8080"]
+    depends_on: {postgres: {condition: service_healthy}, research: {condition: service_healthy}, futures: {condition: service_healthy}}
+  web:
+    build: {context: ../web, dockerfile: Dockerfile, args: {VITE_INTEL_ENABLED: "true", VITE_FUTURES_ENABLED: "true"}}
+    ports: ["127.0.0.1:5173:8080"]
+    networks: [backend]
+    depends_on: [server]
+networks: {backend: {}}
+volumes: {postgres-data: {}, research-data: {}, futures-data: {}, futures-documents: {}}

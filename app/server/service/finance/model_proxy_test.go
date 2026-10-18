@@ -5,8 +5,10 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+	"zhigu/server/ops"
 
 	"gorm.io/gorm"
 
@@ -97,13 +99,21 @@ func TestModelProxyForwardsChatCompletions(t *testing.T) {
 	}
 	var seen []byte
 	proxy := NewModelProxy(s.DB, NewDBBudget(s.DB))
+	monitor := ops.New(nil, nil, "metrics-test")
+	proxy.Observer = monitor
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		seen, _ = io.ReadAll(req.Body)
+		w.Write([]byte(`{"id":"chatcmpl_live","choices":[{"message":{"content":"ok"}}],"usage":{"prompt_tokens":4,"completion_tokens":2}}`))
+	}))
+	defer server.Close()
 	proxy.Client = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		if !strings.HasSuffix(req.URL.Path, "/chat/completions") {
 			t.Errorf("path %s", req.URL.Path)
 		}
-		seen, _ = io.ReadAll(req.Body)
-		raw := `{"id":"chatcmpl_live","choices":[{"message":{"content":"ok"}}],"usage":{"prompt_tokens":4,"completion_tokens":2}}`
-		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(raw)), Header: make(http.Header)}, nil
+		clone := req.Clone(req.Context())
+		target, _ := http.NewRequest(req.Method, server.URL+req.URL.Path, nil)
+		clone.URL = target.URL
+		return server.Client().Do(clone)
 	})}
 	body := []byte(`{"model":"finance-research","messages":[{"role":"user","content":"hello"}]}`)
 	out, err := proxy.Complete(context.Background(), "proxy-forward-1", NormalizeJSONHash(body), HeaderTokenHash(token), body, ProtocolChatCompletions)
@@ -115,6 +125,9 @@ func TestModelProxyForwardsChatCompletions(t *testing.T) {
 	}
 	if !bytes.Contains(seen, []byte("研究口径（服务端冻结）")) {
 		t.Fatalf("scope prefix missing: %s", seen)
+	}
+	if body := operationalMetrics(t, monitor); !strings.Contains(body, `zhigu_provider_calls_total{name="model"} 1`) {
+		t.Fatal("actual model call not observed")
 	}
 }
 

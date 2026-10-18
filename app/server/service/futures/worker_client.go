@@ -5,8 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -178,10 +181,14 @@ func ExecuteRun(ctx context.Context, db *gorm.DB, domain *Domain, grants *GrantM
 		return err
 	}
 	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("X-Futures-Service-Token", os.Getenv("FUTURES_SERVICE_TOKEN"))
+	request.Header.Set("X-Futures-Service-Token", serviceSecret("FUTURES_SERVICE_TOKEN"))
 	request.Header.Set("Authorization", "Bearer "+grantToken)
 	client := &http.Client{Timeout: futuresExecutionTimeout}
+	started := time.Now()
 	response, err := client.Do(request)
+	if domain.Observer != nil {
+		domain.Observer.ObserveWorker("futures", time.Since(started), err != nil || response.StatusCode != http.StatusOK)
+	}
 	if err != nil {
 		return err
 	}
@@ -277,4 +284,112 @@ WHERE m.manifest_id=?`, manifestID).Scan(&rows).Error
 			ModelUse: row.ModelUse, ExportAllowed: row.ExportAllowed, QualityOK: row.QualityOK}
 	}
 	return out
+}
+
+type WorkerOpsClient struct {
+	BaseURL     string
+	Token       string
+	TokenHeader string
+	HTTPClient  *http.Client
+}
+
+type WorkerQuiesceAck struct {
+	Epoch        string `json:"epoch"`
+	Status       string `json:"status"`
+	Acknowledged bool   `json:"acknowledged"`
+	LastSequence int64  `json:"last_sequence"`
+	Persisted    bool   `json:"persisted"`
+}
+
+func (c WorkerOpsClient) quiesceRequest(ctx context.Context, method, path string, body any) (*http.Response, error) {
+	if c.BaseURL == "" || c.Token == "" {
+		return nil, ErrUnavailable
+	}
+	client := c.HTTPClient
+	if client == nil {
+		client = &http.Client{Timeout: 10 * time.Second}
+	}
+	var reader io.Reader
+	if body != nil {
+		raw, err := json.Marshal(body)
+		if err != nil {
+			return nil, err
+		}
+		reader = bytes.NewReader(raw)
+	}
+	request, err := http.NewRequestWithContext(ctx, method, c.BaseURL+path, reader)
+	if err != nil {
+		return nil, err
+	}
+	if body != nil {
+		request.Header.Set("Content-Type", "application/json")
+	}
+	header := c.TokenHeader
+	if header == "" {
+		header = "Authorization"
+	}
+	if header == "Authorization" {
+		request.Header.Set(header, "Bearer "+c.Token)
+	} else {
+		request.Header.Set(header, c.Token)
+	}
+	return client.Do(request)
+}
+
+func (c WorkerOpsClient) QuiesceBegin(ctx context.Context, epoch string) error {
+	response, err := c.quiesceRequest(ctx, http.MethodPost, "/internal/ops/quiesce/begin", map[string]string{"epoch": epoch})
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return ErrUnavailable
+	}
+	return nil
+}
+
+func (c WorkerOpsClient) QuiesceStatus(ctx context.Context, epoch string) (WorkerQuiesceAck, error) {
+	var ack WorkerQuiesceAck
+	response, err := c.quiesceRequest(ctx, http.MethodGet, "/internal/ops/quiesce/status?epoch="+url.QueryEscape(epoch), nil)
+	if err != nil {
+		return ack, err
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return ack, ErrUnavailable
+	}
+	if err := json.NewDecoder(response.Body).Decode(&ack); err != nil {
+		return ack, err
+	}
+	if ack.Epoch != epoch {
+		return ack, ErrUnavailable
+	}
+	return ack, nil
+}
+
+func (c WorkerOpsClient) QuiesceEnd(ctx context.Context, epoch string) error {
+	response, err := c.quiesceRequest(ctx, http.MethodPost, "/internal/ops/quiesce/end", map[string]string{"epoch": epoch})
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return ErrUnavailable
+	}
+	return nil
+}
+
+func serviceSecret(name string) string {
+	if value := os.Getenv(name); value != "" {
+		return value
+	}
+	path := os.Getenv(name + "_FILE")
+	if path == "" {
+		return ""
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(raw))
 }

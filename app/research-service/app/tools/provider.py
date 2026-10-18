@@ -3,6 +3,14 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+from pathlib import Path
+
+def secret_env(name: str) -> str:
+    value = os.environ.get(name, "")
+    if value:
+        return value
+    path = os.environ.get(name + "_FILE", "")
+    return Path(path).read_text(encoding="utf-8").strip() if path else ""
 import uuid
 from typing import Any
 
@@ -14,7 +22,7 @@ CONTRACT_VERSION = "2"
 class GoClient:
     def __init__(self, run_id: str, task_id: str, task_token: str = "", protocol: str = ""):
         self.base = os.environ.get("ZHIGU_GO_INTERNAL_URL", "").rstrip("/")
-        self.service_token = os.environ.get("ZHIGU_INTERNAL_TOKEN", "zhigu-internal-dev")
+        self.service_token = secret_env("ZHIGU_INTERNAL_TOKEN") or "zhigu-internal-dev"
         self.run_id = run_id
         self.task_id = task_id
         self.task_token = task_token

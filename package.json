@@ -1,0 +1,5 @@
+{
+  "devDependencies": {
+    "vue-eslint-parser": "^10.0.0"
+  }
+}

@@ -417,3 +417,28 @@ func beijingDay(value time.Time) time.Time {
 }
 
 func timePtr(value time.Time) *time.Time { return &value }
+
+func (d *Domain) ListRunsPage(ctx context.Context, id Identity, options PageOptions) (Page[map[string]any], error) {
+	if options.Limit < 1 || options.Limit > 100 {
+		return Page[map[string]any]{}, ErrInvalidInput
+	}
+	query := d.DB.WithContext(ctx).Where(`owner_id=? AND mode=? AND deleted_at IS NULL`, id.OwnerID, id.Mode)
+	if options.Cursor != nil {
+		cursorTime, err := time.Parse(time.RFC3339Nano, options.Cursor.Primary)
+		if err != nil {
+			return Page[map[string]any]{}, ErrInvalidInput
+		}
+		query = query.Where(`created_at < ? OR (created_at = ? AND id < ?)`, cursorTime, cursorTime, options.Cursor.Secondary)
+	}
+	var values []model.Run
+	if err := query.Order(`created_at DESC, id DESC`).Limit(options.Limit + 1).Find(&values).Error; err != nil {
+		return Page[map[string]any]{}, err
+	}
+	out := make([]map[string]any, 0, len(values))
+	for _, value := range values {
+		out = append(out, runMap(value))
+	}
+	return BuildPage(id, "runs", "", options, out, func(value map[string]any) (string, string, string) {
+		return TimePagePosition(value["created_at"].(time.Time), fmt.Sprint(value["id"]), 0)
+	})
+}

@@ -15,6 +15,15 @@ const webServers = process.env.E2E_NO_SERVER
       }
     ]
 
+if (process.env.CI && !process.env.E2E_INTEL_CHAIN) {
+  webServers.unshift({
+    command: 'node e2e/mock-api.mjs',
+    url: 'http://127.0.0.1:8080/healthz',
+    reuseExistingServer: false,
+    timeout: 30000
+  })
+}
+
 if (process.env.E2E_INTEL_CHAIN) {
   webServers.unshift({
     command: 'cd ../server && GOTOOLCHAIN=local ZHIGU_INTEL_COOKIE_SECRET=chain-cookie-secret ZHIGU_INTEL_FIXTURE_DIR=../../contracts/intel/fixtures/events-v1 go run ./cmd/intel-demo',

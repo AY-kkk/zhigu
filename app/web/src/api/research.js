@@ -1,5 +1,10 @@
 import http from '../utils/http.js'
 
+export async function getCsrf() {
+  const response = await http.get('/api/v1/session/csrf')
+  return response.headers?.['x-csrf-token'] || response.data?.data?.csrf_token || response.data?.csrf_token || ''
+}
+
 export function login(username, password) {
   return http.post('/api/finance/auth/login', { username, password })
 }

@@ -7,15 +7,31 @@ import (
 )
 
 type User struct {
-	ID           uint      `gorm:"column:id;primaryKey"`
-	Username     string    `gorm:"column:username"`
-	PasswordHash string    `gorm:"column:password_hash"`
-	Role         string    `gorm:"column:role"`
-	CreatedAt    time.Time `gorm:"column:created_at"`
-	UpdatedAt    time.Time `gorm:"column:updated_at"`
+	ID             uint       `gorm:"column:id;primaryKey"`
+	Username       string     `gorm:"column:username"`
+	PasswordHash   string     `gorm:"column:password_hash"`
+	PasswordHashV2 *string    `gorm:"column:password_hash_v2"`
+	Role           string     `gorm:"column:role"`
+	CreatedAt      time.Time  `gorm:"column:created_at"`
+	UpdatedAt      time.Time  `gorm:"column:updated_at"`
+	DisabledAt     *time.Time `gorm:"column:disabled_at"`
 }
 
 func (User) TableName() string { return "finance_users" }
+
+type Session struct {
+	JTI            string     `gorm:"column:jti;primaryKey"`
+	UserID         uint       `gorm:"column:user_id"`
+	TokenDigest    string     `gorm:"column:token_digest"`
+	PasswordDigest string     `gorm:"column:password_digest"`
+	CSRFDigest     *string    `gorm:"column:csrf_digest"`
+	CreatedAt      time.Time  `gorm:"column:created_at"`
+	LastSeenAt     time.Time  `gorm:"column:last_seen_at"`
+	ExpiresAt      time.Time  `gorm:"column:expires_at"`
+	RevokedAt      *time.Time `gorm:"column:revoked_at"`
+}
+
+func (Session) TableName() string { return "finance_browser_sessions" }
 
 type ClaimDraft struct {
 	ID                 string         `gorm:"column:id;primaryKey"`

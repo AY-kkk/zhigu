@@ -13,6 +13,7 @@ _sema = threading.Semaphore(4)
 DB_PATH = Path(os.environ.get("ZHIGU_RESEARCH_SQLITE", "data/jobs.sqlite"))
 CONN: sqlite3.Connection | None = None
 TERMINAL = {"succeeded", "failed", "canceled", "insufficient"}
+_quiescing = False
 
 
 def connect() -> sqlite3.Connection:
@@ -61,9 +62,31 @@ def _snapshot(row: sqlite3.Row) -> dict[str, Any]:
     return {"task_id": row["task_id"], "status": row["status"], "result": result}
 
 
+def set_quiescing(value: bool) -> None:
+    global _quiescing
+    _quiescing = bool(value)
+
+
+def active_count() -> int:
+    conn = connect()
+    with _lock:
+        row = conn.execute("SELECT count(*) AS count FROM tasks WHERE status IN ('queued','running')").fetchone()
+        return int(row["count"])
+
+
+def checkpoint() -> bool:
+    conn = connect()
+    with _lock:
+        conn.execute("PRAGMA wal_checkpoint(FULL)").fetchone()
+        conn.commit()
+        return True
+
+
 def submit(task: ResearchTask, task_token: str = "") -> dict[str, str]:
     import json
 
+    if _quiescing:
+        raise Conflict("WORKER_QUIESCING")
     body = task.model_dump(mode="json")
     h = payload_hash(body)
     conn = connect()

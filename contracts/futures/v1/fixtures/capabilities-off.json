@@ -21,5 +21,9 @@
     "module_daily_cny": "50",
     "queue_timeout_seconds": 60,
     "execution_timeout_seconds": 180
-  }
+  },
+  "deployment_environment": "test",
+  "operation_mode": "off",
+  "data_provenance": "fixture",
+  "health": "unavailable"
 }

@@ -1,4 +1,3 @@
-import { STAGE_A_PUBLIC_MODE } from '../config/publicMode.js'
 import {
   CLAIM_TYPE_LABELS,
   STATUS_MESSAGES,

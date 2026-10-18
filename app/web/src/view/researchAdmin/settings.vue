@@ -26,6 +26,9 @@
   </div>
 </template>
 <script setup>
+import { ElButton, ElForm, ElFormItem, ElInput } from 'element-plus'
+import 'element-plus/dist/index.css'
+
 import { onMounted, ref } from 'vue'
 import http from '../../utils/http.js'
 const baseUrl = ref('https://api.openai.com/v1')

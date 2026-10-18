@@ -1,13 +1,26 @@
 import http from '../../utils/http.js'
+import { ContractError, normalizePage } from '../../utils/apiEnvelope.js'
 
 // Reuse only JWT/envelope transport, never a stock or intel business API.
 export async function getCapabilities(signal) {
   const response = await http.get('/api/v1/futures/capabilities', { signal })
-  return response.data
+  const value = response.data
+  if (
+    !value
+    || typeof value !== 'object'
+    || value.schema_version !== 'futures.capabilities.v1'
+    || !Array.isArray(value.products)
+    || !value.features
+    || typeof value.features !== 'object'
+  ) {
+    throw new ContractError('CONTRACT_CAPABILITIES_INVALID', '能力响应不符合契约')
+  }
+  return value
 }
 
 const idempotencyHeaders = (key) => ({ 'Idempotency-Key': key || crypto.randomUUID() })
 const listParams = (cursor, limit = 20) => ({ cursor, limit })
+const page = value => normalizePage(value)
 
 export const getProducts = (cursor, limit, signal) => http.get('/api/v1/futures/products', { params: listParams(cursor, limit), signal }).then(r => r.data)
 export const getContracts = (productId, cursor, limit, signal) => http.get(`/api/v1/futures/products/${encodeURIComponent(productId)}/contracts`, { params: listParams(cursor, limit), signal }).then(r => r.data)
@@ -18,10 +31,16 @@ export const patchDraft = (id, body, signal) => http.patch(`/api/v1/futures/draf
 export const deleteDraft = (id, key, signal) => http.delete(`/api/v1/futures/drafts/${encodeURIComponent(id)}`, { headers: idempotencyHeaders(key), signal }).then(r => r.data)
 export const parseDraft = (id, expectedRevision, key, signal) => http.post(`/api/v1/futures/drafts/${encodeURIComponent(id)}/parse`, { expected_revision: expectedRevision }, { headers: idempotencyHeaders(key), signal }).then(r => r.data)
 export const getClaims = (id, cursor, limit, signal) => http.get(`/api/v1/futures/drafts/${encodeURIComponent(id)}/claims`, { params: listParams(cursor, limit), signal }).then(r => r.data)
-export const uploadDocument = (file, key, signal) => {
+export const uploadDocument = (file, key, signal, onProgress) => {
   const form = new FormData()
   form.append('file', file)
-  return http.post('/api/v1/futures/documents', form, { headers: idempotencyHeaders(key), signal }).then(r => r.data)
+  return http.post('/api/v1/futures/documents', form, {
+    headers: idempotencyHeaders(key),
+    signal,
+    onUploadProgress: event => {
+      if (onProgress && event.total) onProgress(Math.round((event.loaded / event.total) * 100))
+    },
+  }).then(r => r.data)
 }
 export const getDocument = (id, signal) => http.get(`/api/v1/futures/documents/${encodeURIComponent(id)}`, { signal }).then(r => r.data)
 export const deleteDocument = (id, key, signal) => http.delete(`/api/v1/futures/documents/${encodeURIComponent(id)}`, { headers: idempotencyHeaders(key), signal }).then(r => r.data)
@@ -44,8 +63,14 @@ export const getRecap = (id, signal) => http.get(`/api/v1/futures/hypotheses/${e
 export const putRecap = (id, body, signal) => http.put(`/api/v1/futures/hypotheses/${encodeURIComponent(id)}/recap`, body, { signal }).then(r => r.data)
 export const getWatchlist = (signal) => http.get('/api/v1/futures/watchlist', { signal }).then(r => r.data)
 export const putWatchlist = (body, signal) => http.put('/api/v1/futures/watchlist', body, { signal }).then(r => r.data)
-export const getNotifications = (cursor, limit, signal) => http.get('/api/v1/futures/notifications', { params: listParams(cursor, limit), signal }).then(r => r.data)
+export const getNotifications = (filterOrCursor, limit, signal) => {
+  const params = filterOrCursor && typeof filterOrCursor === 'object'
+    ? { ...filterOrCursor, limit: limit || 20 }
+    : listParams(filterOrCursor, limit)
+  return http.get('/api/v1/futures/notifications', { params, signal }).then(r => page(r.data))
+}
 export const markNotification = (id, signal) => http.patch(`/api/v1/futures/notifications/${encodeURIComponent(id)}`, { read: true }, { signal }).then(r => r.data)
+export const batchReadNotifications = (ids, key, signal) => http.post('/api/v1/futures/notifications/batch-read', { ids }, { headers: idempotencyHeaders(key), signal }).then(r => r.data)
 export const getSources = (cursor, limit, signal) => http.get('/api/v1/admin/futures/sources', { params: listParams(cursor, limit), signal }).then(r => r.data)
 export const createSource = (manifest, key, signal) => http.post('/api/v1/admin/futures/sources', { manifest }, { headers: idempotencyHeaders(key), signal }).then(r => r.data)
 export const patchSource = (id, body, signal) => http.patch(`/api/v1/admin/futures/sources/${encodeURIComponent(id)}`, body, { signal }).then(r => r.data)
@@ -54,3 +79,5 @@ export const getAdmission = (cursor, limit, signal) => http.get('/api/v1/admin/f
 export const putAdmission = (productId, body, signal) => http.put(`/api/v1/admin/futures/admission/${encodeURIComponent(productId)}`, body, { signal }).then(r => r.data)
 export const getOperations = (signal) => http.get('/api/v1/admin/futures/operations', { signal }).then(r => r.data)
 export const patchOperations = (body, signal) => http.patch('/api/v1/admin/futures/operations', body, { signal }).then(r => r.data)
+export const getSourceProbes = (filter = {}, cursor, limit, signal) => http.get('/api/v1/admin/futures/source-probes', { params: { ...listParams(cursor, limit), ...filter }, signal }).then(r => page(r.data))
+export const createSourceProbe = (body, key, signal) => http.post('/api/v1/admin/futures/source-probes', body, { headers: idempotencyHeaders(key), signal }).then(r => r.data)

@@ -18,6 +18,7 @@ import (
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
 
+	"zhigu/server/httpx"
 	model "zhigu/server/model/futures"
 )
 
@@ -27,6 +28,7 @@ type Domain struct {
 	Now        func() time.Time
 	Mode       string
 	Enabled    bool
+	Observer   httpx.OperationalObserver
 }
 
 type RuntimePolicy struct {
@@ -87,7 +89,8 @@ func (d *Domain) AuthorizeAccess(ctx context.Context, id Identity, method, path 
 		return ErrForbidden
 	}
 	maintenance := method == http.MethodDelete || strings.HasSuffix(path, "/cancel") ||
-		(method == http.MethodPatch && strings.HasSuffix(path, "/notifications/:id"))
+		(method == http.MethodPatch && strings.HasSuffix(path, "/notifications/:id")) ||
+		(method == http.MethodPost && strings.HasSuffix(path, "/notifications/batch-read"))
 	switch policy.Mode {
 	case "live":
 		return nil
@@ -133,6 +136,10 @@ func NewDomain(db *gorm.DB, storageDir string) *Domain {
 
 func (d *Domain) WithMode(mode string) *Domain     { d.Mode = mode; return d }
 func (d *Domain) WithEnabled(enabled bool) *Domain { d.Enabled = enabled; return d }
+func (d *Domain) WithObserver(observer httpx.OperationalObserver) *Domain {
+	d.Observer = observer
+	return d
+}
 
 func (d *Domain) Products(ctx context.Context, id Identity, limit int) ([]model.Product, error) {
 	if limit <= 0 || limit > 100 {
@@ -588,4 +595,80 @@ func (d *Domain) writeIdempotency(tx *gorm.DB, id Identity, operation, key, requ
 	}
 	return tx.Create(model.Idempotency{OwnerID: id.OwnerID, Mode: id.Mode, Operation: operation, Key: key, RequestHash: requestHash,
 		Response: datatypes.JSON(raw), Status: "complete", ExpiresAt: d.Now().UTC().Add(24 * time.Hour), CreatedAt: d.Now().UTC()}).Error
+}
+
+func (d *Domain) ProductsPage(ctx context.Context, id Identity, options PageOptions) (Page[model.Product], error) {
+	if options.Limit < 1 || options.Limit > 100 {
+		return Page[model.Product]{}, ErrInvalidInput
+	}
+	query := d.DB.WithContext(ctx).Model(&model.Product{}).Where(`deleted_at IS NULL`)
+	if options.Cursor != nil {
+		query = query.Where(`product_id > ?`, options.Cursor.Primary)
+	}
+	var products []model.Product
+	if err := query.Order(`product_id ASC`).Limit(options.Limit + 1).Find(&products).Error; err != nil {
+		return Page[model.Product]{}, err
+	}
+	return BuildPage(id, "products", "", options, products, func(value model.Product) (string, string, string) {
+		return StringPagePosition(value.ID, value.ID)
+	})
+}
+
+func (d *Domain) ContractsPage(ctx context.Context, id Identity, productID string, options PageOptions) (Page[model.Contract], error) {
+	if options.Limit < 1 || options.Limit > 100 || productID == "" {
+		return Page[model.Contract]{}, ErrInvalidInput
+	}
+	query := d.DB.WithContext(ctx).Model(&model.Contract{}).Where(`product_id=? AND deleted_at IS NULL`, productID)
+	if options.Cursor != nil {
+		cursorTime, err := time.Parse(time.RFC3339Nano, options.Cursor.Primary)
+		if err != nil {
+			return Page[model.Contract]{}, ErrInvalidInput
+		}
+		query = query.Where(`last_trading_at > ? OR (last_trading_at = ? AND id > ?)`, cursorTime, cursorTime, options.Cursor.Secondary)
+	}
+	var contracts []model.Contract
+	if err := query.Order(`last_trading_at ASC, id ASC`).Limit(options.Limit + 1).Find(&contracts).Error; err != nil {
+		return Page[model.Contract]{}, err
+	}
+	if len(contracts) == 0 {
+		var count int64
+		if err := d.DB.WithContext(ctx).Raw(`SELECT count(*) FROM futures_products WHERE product_id=? AND deleted_at IS NULL`, productID).Scan(&count).Error; err != nil {
+			return Page[model.Contract]{}, err
+		}
+		if count == 0 {
+			return Page[model.Contract]{}, ErrNotFound
+		}
+	}
+	return BuildPage(id, "contracts", productID, options, contracts, func(value model.Contract) (string, string, string) {
+		return TimePagePosition(value.LastTradingAt, value.ID, 0)
+	})
+}
+
+func (d *Domain) ListClaimsPage(ctx context.Context, id Identity, draftID string, options PageOptions) (Page[map[string]any], error) {
+	if options.Limit < 1 || options.Limit > 100 || draftID == "" {
+		return Page[map[string]any]{}, ErrInvalidInput
+	}
+	draft, err := d.GetDraft(ctx, id, draftID)
+	if err != nil {
+		return Page[map[string]any]{}, err
+	}
+	raw, _ := json.Marshal(draft["claims"])
+	var claims []map[string]any
+	if err := json.Unmarshal(raw, &claims); err != nil {
+		return Page[map[string]any]{}, err
+	}
+	sort.SliceStable(claims, func(i, j int) bool {
+		return fmt.Sprint(claims[i]["id"]) < fmt.Sprint(claims[j]["id"])
+	})
+	start := 0
+	if options.Cursor != nil {
+		start = sort.Search(len(claims), func(i int) bool { return fmt.Sprint(claims[i]["id"]) > options.Cursor.Primary })
+	}
+	if start > len(claims) {
+		start = len(claims)
+	}
+	claims = claims[start:]
+	return BuildPage(id, "claims", draftID, options, claims, func(value map[string]any) (string, string, string) {
+		return StringPagePosition(fmt.Sprint(value["id"]), fmt.Sprint(value["id"]))
+	})
 }

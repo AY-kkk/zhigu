@@ -3,13 +3,17 @@ package futuresmodels
 import "time"
 
 type Capabilities struct {
-	SchemaVersion string   `json:"schema_version"`
-	Enabled       bool     `json:"enabled"`
-	Ready         bool     `json:"ready"`
-	Mode          string   `json:"mode"`
-	Reason        string   `json:"reason"`
-	Products      []string `json:"products"`
-	Features      struct {
+	SchemaVersion         string   `json:"schema_version"`
+	Enabled               bool     `json:"enabled"`
+	Ready                 bool     `json:"ready"`
+	Mode                  string   `json:"mode"`
+	DeploymentEnvironment string   `json:"deployment_environment"`
+	OperationMode         string   `json:"operation_mode"`
+	DataProvenance        string   `json:"data_provenance"`
+	Health                string   `json:"health"`
+	Reason                string   `json:"reason"`
+	Products              []string `json:"products"`
+	Features              struct {
 		Research bool `json:"research"`
 		Tracking bool `json:"tracking"`
 		Export   bool `json:"export"`

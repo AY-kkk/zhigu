@@ -1,14 +1,21 @@
 package finance
 
 import (
+	"context"
+	"crypto/sha256"
+	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"zhigu/server/httpx"
 	modelfinance "zhigu/server/model/finance"
@@ -16,13 +23,20 @@ import (
 )
 
 type API struct {
-	Svc   *finance.ResearchService
-	Proxy *finance.ModelProxy
+	Svc          *finance.ResearchService
+	Proxy        *finance.ModelProxy
+	LoginLimiter *httpx.LoginLimiter
 }
 
+const loginResponseFloor = 500 * time.Millisecond
+const loginWorkBudget = 2 * time.Second
+
 func Register(engine *gin.Engine, svc *finance.ResearchService, proxy *finance.ModelProxy) {
-	a := &API{Svc: svc, Proxy: proxy}
+	a := &API{Svc: svc, Proxy: proxy, LoginLimiter: httpx.NewLoginLimiter()}
 	engine.POST("/api/finance/auth/login", a.Login)
+	engine.GET("/api/v1/session/csrf", httpx.AuthRequired(), httpx.SessionCSRF)
+	engine.POST("/api/finance/auth/logout", httpx.AuthRequired(), httpx.Logout)
+	engine.POST("/api/v1/session/logout", httpx.AuthRequired(), httpx.Logout)
 
 	consumer := engine.Group("/api/finance")
 	consumer.Use(httpx.AuthRequired())
@@ -55,6 +69,12 @@ func Register(engine *gin.Engine, svc *finance.ResearchService, proxy *finance.M
 }
 
 func (a *API) Login(c *gin.Context) {
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 8192)
+	c.Header("Cache-Control", "no-store")
+	if httpx.ProductionAuth() && !httpx.LoginOriginAllowed(c) {
+		httpx.Fail(c, 403, "CSRF_INVALID", "请求校验失败")
+		return
+	}
 	var req struct {
 		Username string `json:"username"`
 		Password string `json:"password"`
@@ -62,13 +82,119 @@ func (a *API) Login(c *gin.Context) {
 	if !httpx.BindJSON(c, &req) {
 		return
 	}
-	var user modelfinance.User
-	if err := a.Svc.DB.Where("username = ?", req.Username).Take(&user).Error; err != nil {
+	account := httpx.NormalizeAccount(req.Username)
+	if len(account) == 0 || len(account) > 128 || len(req.Password) == 0 || len(req.Password) > 1024 {
 		httpx.Fail(c, http.StatusUnauthorized, "UNAUTHENTICATED", "用户名或密码错误")
 		return
 	}
-	if bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)) != nil {
+	if a.LoginLimiter == nil {
+		httpx.Fail(c, 500, "INTERNAL", "登录暂不可用")
+		return
+	}
+	outcome := "denied"
+	defer func() {
+		subject := sha256.Sum256([]byte(account))
+		log.Printf("auth_login result=%s trace_id=%s subject=%s", outcome, httpx.TraceID(c), fmt.Sprintf("%x", subject[:8]))
+	}()
+	if delay := a.LoginLimiter.Allow(c.ClientIP(), account, time.Now()); delay > 0 {
+		outcome = "rate_limited"
+		httpx.LoginRetryAfter(c, delay)
+		return
+	}
+	// Bound DB work and reject late successes. Password work is synchronous but
+	// bounded by the accepted parameters/cost class; it cannot be interrupted.
+	ctx, cancel := context.WithTimeout(c.Request.Context(), loginWorkBudget)
+	defer cancel()
+	started := time.Now()
+	defer func() {
+		if remaining := loginResponseFloor - time.Since(started); remaining > 0 {
+			timer := time.NewTimer(remaining)
+			defer timer.Stop()
+			select {
+			case <-timer.C:
+			case <-ctx.Done():
+			}
+		}
+	}()
+	var user modelfinance.User
+	if err := a.Svc.DB.WithContext(ctx).Where("lower(username) = ?", account).Take(&user).Error; err != nil {
+		if ctx.Err() != nil {
+			httpx.Fail(c, 503, "RUNTIME_UNAVAILABLE", "登录暂不可用")
+			return
+		}
+		httpx.BurnPasswordVerification(req.Password)
 		httpx.Fail(c, http.StatusUnauthorized, "UNAUTHENTICATED", "用户名或密码错误")
+		return
+	}
+	valid, rehash := httpx.VerifyLoginPassword(&user, req.Password, httpx.ProductionAuth())
+	if ctx.Err() != nil {
+		httpx.Fail(c, 503, "RUNTIME_UNAVAILABLE", "登录暂不可用")
+		return
+	}
+	if !valid || user.DisabledAt != nil {
+		httpx.Fail(c, http.StatusUnauthorized, "UNAUTHENTICATED", "用户名或密码错误")
+		return
+	}
+	// Long parent-version Argon2id credentials remain valid in the transition
+	// layout. Normalize only when bcrypt can represent the complete password.
+	normalizePrimary := len(req.Password) <= 72 && (user.PasswordHashV2 == nil || *user.PasswordHashV2 == "") && httpx.CanonicalProductionArgon2id(user.PasswordHash)
+	if rehash || normalizePrimary {
+		legacyHash, v2Hash := user.PasswordHash, ""
+		updates := make(map[string]any)
+		if normalizePrimary {
+			// Preserve the already verified parent Argon2id exactly. bcrypt's
+			// 72-byte limit is enforced without truncation during normalization.
+			legacy, err := bcrypt.GenerateFromPassword([]byte(req.Password), 12)
+			if err != nil {
+				httpx.Fail(c, 500, "INTERNAL", "登录暂不可用")
+				return
+			}
+			legacyHash, v2Hash = string(legacy), user.PasswordHash
+			updates["password_hash"] = legacyHash
+		} else {
+			hash, err := httpx.RehashPassword(req.Password)
+			if err != nil {
+				httpx.Fail(c, 500, "INTERNAL", "登录暂不可用")
+				return
+			}
+			v2Hash = hash
+		}
+		updates["password_hash_v2"] = v2Hash
+		if err := a.Svc.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+			var current modelfinance.User
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", user.ID).Take(&current).Error; err != nil {
+				return err
+			}
+			sameV2 := current.PasswordHashV2 == nil && user.PasswordHashV2 == nil
+			if current.PasswordHashV2 != nil && user.PasswordHashV2 != nil {
+				sameV2 = *current.PasswordHashV2 == *user.PasswordHashV2
+			}
+			if current.DisabledAt != nil || current.PasswordHash != user.PasswordHash || !sameV2 {
+				return fmt.Errorf("credentials changed")
+			}
+			result := tx.Model(&modelfinance.User{}).Where("id = ?", user.ID).Updates(updates)
+			if result.Error != nil {
+				return result.Error
+			}
+			if result.RowsAffected != 1 {
+				return fmt.Errorf("credentials changed")
+			}
+			return httpx.RevokeUserSessions(tx, user.ID)
+		}); err != nil {
+			httpx.Fail(c, 500, "INTERNAL", "登录暂不可用")
+			return
+		}
+		user.PasswordHash, user.PasswordHashV2 = legacyHash, &v2Hash
+	}
+	if httpx.ProductionAuth() {
+		token, err := httpx.CreateSession(a.Svc.DB.WithContext(ctx), user)
+		if err != nil {
+			httpx.Fail(c, 500, "INTERNAL", "登录暂不可用")
+			return
+		}
+		httpx.SetSessionCookie(c, token)
+		outcome = "success"
+		httpx.OK(c, 200, gin.H{"role": user.Role, "username": user.Username, "user_id": user.ID})
 		return
 	}
 	tok, err := httpx.SignToken(user.ID, user.Username, user.Role)
@@ -77,6 +203,7 @@ func (a *API) Login(c *gin.Context) {
 		return
 	}
 	httpx.OK(c, http.StatusOK, gin.H{"token": tok, "role": user.Role, "username": user.Username, "user_id": user.ID})
+	outcome = "success"
 }
 
 func (a *API) Parse(c *gin.Context) {
@@ -219,11 +346,11 @@ func (a *API) UploadResearchDocument(c *gin.Context) {
 	}
 	ctx := finance.WithUser(c.Request.Context(), httpx.CurrentUserID(c), roleOf(c))
 	out, err := a.Svc.Docs.Upload(ctx, finance.UploadDocumentInput{
-		Filename: fileHeader.Filename,
+		Filename:  fileHeader.Filename,
 		MediaType: fileHeader.Header.Get("Content-Type"),
-		ByteSize: fileHeader.Size,
-		Content: content,
-		DraftID: c.PostForm("draft_id"),
+		ByteSize:  fileHeader.Size,
+		Content:   content,
+		DraftID:   c.PostForm("draft_id"),
 	})
 	if err != nil {
 		fail(c, err)

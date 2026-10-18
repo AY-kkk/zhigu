@@ -8,13 +8,16 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"time"
+	"zhigu/server/httpx"
 )
 
 type HTTPResearchClient struct {
-	Base   string
-	Token  string
-	Client *http.Client
+	Base     string
+	Token    string
+	Client   *http.Client
+	Observer httpx.OperationalObserver
 }
 
 func NewHTTPResearchClient() (ResearchClient, error) {
@@ -26,7 +29,7 @@ func NewHTTPResearchClient() (ResearchClient, error) {
 	if base == "" {
 		return nil, fmt.Errorf("ZHIGU_RESEARCH_URL is required unless ZHIGU_RESEARCH_MODE=unit-test")
 	}
-	token := os.Getenv("ZHIGU_INTERNAL_TOKEN")
+	token := researchSecret("ZHIGU_INTERNAL_TOKEN")
 	if token == "" {
 		token = "zhigu-internal-dev"
 	}
@@ -57,7 +60,7 @@ func (c *HTTPResearchClient) Submit(ctx context.Context, task ResearchTask) (Tas
 	if task.TaskToken != "" {
 		req.Header.Set("X-Zhigu-Task-Token", task.TaskToken)
 	}
-	res, err := c.Client.Do(req)
+	res, err := c.request(c.Client, req)
 	if err != nil {
 		return TaskReceipt{}, NewError(503, "transport", "PYTHON_UNAVAILABLE", err.Error())
 	}
@@ -117,7 +120,7 @@ func (c *HTTPResearchClient) Purge(ctx context.Context, taskID string) error {
 	}
 	req.Header.Set("Authorization", "Bearer "+c.Token)
 	req.Header.Set(ContractVersionHeader, ContractVersion)
-	res, err := c.Client.Do(req)
+	res, err := c.request(c.Client, req)
 	if err != nil {
 		return NewError(503, "transport", "PYTHON_UNAVAILABLE", err.Error())
 	}
@@ -138,11 +141,20 @@ func (c *HTTPResearchClient) do(req *http.Request) (*http.Response, error) {
 	if cli == nil {
 		cli = http.DefaultClient
 	}
-	res, err := cli.Do(req)
+	res, err := c.request(cli, req)
 	if err != nil {
 		return nil, NewError(503, "transport", "PYTHON_UNAVAILABLE", err.Error())
 	}
 	return res, nil
+}
+
+func (c *HTTPResearchClient) request(client *http.Client, req *http.Request) (*http.Response, error) {
+	started := time.Now()
+	res, err := client.Do(req)
+	if c.Observer != nil {
+		c.Observer.ObserveWorker("research", time.Since(started), err != nil || res.StatusCode >= 300)
+	}
+	return res, err
 }
 
 func (c *HTTPResearchClient) ack(ctx context.Context, taskID string) error {
@@ -185,4 +197,19 @@ func isTerminalTaskStatus(status string) bool {
 	default:
 		return false
 	}
+}
+
+func researchSecret(name string) string {
+	if value := os.Getenv(name); value != "" {
+		return value
+	}
+	path := os.Getenv(name + "_FILE")
+	if path == "" {
+		return ""
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(raw))
 }

@@ -49,9 +49,20 @@ func StartFuturesMaintenance(ctx context.Context, db *gorm.DB, domain *Domain) {
 			if _, err := PurgeDueDeletionJobs(ctx, db, now, 500); err != nil {
 				log.Printf("futures cleanup: %v", err)
 			}
-			_ = domain
+			if domain != nil {
+				domain.ObserveCleanupBacklog(ctx)
+			}
 		}
 	}
+}
+
+func (d *Domain) ObserveCleanupBacklog(ctx context.Context) {
+	if d.Observer == nil {
+		return
+	}
+	var count float64
+	err := d.DB.WithContext(ctx).Raw(`SELECT ((SELECT count(*) FROM futures_deletion_jobs WHERE state IN ('scheduled','retry')) + (SELECT count(*) FROM futures_documents WHERE deleted_at IS NOT NULL OR purge_at <= CURRENT_TIMESTAMP))::double precision`).Scan(&count).Error
+	d.Observer.SetCleanupBacklog("futures", count, err == nil)
 }
 
 func ExpireDueHypotheses(ctx context.Context, db *gorm.DB, now time.Time) error {

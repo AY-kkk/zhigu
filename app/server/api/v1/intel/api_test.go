@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"zhigu/server/httpx"
+	model "zhigu/server/model/finance"
 
 	intelsvc "zhigu/server/service/intel"
 	"zhigu/server/testdb"
@@ -24,9 +26,95 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
+func TestIntelErrorRetryAndTraceContract(t *testing.T) {
+	for _, status := range []int{400, 429, 503} {
+		engine := gin.New()
+		httpx.InstallTrace(engine)
+		h := &handler{}
+		engine.GET("/", func(c *gin.Context) { h.fail(c, &appError{status: status, code: "NOT_READY", message: "safe"}) })
+		req := httptest.NewRequest("GET", "/", nil)
+		req.Header.Set("X-Trace-ID", "01ARZ3NDEKTSV4RRFFQ69G5FAV")
+		req.Header.Set("X-Request-ID", "business-id")
+		w := httptest.NewRecorder()
+		engine.ServeHTTP(w, req)
+		var body map[string]any
+		if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+			t.Fatal(err)
+		}
+		if body["trace_id"] != w.Header().Get("X-Trace-ID") {
+			t.Fatal("trace mismatch")
+		}
+		e := body["error"].(map[string]any)
+		if e["request_id"] != "business-id" {
+			t.Fatal("business request ID lost")
+		}
+		if _, ok := body["meta"]; !ok {
+			t.Fatal("meta compatibility field absent")
+		}
+		if _, ok := e["retryable"].(bool); !ok {
+			t.Fatal("retryable absent")
+		}
+		if status == 429 || status == 503 {
+			delay, ok := e["retry_after_seconds"].(float64)
+			if !ok || delay <= 0 || w.Header().Get("Retry-After") == "" {
+				t.Errorf("retry delay absent: %s", w.Body.String())
+			}
+		} else if _, ok := e["retry_after_seconds"]; ok {
+			t.Fatal("nonretryable error has retry delay")
+		}
+	}
+}
+
 func fixtureDir(t *testing.T) string {
 	t.Helper()
 	return filepath.Join("..", "..", "..", "..", "..", "contracts", "intel", "fixtures", "events-v1")
+}
+
+func TestProductionIntelUsesDurableCookieAndRefererCSRF(t *testing.T) {
+	db := testdb.Start(t)
+	user := model.User{Username: "research-owner", PasswordHash: "hash", Role: "admin"}
+	if err := db.Create(&user).Error; err != nil {
+		t.Fatal(err)
+	}
+	httpx.ConfigureAuth(httpx.AuthConfig{DB: db, Production: true, PublicOrigin: "https://zhigu.example"})
+	t.Cleanup(func() { httpx.ConfigureAuth(httpx.AuthConfig{}) })
+	t.Setenv("ZHIGU_INTEL_PUBLIC_ORIGIN", "https://zhigu.example")
+	engine := gin.New()
+	Register(engine, intelsvc.NewService(db, []byte("api-test-cookie-secret"), fixtureDir(t)))
+	engine.GET("/csrf", httpx.AuthRequired(), httpx.SessionCSRF)
+	token, err := httpx.CreateSession(db, user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := func(method, path, csrf, referer string, bearer bool) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(method, path, nil)
+		r.Header.Set("X-Intel-Mode", "live")
+		if bearer {
+			jwt, _ := httpx.SignToken(user.ID, user.Username, user.Role)
+			r.Header.Set("Authorization", "Bearer "+jwt)
+		} else {
+			r.AddCookie(&http.Cookie{Name: httpx.SessionCookieName, Value: token})
+		}
+		r.Header.Set("X-CSRF-Token", csrf)
+		r.Header.Set("Referer", referer)
+		w := httptest.NewRecorder()
+		engine.ServeHTTP(w, r)
+		return w
+	}
+	if w := request("GET", "/api/finance/intel/v1/session", "", "", false); w.Code != 200 {
+		t.Fatalf("cookie not accepted: %d %s", w.Code, w.Body)
+	}
+	if w := request("GET", "/api/finance/intel/v1/session", "", "", true); w.Code != 401 {
+		t.Fatalf("bearer accepted: %d", w.Code)
+	}
+	csrf := request("GET", "/csrf", "", "", false).Header().Get("X-CSRF-Token")
+	w := request("PUT", "/api/finance/intel/v1/watchlist/600519.SH", csrf, "https://zhigu.example/watchlist", false)
+	if w.Code == 401 || w.Code == 403 {
+		t.Fatalf("valid referer rejected: %d %s", w.Code, w.Body)
+	}
+	if w := request("PUT", "/api/finance/intel/v1/watchlist/600519.SH", csrf, "https://evil.example/watchlist", false); w.Code != 403 {
+		t.Fatalf("evil referer accepted: %d", w.Code)
+	}
 }
 
 func doJSON(t *testing.T, engine *gin.Engine, method, path, mode, token, cookie string, body any) *httptest.ResponseRecorder {
@@ -224,7 +312,6 @@ func TestSignedListCursorAndGenerationFence(t *testing.T) {
 		t.Fatalf("stale cursor status=%d body=%s", stale.Code, stale.Body.String())
 	}
 }
-
 
 func TestReplayIdempotencyReplaysSameBodyAndRejectsDifferentBody(t *testing.T) {
 	gin.SetMode(gin.TestMode)

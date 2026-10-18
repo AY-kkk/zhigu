@@ -106,19 +106,17 @@ export function runView(overrides = {}) {
     : report('supported', { run_id: overrides.run_id || 'run_e2e_1' })
   return wrap({
     run_id: overrides.run_id || 'run_e2e_1',
-    status,
     stage: overrides.stage || (status === 'completed' ? 'done' : status),
     mode: 'fixture',
     as_of: '2026-09-01T08:00:00Z',
     instrument_id: 'DEMO:COMPANY',
     horizon: '未来一年',
     claim: { text: DEMO_CLAIM, horizon: '未来一年', items: [] },
-    report: reportValue,
     warnings: [],
     error: overrides.error || null,
     updated_at: '2026-09-01T08:05:00Z',
     ...overrides,
     report: reportValue,
-    status
+    status,
   })
 }

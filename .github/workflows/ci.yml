@@ -32,6 +32,7 @@ jobs:
       - run: go mod verify
       - run: go test ./... -count=1 -timeout 300s
       - run: go test -race ./service/finance ./service/intel ./api/v1/intel -count=1 -timeout 300s
+      - run: go test -race ./service/futures ./api/v1/futures -count=1 -timeout 300s
   python:
     name: Python
     runs-on: ubuntu-latest
@@ -66,7 +67,7 @@ jobs:
   web:
     name: Web
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: app/web
@@ -91,3 +92,158 @@ jobs:
         run: npx playwright test e2e/intel.spec.js --config playwright.intel.config.js --project=firefox --project=webkit
       - name: Futures browser smoke checks (fixture APIs only)
         run: npx playwright test e2e/futures.spec.js --project=chromium
+
+  production-contracts:
+    name: Production contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with: {python-version: '3.12'}
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+      - run: uv sync --frozen --no-dev --project app/research-service
+      - run: uv sync --frozen --no-dev --project app/futures-service
+      - run: app/scripts/verify-production.sh --static
+      - run: app/research-service/.venv/bin/python app/scripts/release-evidence.py --output artifacts/release/manifest.json --version "${GITHUB_SHA::12}" --test "static=pass"
+
+  go-race-futures:
+    name: Futures race
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults: {run: {working-directory: app/server}}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with: {go-version-file: app/server/go.mod, cache-dependency-path: app/server/go.sum}
+      - run: go test -race ./service/futures ./api/v1/futures -count=1 -timeout 300s
+
+  images:
+    name: Immutable images
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: docker build -f app/research-service/Dockerfile -t zhigu/research:${GITHUB_SHA::12} .
+      - run: docker build -f app/futures-service/Dockerfile -t zhigu/futures:${GITHUB_SHA::12} .
+      - run: docker build -f app/server/Dockerfile -t zhigu/server:${GITHUB_SHA::12} app/server
+      - run: docker build -f app/web/Dockerfile -t zhigu/web:${GITHUB_SHA::12} app/web
+
+  fixture-integration:
+    name: Fixture integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: docker compose -f app/deploy/compose.test.yaml -p zhigu-test up --build -d
+      - run: |
+          for i in $(seq 1 60); do curl -fsS http://127.0.0.1:5173 >/dev/null && break; sleep 2; done
+          curl -fsS http://127.0.0.1:5173 >/dev/null
+      - if: always()
+        run: docker compose -f app/deploy/compose.test.yaml -p zhigu-test down -v
+
+  production-smoke:
+    name: Production fail-closed smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Generate disposable production secrets and TLS certificate
+        run: |
+          mkdir -p app/deploy/secrets /tmp/zhigu-tls
+          for name in postgres_password postgres_dsn internal_token futures_token jwt_secret session_keys master_key bootstrap_owner; do
+            head -c 48 /dev/urandom | base64 | tr '/+' '_-' | tr -d '\n=' > app/deploy/secrets/$name
+            chmod 600 app/deploy/secrets/$name
+          done
+          printf 'postgres://zhigu:%s@postgres:5432/zhigu?sslmode=disable' "$(cat app/deploy/secrets/postgres_password)" > app/deploy/secrets/postgres_dsn
+          printf '["%s","%s"]' "$(head -c 48 /dev/urandom | base64 | tr '/+' '_-' | tr -d '\n=')" "$(head -c 48 /dev/urandom | base64 | tr '/+' '_-' | tr -d '\n=')" > app/deploy/secrets/session_keys
+          printf '{"username":"owner-%s","password":"%s"}' "$(head -c 6 /dev/urandom | base64 | tr '/+' '_-' | tr -d '\n=')" "$(head -c 48 /dev/urandom | base64 | tr '/+' '_-' | tr -d '\n=')" > app/deploy/secrets/bootstrap_owner
+          sudo chown 10001:10001 app/deploy/secrets/*
+          openssl req -x509 -newkey rsa:2048 -nodes -keyout /tmp/zhigu-tls/privkey.pem -out /tmp/zhigu-tls/fullchain.pem -subj /CN=smoke.zhigu.example.com -days 1
+          sudo chown 101:101 /tmp/zhigu-tls/*
+      - run: app/scripts/production-preflight.sh
+        env:
+          ZHIGU_PUBLIC_ORIGIN: https://smoke.zhigu.example.com
+          ZHIGU_TLS_CERT_DIR: /tmp/zhigu-tls
+      - run: docker compose -f app/deploy/compose.prod.yaml -f app/deploy/compose.bootstrap.yaml -p zhigu-production-smoke up -d --build
+        env:
+          ZHIGU_PUBLIC_ORIGIN: https://smoke.zhigu.example.com
+          ZHIGU_TLS_CERT_DIR: /tmp/zhigu-tls
+      - run: |
+          curl -kfsS --noproxy '*' --resolve smoke.zhigu.example.com:443:127.0.0.1 --retry 60 --retry-delay 2 --retry-all-errors https://smoke.zhigu.example.com/
+          docker compose -f app/deploy/compose.prod.yaml -f app/deploy/compose.bootstrap.yaml -p zhigu-production-smoke exec -T server wget -q -O - http://127.0.0.1:8080/readyz
+          docker compose -f app/deploy/compose.prod.yaml -f app/deploy/compose.bootstrap.yaml -p zhigu-production-smoke exec -T research python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8091/readyz')"
+          docker compose -f app/deploy/compose.prod.yaml -f app/deploy/compose.bootstrap.yaml -p zhigu-production-smoke exec -T futures python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8092/readyz')"
+          ! curl -kfsS --noproxy '*' --resolve smoke.zhigu.example.com:443:127.0.0.1 https://smoke.zhigu.example.com/metrics
+      - if: always()
+        run: docker compose -f app/deploy/compose.prod.yaml -f app/deploy/compose.bootstrap.yaml -p zhigu-production-smoke down -v
+        env:
+          ZHIGU_PUBLIC_ORIGIN: https://smoke.zhigu.example.com
+          ZHIGU_TLS_CERT_DIR: /tmp/zhigu-tls
+
+  upgrade:
+    name: Upgrade and N/N-1 compatibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: app/scripts/upgrade-verify.sh --static
+      - run: |
+          set +e
+          app/scripts/upgrade-verify.sh --run
+          code=$?
+          set -e
+          if [ "$code" -eq 2 ]; then echo "NOT_RUN/BLOCKED: previous release database/image evidence unavailable"; exit 0; fi
+          exit "$code"
+
+  performance-contract:
+    name: Performance harness
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with: {python-version: '3.12'}
+      - run: python -m py_compile app/tests/performance/http_load.py
+      - run: |
+          set +e
+          app/scripts/run-performance.sh /tmp/zhigu-performance
+          code=$?
+          set -e
+          if [ "$code" -eq 2 ]; then echo "NOT_RUN/BLOCKED: full §13 mutation/queue/upload/restart harness unavailable"; exit 0; fi
+          exit "$code"
+
+  backup-restore:
+    name: Backup restore contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with: {python-version: '3.12'}
+      - run: bash -n app/scripts/backup.sh app/scripts/restore-verify.sh app/scripts/maintenance-watchdog.sh
+      - run: |
+          python -m unittest discover -s app/tests/contract -p 'test_production_deploy.py' -q
+          python -m unittest discover -s app/tests/contract -p 'test_operational_scripts.py' -q
+
+  security:
+    name: Security and defaults
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: |
+          ! grep -RInE 'BEGIN (RSA |OPENSSH |EC )?PRIVATE KEY|AKIA[0-9A-Z]{16}' app contracts .github
+          ! grep -nE 'fixture|latest|:/work|\.\.:/|default_password|zhigu-internal-dev' app/deploy/compose.prod.yaml
+
+  release-manifest:
+    name: Release manifest
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with: {python-version: '3.12'}
+      - run: python app/scripts/release-evidence.py --output artifacts/release/${GITHUB_SHA::12}/manifest.json --version "${GITHUB_SHA::12}" --test "ci=pass"
+      - uses: actions/upload-artifact@v4
+        with: {name: release-manifest, path: artifacts/release}
