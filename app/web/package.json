@@ -34,7 +34,7 @@
   "devDependencies": {
     "@eslint/js": "9.39.1",
     "@playwright/test": "1.50.0",
-    "@vitejs/plugin-vue": "5.2.1",
+    "@vitejs/plugin-vue": "6.0.10",
     "@vue/test-utils": "2.4.6",
     "axe-core": "4.10.3",
     "eslint": "9.39.1",
